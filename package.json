@@ -1,0 +1,13 @@
+{
+  "name": "erp-universitario",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo oficial para el ERP Universitario",
+  "scripts": {
+    "dev": "pnpm --filter \"@erp/*\" --parallel dev",
+    "build": "pnpm --filter \"@erp/*\" build"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
