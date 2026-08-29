@@ -5,6 +5,10 @@ import { GestionesCobroPage } from '../modules/cxc/cobranza/GestionesCobroPage';
 import { PromesasPagoPage } from '../modules/cxc/cobranza/PromesasPagoPage';
 import { ConveniosPagoPage } from '../modules/cxc/cobranza/ConveniosPagoPage';
 import { ConvenioDetallePage } from '../modules/cxc/cobranza/ConvenioDetallePage';
+import { CondicionesCreditoPage } from '../modules/cxc/credito/CondicionesCreditoPage';
+import { NotasCreditoPage } from '../modules/cxc/credito/NotasCreditoPage';
+import { AplicacionesNotaCreditoPage } from '../modules/cxc/credito/AplicacionesNotaCreditoPage';
+import { MoraPage } from '../modules/cxc/credito/MoraPage';
 
 // Cada módulo (compras, bancos, cxp, cxc) agrega sus rutas aquí, envueltas
 // en MainLayout, como indica ARCHITECTURE.md sección 5.2.
@@ -26,6 +30,36 @@ export const routes: RouteObject[] = [
     path: '/cxc/cobranza/convenios-pago/:id',
     element: <MainLayout><ConvenioDetallePage /></MainLayout>,
   },
+
+  // --- CXC / Crédito ---
+{
+  path: '/cxc/credito/condiciones-credito',
+  element: <MainLayout><CondicionesCreditoPage /></MainLayout>,
+},
+
+{
+  path: '/cxc/credito/notas-credito',
+  element: <MainLayout><NotasCreditoPage /></MainLayout>,
+},
+
+{
+  path: '/cxc/credito/aplicaciones-nota-credito',
+  element: (
+    <MainLayout>
+      <AplicacionesNotaCreditoPage />
+    </MainLayout>
+  ),
+},
+{
+  path: '/cxc/credito/mora',
+  element: (
+    <MainLayout>
+      <MoraPage />
+    </MainLayout>
+  ),
+},
+
+
 
   // --- Otros módulos: agregar aquí siguiendo el mismo patrón ---
   // { path: '/cxc/documentos', element: <MainLayout><DocumentosPage /></MainLayout> },   // Kevin

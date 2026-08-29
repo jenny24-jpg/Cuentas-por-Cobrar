@@ -30,4 +30,18 @@ router.get('/clientes/:idCliente/documentos-pendientes', async (req: Request, re
   }
 });
 
+router.get(
+  '/notas-credito',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const notas =
+        await catalogosRepository.listNotasCreditoActivas();
+
+      res.json(notas);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 export default router;
