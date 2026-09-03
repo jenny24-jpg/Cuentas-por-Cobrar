@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import cobranzaRoutes from './cobranza';
 import catalogosRoutes from './catalogos.routes';
+import pagosRoutes from './pagos';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.use('/catalogos', catalogosRoutes);
 // /api/cxc/gestiones-cobro, /api/cxc/promesas-pago, etc. (cobranza)
 router.use('/', cobranzaRoutes);
 // router.use('/', documentosRoutes);   // Kevin
-// router.use('/', pagosRoutes);         // Laura
+router.use('/', pagosRoutes);
 // router.use('/', creditoRoutes);       // Ángel
 
 export default router;

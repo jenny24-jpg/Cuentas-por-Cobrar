@@ -16,3 +16,4 @@ export { TIPOS_GESTION_COBRO } from './modules/cxc/cobranza/gestion-cobro';
 export { ESTADOS_PROMESA_PAGO } from './modules/cxc/cobranza/promesa-pago';
 export { ESTADOS_CONVENIO_PAGO } from './modules/cxc/cobranza/convenio-pago';
 export { ESTADOS_CUOTA } from './modules/cxc/cobranza/convenio-cuota';
+export { ESTADOS_FORMA_PAGO } from './modules/cxc/pagos/forma-pago';
