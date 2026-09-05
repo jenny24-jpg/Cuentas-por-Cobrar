@@ -16,10 +16,25 @@ let pool: oracledb.Pool | null = null;
 export async function initOraclePool(): Promise<oracledb.Pool> {
   if (pool) return pool;
 
+  const { user, password, connectString } = config.oracleConnection;
+
+  // Chequeo de sanidad: si el .env no cargó (o falta una variable), es mejor
+  // fallar aquí con un mensaje claro que dejar que oracledb tire un error
+  // críptico (NJS-125 y similares) por recibir valores vacíos.
+  if (!user || !password || !connectString) {
+    throw new Error(
+      '[Oracle] Faltan variables de conexión (NODE_ORACLEDB_USER, NODE_ORACLEDB_PASSWORD o ' +
+      'NODE_ORACLEDB_CONNECTIONSTRING). Verifica que existe server/.env y que "dotenv/config" ' +
+      'se está importando al inicio de src/index.ts.',
+    );
+  }
+
+  console.log(`[Oracle] Conectando como ${user} a ${connectString}...`);
+
   pool = await oracledb.createPool({
-    user: config.oracleConnection.user,
-    password: config.oracleConnection.password,
-    connectString: config.oracleConnection.connectString,
+    user,
+    password,
+    connectString,
     poolMin: 2,
     poolMax: 10,
     poolIncrement: 1,

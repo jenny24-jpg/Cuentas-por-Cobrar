@@ -12,10 +12,15 @@ import type { CatalogoOption } from '@erp/contracts';
 export async function listClientesActivos(search?: string): Promise<CatalogoOption[]> {
   const conn = await getConnection();
   try {
-    const whereClause = search ? `AND UPPER(NOMBRE) LIKE UPPER(:search)` : '';
+    // NOTA: sin filtro de ESTADO a propósito. CLIENTE.ESTADO existe en el
+    // esquema pero hoy no tiene ningún valor cargado (confirmado en Oracle
+    // real) — filtrar por 'A' devolvería siempre una lista vacía. Cuando el
+    // equipo defina y cargue el catálogo de estados de cliente, agregar
+    // aquí el WHERE correspondiente.
+    const whereClause = search ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search)` : '';
     const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string }>(
-      `SELECT ID_CLIENTE, NOMBRE FROM CXC_CLIENTES
-       WHERE ESTADO = 'A' ${whereClause}
+      `SELECT ID_CLIENTE, NOMBRE FROM CLIENTE
+       ${whereClause}
        ORDER BY NOMBRE ASC
        FETCH FIRST 50 ROWS ONLY`,
       search ? { search: `%${search}%` } : {},
@@ -29,12 +34,14 @@ export async function listClientesActivos(search?: string): Promise<CatalogoOpti
 export async function listEmpleadosActivos(): Promise<CatalogoOption[]> {
   const conn = await getConnection();
   try {
-    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string }>(
-      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO FROM CXC_EMPLEADOS
-       WHERE ESTADO = 'A'
+    // NOTA: igual que en clientes, sin filtro de ESTADO por ahora — EMPLEADO.ESTADO
+    // sí tiene NOT NULL en el esquema, pero no confirmamos qué valor representa
+    // "activo" (¿'A'? ¿'S'? ¿1?). Ajustar el WHERE en cuanto se confirme.
+    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string | null }>(
+      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO FROM EMPLEADO
        ORDER BY NOMBRE ASC`,
     );
-    return (result.rows ?? []).map((r) => ({ id: r.ID_EMPLEADO, label: `${r.NOMBRE} ${r.APELLIDO}` }));
+    return (result.rows ?? []).map((r) => ({ id: r.ID_EMPLEADO, label: `${r.NOMBRE} ${r.APELLIDO ?? ''}`.trim() }));
   } finally {
     await conn.close();
   }
