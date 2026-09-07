@@ -23,6 +23,11 @@ import {
 } from '../components/ui/FormControls';
 import { StatusBadge as StatusBadgeBase, AuditBanner as AuditBannerBase } from '../components/ui/Badges';
 import {
+  Sidebar as SidebarBase,
+  Navbar as NavbarBase,
+  AppLayout as AppLayoutBase,
+} from '../components/ui/AppLayout';
+import {
   StatCard as StatCardBase,
   ProcessStepper as ProcessStepperBase,
   Pagination as PaginationBase,
@@ -36,6 +41,9 @@ export const TextArea = TextAreaBase as FC<any>;
 export const Checkbox = CheckboxBase as FC<any>;
 export const StatusBadge = StatusBadgeBase as FC<any>;
 export const AuditBanner = AuditBannerBase as FC<any>;
+export const Sidebar = SidebarBase as FC<any>;
+export const Navbar = NavbarBase as FC<any>;
+export const AppLayout = AppLayoutBase as FC<any>;
 export const StatCard = StatCardBase as FC<any>;
 export const ProcessStepper = ProcessStepperBase as FC<any>;
 export const Pagination = PaginationBase as FC<any>;

@@ -12,17 +12,21 @@ export async function listClientesActivos(
   const conn = await getConnection();
 
   try {
+    // Sin filtro de ESTADO por ahora.
+    // CLIENTE.ESTADO existe, pero todavía no hay una regla confirmada
+    // sobre qué valor representa "activo".
     const whereClause = search
-      ? `AND UPPER(NOMBRE) LIKE UPPER(:search)`
+      ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search)`
       : '';
 
     const result = await conn.execute<{
       ID_CLIENTE: number;
       NOMBRE: string;
     }>(
-      `SELECT ID_CLIENTE, NOMBRE
+      `SELECT
+         ID_CLIENTE,
+         NOMBRE
        FROM CLIENTE
-       WHERE ESTADO = 'A'
        ${whereClause}
        ORDER BY NOMBRE ASC
        FETCH FIRST 50 ROWS ONLY`,
@@ -44,20 +48,25 @@ export async function listEmpleadosActivos(): Promise<
   const conn = await getConnection();
 
   try {
+    // Sin filtro de ESTADO por ahora.
+    // EMPLEADO.ESTADO existe, pero todavía no está confirmado
+    // qué valor representa "activo".
     const result = await conn.execute<{
       ID_EMPLEADO: number;
       NOMBRE: string;
-      APELLIDO: string;
+      APELLIDO: string | null;
     }>(
-      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO
-       FROM CXC_EMPLEADOS
-       WHERE ESTADO = 'A'
+      `SELECT
+         ID_EMPLEADO,
+         NOMBRE,
+         APELLIDO
+       FROM EMPLEADO
        ORDER BY NOMBRE ASC`,
     );
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_EMPLEADO,
-      label: `${r.NOMBRE} ${r.APELLIDO}`,
+      label: `${r.NOMBRE} ${r.APELLIDO ?? ''}`.trim(),
     }));
   } finally {
     await conn.close();
