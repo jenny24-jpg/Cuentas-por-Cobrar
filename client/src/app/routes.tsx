@@ -3,28 +3,36 @@ import type { RouteObject } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 
 // --- CXC / Cobranza ---
+import { CobranzaLayout } from '../modules/cxc/cobranza/cobranzaLayout';
 import { GestionesCobroPage } from '../modules/cxc/cobranza/GestionesCobroPage';
 import { PromesasPagoPage } from '../modules/cxc/cobranza/PromesasPagoPage';
 import { ConveniosPagoPage } from '../modules/cxc/cobranza/ConveniosPagoPage';
 import { ConvenioDetallePage } from '../modules/cxc/cobranza/ConvenioDetallePage';
 
+// --- CXC / Crédito ---
+import { CreditoLayout } from '../modules/cxc/credito/CreditoLayout';
+import { CondicionesCreditoPage } from '../modules/cxc/credito/CondicionesCreditoPage';
+import { NotasCreditoPage } from '../modules/cxc/credito/NotasCreditoPage';
+import { AplicacionesNotaCreditoPage } from '../modules/cxc/credito/AplicacionesNotaCreditoPage';
+import { MoraPage } from '../modules/cxc/credito/MoraPage';
+
 // --- CXC / Pagos ---
+import { PagosLayout } from '../modules/cxc/pagos/PagosLayout';
 import { PagosPage } from '../modules/cxc/pagos/PagosPage';
 import { AplicacionesPagoPage } from '../modules/cxc/pagos/AplicacionesPagoPage';
 import { AnticiposPage } from '../modules/cxc/pagos/AnticiposPage';
 import { RecibosPage } from '../modules/cxc/pagos/RecibosPage';
 import { FormasPagoPage } from '../modules/cxc/pagos/FormasPagoPage';
-import { PagosLayout } from '../modules/cxc/pagos/PagosLayout';
 
-// Cada módulo (compras, bancos, cxp, cxc) agrega sus rutas aquí, envueltas
-// en MainLayout, como indica ARCHITECTURE.md sección 5.2.
 export const routes: RouteObject[] = [
   // --- CXC / Cobranza ---
   {
     path: '/cxc/cobranza/gestiones-cobro',
     element: (
       <MainLayout>
-        <GestionesCobroPage />
+        <CobranzaLayout>
+          <GestionesCobroPage />
+        </CobranzaLayout>
       </MainLayout>
     ),
   },
@@ -32,7 +40,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/cobranza/promesas-pago',
     element: (
       <MainLayout>
-        <PromesasPagoPage />
+        <CobranzaLayout>
+          <PromesasPagoPage />
+        </CobranzaLayout>
       </MainLayout>
     ),
   },
@@ -40,7 +50,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/cobranza/convenios-pago',
     element: (
       <MainLayout>
-        <ConveniosPagoPage />
+        <CobranzaLayout>
+          <ConveniosPagoPage />
+        </CobranzaLayout>
       </MainLayout>
     ),
   },
@@ -48,7 +60,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/cobranza/convenios-pago/:id',
     element: (
       <MainLayout>
-        <ConvenioDetallePage />
+        <CobranzaLayout>
+          <ConvenioDetallePage />
+        </CobranzaLayout>
       </MainLayout>
     ),
   },
@@ -58,7 +72,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/pagos',
     element: (
       <MainLayout>
-        <PagosLayout><PagosPage /></PagosLayout>
+        <PagosLayout>
+          <PagosPage />
+        </PagosLayout>
       </MainLayout>
     ),
   },
@@ -66,7 +82,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/aplicaciones-pago',
     element: (
       <MainLayout>
-        <PagosLayout><AplicacionesPagoPage /></PagosLayout>
+        <PagosLayout>
+          <AplicacionesPagoPage />
+        </PagosLayout>
       </MainLayout>
     ),
   },
@@ -74,7 +92,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/anticipos',
     element: (
       <MainLayout>
-        <PagosLayout><AnticiposPage /></PagosLayout>
+        <PagosLayout>
+          <AnticiposPage />
+        </PagosLayout>
       </MainLayout>
     ),
   },
@@ -82,7 +102,9 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/recibos',
     element: (
       <MainLayout>
-        <PagosLayout><RecibosPage /></PagosLayout>
+        <PagosLayout>
+          <RecibosPage />
+        </PagosLayout>
       </MainLayout>
     ),
   },
@@ -90,12 +112,44 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/formas-pago',
     element: (
       <MainLayout>
-        <PagosLayout><FormasPagoPage /></PagosLayout>
+        <PagosLayout>
+          <FormasPagoPage />
+        </PagosLayout>
       </MainLayout>
     ),
   },
 
-  // --- Otros módulos: agregar aquí siguiendo el mismo patrón ---
-  // { path: '/cxc/documentos', element: <MainLayout><DocumentosPage /></MainLayout> }, // Kevin
-  // { path: '/cxc/credito', element: <MainLayout><CreditoPage /></MainLayout> },       // Ángel
+  // --- CXC / Crédito ---
+  {
+    path: '/cxc/credito/condiciones-credito',
+    element: (
+      <CreditoLayout>
+        <CondicionesCreditoPage />
+      </CreditoLayout>
+    ),
+  },
+  {
+    path: '/cxc/credito/notas-credito',
+    element: (
+      <CreditoLayout>
+        <NotasCreditoPage />
+      </CreditoLayout>
+    ),
+  },
+  {
+    path: '/cxc/credito/aplicaciones-nota-credito',
+    element: (
+      <CreditoLayout>
+        <AplicacionesNotaCreditoPage />
+      </CreditoLayout>
+    ),
+  },
+  {
+    path: '/cxc/credito/mora',
+    element: (
+      <CreditoLayout>
+        <MoraPage />
+      </CreditoLayout>
+    ),
+  },
 ];

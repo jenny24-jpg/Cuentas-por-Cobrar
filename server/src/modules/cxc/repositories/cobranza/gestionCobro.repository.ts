@@ -40,8 +40,8 @@ const SELECT_BASE = `
          g.FECHA_GESTION, g.TIPO_GESTION, g.RESULTADO, g.OBSERVACION,
          g.FECHA_COMPROMISO, g.MONTO_COMPROMISO
   FROM CXC_GESTIONES_COBRO g
-  JOIN CXC_CLIENTES c ON c.ID_CLIENTE = g.ID_CLIENTE
-  JOIN CXC_EMPLEADOS e ON e.ID_EMPLEADO = g.ID_EMPLEADO
+  JOIN CLIENTE c ON c.ID_CLIENTE = g.ID_CLIENTE
+  JOIN EMPLEADO e ON e.ID_EMPLEADO = g.ID_EMPLEADO
 `;
 
 export async function findAll(params: {
@@ -67,7 +67,7 @@ export async function findAll(params: {
     const countResult = await conn.execute<{ TOTAL: number }>(
       `SELECT COUNT(*) AS TOTAL
        FROM CXC_GESTIONES_COBRO g
-       JOIN CXC_CLIENTES c ON c.ID_CLIENTE = g.ID_CLIENTE
+       JOIN CLIENTE c ON c.ID_CLIENTE = g.ID_CLIENTE
        ${whereClause}`,
       searchBind,
     );

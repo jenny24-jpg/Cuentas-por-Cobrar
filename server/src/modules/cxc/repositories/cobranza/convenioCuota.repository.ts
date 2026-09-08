@@ -58,7 +58,7 @@ export async function findById(id: number): Promise<ConvenioCuota | null> {
 /**
  * Inserta un lote de cuotas para un convenio, todas en la misma transacción
  * (una sola conexión, un solo commit). Se usa al crear un convenio nuevo:
- * ver services/cobranza/convenioPago.service.ts -> generarCuotas().
+ * ver services/cobranza/convenioPago.service.ts -> generarPlanDeCuotas().
  */
 export async function bulkCreate(
   idConvenio: number,

@@ -35,7 +35,7 @@ const SELECT_BASE = `
          p.ID_GESTION, p.FECHA_PROMESA, p.FECHA_COMPROMISO, p.MONTO_COMPROMETIDO,
          p.ESTADO, p.OBSERVACIONES
   FROM CXC_PROMESAS_PAGO p
-  JOIN CXC_CLIENTES c ON c.ID_CLIENTE = p.ID_CLIENTE
+  JOIN CLIENTE c ON c.ID_CLIENTE = p.ID_CLIENTE
 `;
 
 export async function findAll(params: {
@@ -59,7 +59,7 @@ export async function findAll(params: {
     );
 
     const countResult = await conn.execute<{ TOTAL: number }>(
-      `SELECT COUNT(*) AS TOTAL FROM CXC_PROMESAS_PAGO p JOIN CXC_CLIENTES c ON c.ID_CLIENTE = p.ID_CLIENTE ${whereClause}`,
+      `SELECT COUNT(*) AS TOTAL FROM CXC_PROMESAS_PAGO p JOIN CLIENTE c ON c.ID_CLIENTE = p.ID_CLIENTE ${whereClause}`,
       searchBind,
     );
 
