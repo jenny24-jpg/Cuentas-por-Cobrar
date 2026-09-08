@@ -14,6 +14,7 @@ import { AplicacionesPagoPage } from '../modules/cxc/pagos/AplicacionesPagoPage'
 import { AnticiposPage } from '../modules/cxc/pagos/AnticiposPage';
 import { RecibosPage } from '../modules/cxc/pagos/RecibosPage';
 import { FormasPagoPage } from '../modules/cxc/pagos/FormasPagoPage';
+import { PagosLayout } from '../modules/cxc/pagos/PagosLayout';
 
 // Cada módulo (compras, bancos, cxp, cxc) agrega sus rutas aquí, envueltas
 // en MainLayout, como indica ARCHITECTURE.md sección 5.2.
@@ -57,7 +58,7 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/pagos',
     element: (
       <MainLayout>
-        <PagosPage />
+        <PagosLayout><PagosPage /></PagosLayout>
       </MainLayout>
     ),
   },
@@ -65,7 +66,7 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/aplicaciones-pago',
     element: (
       <MainLayout>
-        <AplicacionesPagoPage />
+        <PagosLayout><AplicacionesPagoPage /></PagosLayout>
       </MainLayout>
     ),
   },
@@ -73,7 +74,7 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/anticipos',
     element: (
       <MainLayout>
-        <AnticiposPage />
+        <PagosLayout><AnticiposPage /></PagosLayout>
       </MainLayout>
     ),
   },
@@ -81,7 +82,7 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/recibos',
     element: (
       <MainLayout>
-        <RecibosPage />
+        <PagosLayout><RecibosPage /></PagosLayout>
       </MainLayout>
     ),
   },
@@ -89,7 +90,7 @@ export const routes: RouteObject[] = [
     path: '/cxc/pagos/formas-pago',
     element: (
       <MainLayout>
-        <FormasPagoPage />
+        <PagosLayout><FormasPagoPage /></PagosLayout>
       </MainLayout>
     ),
   },
