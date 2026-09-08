@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import cobranzaRoutes from './cobranza';
+import creditoRoutes from './credito';
 import catalogosRoutes from './catalogos.routes';
 
 const router = Router();
@@ -10,9 +11,9 @@ router.use('/catalogos', catalogosRoutes);
 // Cada área monta su propio sub-router aquí. Mantener el prefijo alineado
 // con el nombre del área para que las rutas queden legibles:
 // /api/cxc/gestiones-cobro, /api/cxc/promesas-pago, etc. (cobranza)
-router.use('/', cobranzaRoutes);
+router.use('/', cobranzaRoutes);    
 // router.use('/', documentosRoutes);   // Kevin
 // router.use('/', pagosRoutes);         // Laura
-// router.use('/', creditoRoutes);       // Ángel
+router.use('/', creditoRoutes);
 
 export default router;
