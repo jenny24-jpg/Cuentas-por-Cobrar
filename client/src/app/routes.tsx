@@ -1,26 +1,204 @@
 // Configuración de rutas para el ERP Universitario
 import type { RouteObject } from 'react-router-dom';
+import MainLayout from '../layouts/MainLayout';
+
+// --- CXC / Organización ---
 import { OrganizacionLayout } from '../modules/cxc/organizacion/organizacionLayout';
 import { EmpresasPage } from '../modules/cxc/organizacion/EmpresasPage';
 import { SucursalesPage } from '../modules/cxc/organizacion/SucursalesPage';
 import { RutasPage } from '../modules/cxc/organizacion/RutasPage';
 import { RutaDetallePage } from '../modules/cxc/organizacion/RutaDetallePage';
 
+// --- CXC / Cobranza ---
+import { CobranzaLayout } from '../modules/cxc/cobranza/cobranzaLayout';
+import { GestionesCobroPage } from '../modules/cxc/cobranza/GestionesCobroPage';
+import { PromesasPagoPage } from '../modules/cxc/cobranza/PromesasPagoPage';
+import { ConveniosPagoPage } from '../modules/cxc/cobranza/ConveniosPagoPage';
+import { ConvenioDetallePage } from '../modules/cxc/cobranza/ConvenioDetallePage';
+
+// --- CXC / Crédito ---
+import { CreditoLayout } from '../modules/cxc/credito/CreditoLayout';
+import { CondicionesCreditoPage } from '../modules/cxc/credito/CondicionesCreditoPage';
+import { NotasCreditoPage } from '../modules/cxc/credito/NotasCreditoPage';
+import { AplicacionesNotaCreditoPage } from '../modules/cxc/credito/AplicacionesNotaCreditoPage';
+import { MoraPage } from '../modules/cxc/credito/MoraPage';
+
+// --- CXC / Pagos ---
+import { PagosLayout } from '../modules/cxc/pagos/PagosLayout';
+import { PagosPage } from '../modules/cxc/pagos/PagosPage';
+import { AplicacionesPagoPage } from '../modules/cxc/pagos/AplicacionesPagoPage';
+import { AnticiposPage } from '../modules/cxc/pagos/AnticiposPage';
+import { RecibosPage } from '../modules/cxc/pagos/RecibosPage';
+import { FormasPagoPage } from '../modules/cxc/pagos/FormasPagoPage';
+
 export const routes: RouteObject[] = [
+  // --- CXC / Organización ---
   {
     path: '/cxc/organizacion/empresas',
-    element: <OrganizacionLayout><EmpresasPage /></OrganizacionLayout>,
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <EmpresasPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
   },
   {
     path: '/cxc/organizacion/sucursales',
-    element: <OrganizacionLayout><SucursalesPage /></OrganizacionLayout>,
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <SucursalesPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
   },
   {
     path: '/cxc/organizacion/rutas',
-    element: <OrganizacionLayout><RutasPage /></OrganizacionLayout>,
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <RutasPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
   },
   {
     path: '/cxc/organizacion/rutas/:id',
-    element: <OrganizacionLayout><RutaDetallePage /></OrganizacionLayout>,
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <RutaDetallePage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
+  },
+
+  // --- CXC / Cobranza ---
+  {
+    path: '/cxc/cobranza/gestiones-cobro',
+    element: (
+      <MainLayout>
+        <CobranzaLayout>
+          <GestionesCobroPage />
+        </CobranzaLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/cobranza/promesas-pago',
+    element: (
+      <MainLayout>
+        <CobranzaLayout>
+          <PromesasPagoPage />
+        </CobranzaLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/cobranza/convenios-pago',
+    element: (
+      <MainLayout>
+        <CobranzaLayout>
+          <ConveniosPagoPage />
+        </CobranzaLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/cobranza/convenios-pago/:id',
+    element: (
+      <MainLayout>
+        <CobranzaLayout>
+          <ConvenioDetallePage />
+        </CobranzaLayout>
+      </MainLayout>
+    ),
+  },
+
+  // --- CXC / Pagos ---
+  {
+    path: '/cxc/pagos/pagos',
+    element: (
+      <MainLayout>
+        <PagosLayout>
+          <PagosPage />
+        </PagosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/pagos/aplicaciones-pago',
+    element: (
+      <MainLayout>
+        <PagosLayout>
+          <AplicacionesPagoPage />
+        </PagosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/pagos/anticipos',
+    element: (
+      <MainLayout>
+        <PagosLayout>
+          <AnticiposPage />
+        </PagosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/pagos/recibos',
+    element: (
+      <MainLayout>
+        <PagosLayout>
+          <RecibosPage />
+        </PagosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/pagos/formas-pago',
+    element: (
+      <MainLayout>
+        <PagosLayout>
+          <FormasPagoPage />
+        </PagosLayout>
+      </MainLayout>
+    ),
+  },
+
+  // --- CXC / Crédito ---
+  {
+    path: '/cxc/credito/condiciones-credito',
+    element: (
+      <CreditoLayout>
+        <CondicionesCreditoPage />
+      </CreditoLayout>
+    ),
+  },
+  {
+    path: '/cxc/credito/notas-credito',
+    element: (
+      <CreditoLayout>
+        <NotasCreditoPage />
+      </CreditoLayout>
+    ),
+  },
+  {
+    path: '/cxc/credito/aplicaciones-nota-credito',
+    element: (
+      <CreditoLayout>
+        <AplicacionesNotaCreditoPage />
+      </CreditoLayout>
+    ),
+  },
+  {
+    path: '/cxc/credito/mora',
+    element: (
+      <CreditoLayout>
+        <MoraPage />
+      </CreditoLayout>
+    ),
   },
 ];

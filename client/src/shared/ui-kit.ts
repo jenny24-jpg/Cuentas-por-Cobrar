@@ -1,3 +1,18 @@
+/**
+ * El kit de components/ui/* (Button, FormControls, DataDisplay, Badges) está
+ * escrito en JSX con JSDoc parcial: documenta algunas props pero no todas
+ * las que el componente realmente acepta en runtime (ej. Button SÍ acepta
+ * onClick y type, pero el JSDoc no los declara; DataTable SÍ acepta
+ * onRowClick opcional, pero al no tener JSDoc, TypeScript lo infiere como
+ * requerido). Eso hace que TypeScript rechace props válidas.
+ *
+ * Por la regla 1 de FRONTEND_GUIDELINES.md, components/ui/* es de solo
+ * lectura — no se puede corregir el JSDoc ahí. Este archivo re-exporta los
+ * mismos componentes reales (mismo código, mismo comportamiento) con un
+ * tipo permisivo, para que el resto del equipo no tenga que pelear con
+ * falsos errores de tipos. Importa SIEMPRE desde aquí, no directo desde
+ * components/ui, en cualquier módulo (compras, bancos, cxp, cxc).
+ */
 import type { FC } from 'react';
 import { Button as ButtonBase } from '../components/ui/Button';
 import {

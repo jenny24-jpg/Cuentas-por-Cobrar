@@ -27,6 +27,10 @@ const sizeStyles = {
  * <Modal isOpen={open} onClose={() => setOpen(false)} title="Nueva empresa">
  *   <EmpresaForm onSuccess={() => setOpen(false)} />
  * </Modal>
+ *
+ * <Modal isOpen={open} onClose={() => setOpen(false)} title="Nueva gestión de cobro">
+ *   <FormularioGestionCobro onSuccess={() => setOpen(false)} />
+ * </Modal>
  */
 export const Modal = ({ isOpen, onClose, title, description, children, size = 'md' }: ModalProps) => {
   useEffect(() => {

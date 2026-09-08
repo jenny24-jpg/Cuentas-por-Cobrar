@@ -1,6 +1,7 @@
 // Cliente API único para todo el frontend. No uses fetch() suelto en los
 // módulos: todo el equipo pasa por aquí para que la base URL, el manejo de
 // errores y el formato de respuesta sean consistentes en toda la app.
+
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
 export class ApiError extends Error {
