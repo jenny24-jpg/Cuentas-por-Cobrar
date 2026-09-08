@@ -30,7 +30,7 @@ const SELECT_BASE = `
   SELECT cv.ID_CONVENIO, cv.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE, cv.FECHA_CONVENIO,
          cv.MONTO_DEUDA, cv.NUMERO_CUOTAS, cv.ESTADO, cv.OBSERVACIONES
   FROM CXC_CONVENIOS_PAGO cv
-  JOIN CXC_CLIENTES c ON c.ID_CLIENTE = cv.ID_CLIENTE
+  JOIN CLIENTE c ON c.ID_CLIENTE = cv.ID_CLIENTE
 `;
 
 export async function findAll(params: {
@@ -54,7 +54,7 @@ export async function findAll(params: {
     );
 
     const countResult = await conn.execute<{ TOTAL: number }>(
-      `SELECT COUNT(*) AS TOTAL FROM CXC_CONVENIOS_PAGO cv JOIN CXC_CLIENTES c ON c.ID_CLIENTE = cv.ID_CLIENTE ${whereClause}`,
+      `SELECT COUNT(*) AS TOTAL FROM CXC_CONVENIOS_PAGO cv JOIN CLIENTE c ON c.ID_CLIENTE = cv.ID_CLIENTE ${whereClause}`,
       searchBind,
     );
 
@@ -111,11 +111,8 @@ export async function update(id: number, input: UpdateConvenioPagoInput): Promis
 
   if (input.estado !== undefined) { fields.push('ESTADO = :estado'); binds.estado = input.estado; }
   if (input.observaciones !== undefined) { fields.push('OBSERVACIONES = :observaciones'); binds.observaciones = input.observaciones; }
-  // Nota deliberada: montoDeuda, numeroCuotas y fechaConvenio NO se dejan
-  // editar aquí porque ya generaron las cuotas al crearse el convenio
-  // (ver convenioPago.service.ts). Cambiarlos después desincroniza las
-  // cuotas ya generadas. Si el negocio necesita eso, debe ser un flujo
-  // explícito de "renegociar convenio", no un PATCH simple.
+  // montoDeuda, numeroCuotas y fechaConvenio no se editan aquí a propósito:
+  // ya generaron las cuotas al crearse el convenio.
 
   if (fields.length === 0) return;
 
@@ -134,8 +131,6 @@ export async function update(id: number, input: UpdateConvenioPagoInput): Promis
 export async function remove(id: number): Promise<void> {
   const conn = await getConnection();
   try {
-    // Las cuotas hijas se eliminan primero por integridad referencial
-    // (no hay ON DELETE CASCADE en el DDL original).
     await conn.execute(`DELETE FROM CXC_CONVENIO_CUOTAS WHERE ID_CONVENIO = :id`, { id });
     await conn.execute(`DELETE FROM CXC_CONVENIOS_PAGO WHERE ID_CONVENIO = :id`, { id });
     await conn.commit();
