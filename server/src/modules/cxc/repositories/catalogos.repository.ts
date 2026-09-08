@@ -1,6 +1,5 @@
 import { getConnection } from '../../../config/database';
-import type { CatalogoOption } from '@erp/contracts';
-
+import type { CatalogoOption, FormaPagoOption } from '@erp/contracts';
 /**
  * Catálogos de solo lectura para poblar <Select> en formularios (cliente,
  * empleado, documento). CXC_CLIENTES, CXC_EMPLEADOS y CXC_DOCUMENTOS son
@@ -47,6 +46,26 @@ export async function listEmpleadosActivos(): Promise<CatalogoOption[]> {
   }
 }
 
+export async function listFormasPagoActivas(): Promise<FormaPagoOption[]> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ID_FORMA_PAGO: number; NOMBRE: string; REQUIERE_REFERENCIA: string }>(
+      `SELECT ID_FORMA_PAGO, NOMBRE, REQUIERE_REFERENCIA FROM CXC_FORMAS_PAGO
+       WHERE ESTADO = 'A'
+       ORDER BY NOMBRE ASC`,
+    );
+    return (result.rows ?? []).map((r) => ({
+      id: r.ID_FORMA_PAGO,
+      label: r.NOMBRE,
+      requiereReferencia: r.REQUIERE_REFERENCIA === 'S',
+    }));
+  } finally {
+    await conn.close();
+  }
+}
+
+
+
 /** Documentos con saldo pendiente de un cliente específico (para asociar la gestión/promesa al documento correcto). */
 export async function listDocumentosPendientesPorCliente(idCliente: number): Promise<CatalogoOption[]> {
   const conn = await getConnection();
@@ -64,4 +83,5 @@ export async function listDocumentosPendientesPorCliente(idCliente: number): Pro
   } finally {
     await conn.close();
   }
+  
 }
