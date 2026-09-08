@@ -1,4 +1,5 @@
-// Exportación unificada de todos los contratos y esquemas del ERP
+﻿// Exportación unificada de todos los contratos y esquemas del ERP
+export * from './pagination';
 export * from './modules/compras';
 export * from './modules/bancos';
 export * from './modules/cxp';

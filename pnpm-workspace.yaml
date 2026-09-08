@@ -4,3 +4,5 @@ packages:
   - 'packages/contracts'
 allowBuilds:
   esbuild: true
+  oracledb: set this to true or false
+  pnpm: set this to true or false

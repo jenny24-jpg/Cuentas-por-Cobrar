@@ -1,8 +1,12 @@
+import 'dotenv/config';
 import express from 'express';
+import cors from 'cors';
+import cxcRoutes from './modules/cxc/routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -12,7 +16,11 @@ app.get('/health', (_req, res) => {
 });
 
 // Registro de módulos del sistema
-// TODO: Importar y usar rutas de compras, bancos, cxp, cxc
+app.use('/api/cxc', cxcRoutes);
+// TODO: cuando estén listos, agregar de la misma forma:
+// app.use('/api/compras', comprasRoutes);
+// app.use('/api/bancos', bancosRoutes);
+// app.use('/api/cxp', cxpRoutes);
 
 app.listen(PORT, () => {
   console.log(`[ERP Server]: API base corriendo en http://localhost:${PORT}`);
