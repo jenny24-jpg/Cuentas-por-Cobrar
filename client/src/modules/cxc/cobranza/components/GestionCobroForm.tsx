@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { TextInput, Select, TextArea, Button } from '../../../../shared/ui-kit';
 import { apiClient, ApiError } from '../../../../shared/api';
+import {
+  validateRequiredSelect,
+  validateNumber,
+  validateDate,
+  validateMaxLength,
+  hasErrors,
+  type ValidationErrors,
+} from '../../../../shared/validation';
 import type { CatalogoOption, GestionCobro } from '@erp/contracts';
-
-// NOTA: no se importa TIPOS_GESTION_COBRO desde @erp/contracts aquí a
-// propósito. Vite/Rollup no logra resolver estáticamente constantes de
-// runtime cuando llegan a través de 3+ niveles de `export *` encadenados
-// compilados a CommonJS (limitación conocida del bundler, no del código).
-// El backend SÍ importa la constante real desde contracts para validar
-// (ver packages/contracts/src/modules/cxc/cobranza/gestion-cobro.ts).
-// Si cambias los valores allá, cámbialos aquí también.
-const TIPOS_GESTION_COBRO = ['LLAMADA', 'VISITA', 'EMAIL', 'WHATSAPP', 'CARTA', 'OTRO'] as const;
 
 interface GestionCobroFormProps {
   gestion?: GestionCobro | null;
@@ -18,6 +17,13 @@ interface GestionCobroFormProps {
   onCancel: () => void;
 }
 
+// NOTA: no se importa TIPOS_GESTION_COBRO desde @erp/contracts aquí a
+// propósito. Vite/Rollup no logra resolver estáticamente constantes de
+// runtime cuando llegan a través de 3+ niveles de `export *` encadenados
+// compilados a CommonJS (limitación conocida del bundler, no del código).
+// El backend SÍ importa la constante real desde contracts para validar.
+// Si cambias los valores allá, cámbialos aquí también.
+const TIPOS_GESTION_COBRO = ['LLAMADA', 'VISITA', 'EMAIL', 'WHATSAPP', 'CARTA', 'OTRO'] as const;
 const TIPO_OPTIONS = TIPOS_GESTION_COBRO.map((t) => ({ value: t, label: t }));
 
 export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroFormProps) => {
@@ -36,7 +42,7 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
   const [fechaCompromiso, setFechaCompromiso] = useState(gestion?.fechaCompromiso?.slice(0, 10) ?? '');
   const [montoCompromiso, setMontoCompromiso] = useState(gestion?.montoCompromiso?.toString() ?? '');
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -56,10 +62,47 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
       .catch(() => setDocumentos([]));
   }, [idCliente]);
 
+  /**
+   * Validación 100% del lado del cliente. Si devuelve cualquier error, el
+   * submit se detiene ANTES de tocar la red — nunca se manda nada a medio
+   * validar al backend.
+   */
+  const validate = (): ValidationErrors => {
+    const next: ValidationErrors = {};
+
+    const clienteErr = validateRequiredSelect(idCliente, 'un cliente');
+    if (clienteErr) next.idCliente = clienteErr;
+
+    const empleadoErr = validateRequiredSelect(idEmpleado, 'un empleado responsable');
+    if (empleadoErr) next.idEmpleado = empleadoErr;
+
+    const resultadoErr = validateMaxLength(resultado, 'Resultado', 80);
+    if (resultadoErr) next.resultado = resultadoErr;
+
+    const observacionErr = validateMaxLength(observacion, 'Observación', 500);
+    if (observacionErr) next.observacion = observacionErr;
+
+    // La fecha de compromiso, si se llena, no puede ser una fecha ya pasada
+    // (no tiene sentido "comprometer" un pago para ayer).
+    const fechaErr = validateDate(fechaCompromiso, 'La fecha de compromiso', { notPast: true });
+    if (fechaErr) next.fechaCompromiso = fechaErr;
+
+    const montoErr = validateNumber(montoCompromiso, 'El monto comprometido', { positive: true });
+    if (montoErr) next.montoCompromiso = montoErr;
+
+    return next;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
     setFormError(null);
+
+    const validationErrors = validate();
+    if (hasErrors(validationErrors)) {
+      setErrors(validationErrors);
+      return; // Bloqueado: ni un solo request sale de aquí con datos inválidos.
+    }
+    setErrors({});
     setIsSubmitting(true);
 
     const payload = {
@@ -81,8 +124,11 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
       }
       onSuccess();
     } catch (err) {
+      // Segunda línea de defensa: si el backend rechaza algo que el cliente
+      // no captó (ej. una regla de negocio que solo Oracle conoce), se
+      // muestra igual, con el mismo mecanismo de errores por campo.
       if (err instanceof ApiError && err.status === 400 && Array.isArray(err.details)) {
-        const fieldErrors: Record<string, string> = {};
+        const fieldErrors: ValidationErrors = {};
         (err.details as Array<{ campo: string; mensaje: string }>).forEach((d) => {
           fieldErrors[d.campo] = d.mensaje;
         });
@@ -102,50 +148,57 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
           label="Cliente"
           required
           value={idCliente}
-          onChange={(e) => { setIdCliente(e.target.value); setIdDocumento(''); }}
+          onChange={(e: any) => { setIdCliente(e.target.value); setIdDocumento(''); }}
           options={clientes.map((c) => ({ value: c.id, label: c.label }))}
           error={errors.idCliente}
+          helperText="El cliente al que se le realizó la gestión de cobro."
         />
         <Select
           label="Empleado responsable"
           required
           value={idEmpleado}
-          onChange={(e) => setIdEmpleado(e.target.value)}
-          options={empleados.map((e) => ({ value: e.id, label: e.label }))}
+          onChange={(e: any) => setIdEmpleado(e.target.value)}
+          options={empleados.map((emp) => ({ value: emp.id, label: emp.label }))}
           error={errors.idEmpleado}
+          helperText="La persona del equipo de cobranza que hizo el contacto."
         />
       </div>
 
       <Select
         label="Documento relacionado"
         value={idDocumento}
-        onChange={(e) => setIdDocumento(e.target.value)}
+        onChange={(e: any) => setIdDocumento(e.target.value)}
         options={documentos.map((d) => ({ value: d.id, label: d.label }))}
         placeholder={idCliente ? 'Seleccionar documento (opcional)' : 'Selecciona un cliente primero'}
         isReadOnly={!idCliente}
-        helperText="Opcional: solo documentos con saldo pendiente del cliente seleccionado"
+        helperText="Opcional: solo aparecen documentos con saldo pendiente del cliente seleccionado."
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Tipo de gestión"
           value={tipoGestion}
-          onChange={(e) => setTipoGestion(e.target.value)}
+          onChange={(e: any) => setTipoGestion(e.target.value)}
           options={TIPO_OPTIONS}
+          helperText="Cómo se realizó el contacto con el cliente."
         />
         <TextInput
           label="Resultado"
           value={resultado}
-          onChange={(e) => setResultado(e.target.value)}
+          onChange={(e: any) => setResultado(e.target.value)}
           placeholder="Ej. Cliente comprometió pago"
+          error={errors.resultado}
+          helperText="Resumen corto de cómo terminó la gestión (máx. 80 caracteres)."
         />
       </div>
 
       <TextArea
         label="Observación"
         value={observacion}
-        onChange={(e) => setObservacion(e.target.value)}
+        onChange={(e: any) => setObservacion(e.target.value)}
         rows={3}
+        error={errors.observacion}
+        helperText="Detalle adicional de la conversación o visita (máx. 500 caracteres)."
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -153,14 +206,18 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
           label="Fecha compromiso"
           type="date"
           value={fechaCompromiso}
-          onChange={(e) => setFechaCompromiso(e.target.value)}
+          onChange={(e: any) => setFechaCompromiso(e.target.value)}
+          error={errors.fechaCompromiso}
+          helperText="Solo si el cliente se comprometió a pagar en una fecha específica. No puede ser una fecha pasada."
         />
         <TextInput
           label="Monto comprometido"
           type="number"
           step="0.01"
           value={montoCompromiso}
-          onChange={(e) => setMontoCompromiso(e.target.value)}
+          onChange={(e: any) => setMontoCompromiso(e.target.value)}
+          error={errors.montoCompromiso}
+          helperText="Cantidad exacta que el cliente prometió pagar, si aplica."
         />
       </div>
 

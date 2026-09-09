@@ -1,66 +1,41 @@
 import { getConnection } from '../../../config/database';
-import type { CatalogoOption } from '@erp/contracts';
+import type { CatalogoOption, FormaPagoOption } from '@erp/contracts';
 
 /**
  * Catálogos de solo lectura para poblar <Select> en formularios.
  * Este repositorio solo LEE las tablas relacionadas; no administra sus CRUD.
  */
 
-export async function listClientesActivos(
-  search?: string,
-): Promise<CatalogoOption[]> {
+export async function listClientesActivos(search?: string): Promise<CatalogoOption[]> {
   const conn = await getConnection();
-
   try {
     // Sin filtro de ESTADO por ahora.
     // CLIENTE.ESTADO existe, pero todavía no hay una regla confirmada
     // sobre qué valor representa "activo".
-    const whereClause = search
-      ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search)`
-      : '';
+    const whereClause = search ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search)` : '';
 
-    const result = await conn.execute<{
-      ID_CLIENTE: number;
-      NOMBRE: string;
-    }>(
-      `SELECT
-         ID_CLIENTE,
-         NOMBRE
-       FROM CLIENTE
+    const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string }>(
+      `SELECT ID_CLIENTE, NOMBRE FROM CLIENTE
        ${whereClause}
        ORDER BY NOMBRE ASC
        FETCH FIRST 50 ROWS ONLY`,
       search ? { search: `%${search}%` } : {},
     );
 
-    return (result.rows ?? []).map((r) => ({
-      id: r.ID_CLIENTE,
-      label: r.NOMBRE,
-    }));
+    return (result.rows ?? []).map((r) => ({ id: r.ID_CLIENTE, label: r.NOMBRE }));
   } finally {
     await conn.close();
   }
 }
 
-export async function listEmpleadosActivos(): Promise<
-  CatalogoOption[]
-> {
+export async function listEmpleadosActivos(): Promise<CatalogoOption[]> {
   const conn = await getConnection();
-
   try {
     // Sin filtro de ESTADO por ahora.
     // EMPLEADO.ESTADO existe, pero todavía no está confirmado
     // qué valor representa "activo".
-    const result = await conn.execute<{
-      ID_EMPLEADO: number;
-      NOMBRE: string;
-      APELLIDO: string | null;
-    }>(
-      `SELECT
-         ID_EMPLEADO,
-         NOMBRE,
-         APELLIDO
-       FROM EMPLEADO
+    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string | null }>(
+      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO FROM EMPLEADO
        ORDER BY NOMBRE ASC`,
     );
 
@@ -73,14 +48,29 @@ export async function listEmpleadosActivos(): Promise<
   }
 }
 
+export async function listFormasPagoActivas(): Promise<FormaPagoOption[]> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ID_FORMA_PAGO: number; NOMBRE: string; REQUIERE_REFERENCIA: string }>(
+      `SELECT ID_FORMA_PAGO, NOMBRE, REQUIERE_REFERENCIA FROM CXC_FORMAS_PAGO
+       WHERE ESTADO = 'A'
+       ORDER BY NOMBRE ASC`,
+    );
+    return (result.rows ?? []).map((r) => ({
+      id: r.ID_FORMA_PAGO,
+      label: r.NOMBRE,
+      requiereReferencia: r.REQUIERE_REFERENCIA === 'S',
+    }));
+  } finally {
+    await conn.close();
+  }
+}
+
 /**
  * Documentos con saldo pendiente de un cliente específico.
  */
-export async function listDocumentosPendientesPorCliente(
-  idCliente: number,
-): Promise<CatalogoOption[]> {
+export async function listDocumentosPendientesPorCliente(idCliente: number): Promise<CatalogoOption[]> {
   const conn = await getConnection();
-
   try {
     const result = await conn.execute<{
       ID_DOCUMENTO: number;
@@ -88,11 +78,7 @@ export async function listDocumentosPendientesPorCliente(
       NUMERO_DOCUMENTO: string | null;
       SALDO: number;
     }>(
-      `SELECT
-         ID_DOCUMENTO,
-         SERIE,
-         NUMERO_DOCUMENTO,
-         SALDO
+      `SELECT ID_DOCUMENTO, SERIE, NUMERO_DOCUMENTO, SALDO
        FROM CXC_DOCUMENTOS
        WHERE ID_CLIENTE = :idCliente
          AND SALDO > 0
@@ -113,11 +99,8 @@ export async function listDocumentosPendientesPorCliente(
  * Notas de crédito activas disponibles para seleccionar
  * al registrar una aplicación de nota de crédito.
  */
-export async function listNotasCreditoActivas(): Promise<
-  CatalogoOption[]
-> {
+export async function listNotasCreditoActivas(): Promise<CatalogoOption[]> {
   const conn = await getConnection();
-
   try {
     const result = await conn.execute<{
       ID_NOTA_CREDITO: number;
@@ -125,21 +108,14 @@ export async function listNotasCreditoActivas(): Promise<
       NUMERO: string | null;
       MONTO: number;
     }>(
-      `SELECT
-         ID_NOTA_CREDITO,
-         SERIE,
-         NUMERO,
-         MONTO
+      `SELECT ID_NOTA_CREDITO, SERIE, NUMERO, MONTO
        FROM CXC_NOTAS_CREDITO
        WHERE ESTADO = 'ACTIVA'
        ORDER BY FECHA DESC, ID_NOTA_CREDITO DESC`,
     );
 
     return (result.rows ?? []).map((r) => {
-      const identificador =
-        [r.SERIE, r.NUMERO].filter(Boolean).join('-') ||
-        `Nota #${r.ID_NOTA_CREDITO}`;
-
+      const identificador = [r.SERIE, r.NUMERO].filter(Boolean).join('-') || `Nota #${r.ID_NOTA_CREDITO}`;
       return {
         id: r.ID_NOTA_CREDITO,
         label: `${identificador} (monto: ${r.MONTO})`,

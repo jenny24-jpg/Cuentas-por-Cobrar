@@ -30,6 +30,15 @@ router.get('/clientes/:idCliente/documentos-pendientes', async (req: Request, re
   }
 });
 
+router.get('/formas-pago', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const formasPago = await catalogosRepository.listFormasPagoActivas();
+    res.json(formasPago);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get(
   '/notas-credito',
   async (_req: Request, res: Response, next: NextFunction) => {

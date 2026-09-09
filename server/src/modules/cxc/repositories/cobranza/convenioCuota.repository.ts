@@ -10,6 +10,9 @@ interface ConvenioCuotaRow {
   MONTO: number;
   SALDO: number;
   ESTADO: string;
+  ID_FORMA_PAGO: number | null;
+  NOMBRE_FORMA_PAGO: string | null;
+  REFERENCIA_PAGO: string | null;
 }
 
 function mapRow(row: ConvenioCuotaRow): ConvenioCuota {
@@ -21,17 +24,27 @@ function mapRow(row: ConvenioCuotaRow): ConvenioCuota {
     monto: row.MONTO,
     saldo: row.SALDO,
     estado: row.ESTADO as ConvenioCuota['estado'],
+    idFormaPago: row.ID_FORMA_PAGO,
+    nombreFormaPago: row.NOMBRE_FORMA_PAGO,
+    referenciaPago: row.REFERENCIA_PAGO,
   };
 }
+
+const SELECT_BASE = `
+  SELECT cc.ID_CUOTA, cc.ID_CONVENIO, cc.NUMERO_CUOTA, cc.FECHA_VENCIMIENTO,
+         cc.MONTO, cc.SALDO, cc.ESTADO, cc.ID_FORMA_PAGO,
+         fp.NOMBRE AS NOMBRE_FORMA_PAGO, cc.REFERENCIA_PAGO
+  FROM CXC_CONVENIO_CUOTAS cc
+  LEFT JOIN CXC_FORMAS_PAGO fp ON fp.ID_FORMA_PAGO = cc.ID_FORMA_PAGO
+`;
+// LEFT JOIN (no JOIN normal): las cuotas que todavía no se han pagado no
+// tienen ID_FORMA_PAGO, y aun así deben aparecer en el listado.
 
 export async function findByConvenio(idConvenio: number): Promise<ConvenioCuota[]> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<ConvenioCuotaRow>(
-      `SELECT ID_CUOTA, ID_CONVENIO, NUMERO_CUOTA, FECHA_VENCIMIENTO, MONTO, SALDO, ESTADO
-       FROM CXC_CONVENIO_CUOTAS
-       WHERE ID_CONVENIO = :idConvenio
-       ORDER BY NUMERO_CUOTA ASC`,
+      `${SELECT_BASE} WHERE cc.ID_CONVENIO = :idConvenio ORDER BY cc.NUMERO_CUOTA ASC`,
       { idConvenio },
     );
     return (result.rows ?? []).map(mapRow);
@@ -44,8 +57,7 @@ export async function findById(id: number): Promise<ConvenioCuota | null> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<ConvenioCuotaRow>(
-      `SELECT ID_CUOTA, ID_CONVENIO, NUMERO_CUOTA, FECHA_VENCIMIENTO, MONTO, SALDO, ESTADO
-       FROM CXC_CONVENIO_CUOTAS WHERE ID_CUOTA = :id`,
+      `${SELECT_BASE} WHERE cc.ID_CUOTA = :id`,
       { id },
     );
     const row = result.rows?.[0];
@@ -113,15 +125,21 @@ export async function update(id: number, input: UpdateConvenioCuotaInput): Promi
 }
 
 /**
- * Registra un abono a la cuota: reduce el saldo y, si llega a 0, la marca
- * PAGADA automáticamente. Devuelve la cuota actualizada.
+ * Registra un abono a la cuota: reduce el saldo, guarda con qué forma de
+ * pago y referencia se hizo, y si el saldo llega a 0 la marca PAGADA
+ * automáticamente. Devuelve la cuota actualizada (con el nombre de la
+ * forma de pago ya incluido, vía findById).
  */
-export async function registrarPago(id: number, montoPagado: number): Promise<ConvenioCuota> {
+export async function registrarPago(
+  id: number,
+  montoPagado: number,
+  idFormaPago: number,
+  referenciaPago: string | undefined,
+): Promise<ConvenioCuota> {
   const conn = await getConnection();
   try {
-    const current = await conn.execute<ConvenioCuotaRow>(
-      `SELECT ID_CUOTA, ID_CONVENIO, NUMERO_CUOTA, FECHA_VENCIMIENTO, MONTO, SALDO, ESTADO
-       FROM CXC_CONVENIO_CUOTAS WHERE ID_CUOTA = :id FOR UPDATE`,
+    const current = await conn.execute<{ SALDO: number; ESTADO: string }>(
+      `SELECT SALDO, ESTADO FROM CXC_CONVENIO_CUOTAS WHERE ID_CUOTA = :id FOR UPDATE`,
       { id },
     );
     const row = current.rows?.[0];
@@ -133,16 +151,32 @@ export async function registrarPago(id: number, montoPagado: number): Promise<Co
     const nuevoEstado = nuevoSaldo === 0 ? 'PAGADA' : row.ESTADO;
 
     await conn.execute(
-      `UPDATE CXC_CONVENIO_CUOTAS SET SALDO = :saldo, ESTADO = :estado WHERE ID_CUOTA = :id`,
-      { saldo: nuevoSaldo, estado: nuevoEstado, id },
+      `UPDATE CXC_CONVENIO_CUOTAS
+       SET SALDO = :saldo, ESTADO = :estado, ID_FORMA_PAGO = :idFormaPago, REFERENCIA_PAGO = :referenciaPago
+       WHERE ID_CUOTA = :id`,
+      {
+        saldo: nuevoSaldo,
+        estado: nuevoEstado,
+        idFormaPago,
+        referenciaPago: referenciaPago ?? null,
+        id,
+      },
     );
     await conn.commit();
-
-    return mapRow({ ...row, SALDO: nuevoSaldo, ESTADO: nuevoEstado });
   } catch (err) {
     await conn.rollback();
     throw err;
   } finally {
     await conn.close();
+  }
+
+  // Se recarga completa (con JOIN a CXC_FORMAS_PAGO) para devolver el
+  // nombre real de la forma de pago, no solo el ID.
+  const conn2 = await getConnection();
+  try {
+    const result = await conn2.execute<ConvenioCuotaRow>(`${SELECT_BASE} WHERE cc.ID_CUOTA = :id`, { id });
+    return mapRow(result.rows![0]);
+  } finally {
+    await conn2.close();
   }
 }

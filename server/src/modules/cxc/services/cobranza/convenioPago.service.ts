@@ -99,5 +99,5 @@ export async function getCuotasDeConvenio(idConvenio: number): Promise<ConvenioC
 
 export async function registrarPagoCuota(idCuota: number, rawInput: unknown): Promise<ConvenioCuota> {
   const input = registrarPagoCuotaSchema.parse(rawInput);
-  return convenioCuotaRepository.registrarPago(idCuota, input.montoPagado);
+  return convenioCuotaRepository.registrarPago(idCuota, input.montoPagado, input.idFormaPago, input.referenciaPago);
 }
