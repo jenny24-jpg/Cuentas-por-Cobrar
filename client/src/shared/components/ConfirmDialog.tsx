@@ -13,9 +13,10 @@ interface ConfirmDialogProps {
 }
 
 /**
- * Confirmación estandarizada para acciones irreversibles (eliminar gestión,
- * eliminar convenio, etc.). Reutilizar en vez de un window.confirm() nativo
- * o un modal de confirmación distinto por pantalla.
+ * Confirmación estandarizada para acciones irreversibles (eliminar empresa,
+ * eliminar ruta, eliminar gestión, eliminar convenio, etc.). Reutilizar en
+ * vez de un window.confirm() nativo o un modal de confirmación distinto
+ * por pantalla.
  */
 export const ConfirmDialog = ({
   isOpen,

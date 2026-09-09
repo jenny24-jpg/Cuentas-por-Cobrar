@@ -24,6 +24,10 @@ const sizeStyles = {
  * cxc), no propiedad de uno solo.
  *
  * Uso:
+ * <Modal isOpen={open} onClose={() => setOpen(false)} title="Nueva empresa">
+ *   <EmpresaForm onSuccess={() => setOpen(false)} />
+ * </Modal>
+ *
  * <Modal isOpen={open} onClose={() => setOpen(false)} title="Nueva gestión de cobro">
  *   <FormularioGestionCobro onSuccess={() => setOpen(false)} />
  * </Modal>
@@ -48,7 +52,6 @@ export const Modal = ({ isOpen, onClose, title, description, children, size = 'm
         onClick={onClose}
         aria-hidden="true"
       />
-
       {/* Panel */}
       <div
         role="dialog"
@@ -72,7 +75,6 @@ export const Modal = ({ isOpen, onClose, title, description, children, size = 'm
             <X size={18} />
           </button>
         </div>
-
         <div className="px-6 py-5 overflow-y-auto">{children}</div>
       </div>
     </div>

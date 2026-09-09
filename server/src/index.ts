@@ -1,5 +1,4 @@
 import 'dotenv/config';
-
 import express from 'express';
 import cors from 'cors';
 import cxcRoutes from './modules/cxc/routes';
@@ -24,6 +23,10 @@ app.get('/health', (_req, res) => {
 
 // Rutas del módulo Cuentas por Cobrar
 app.use('/api/cxc', cxcRoutes);
+// TODO: cuando estén listos, agregar de la misma forma:
+// app.use('/api/compras', comprasRoutes);
+// app.use('/api/bancos', bancosRoutes);
+// app.use('/api/cxp', cxpRoutes);
 
 // Manejo de errores
 app.use(errorHandler);

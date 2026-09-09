@@ -12,6 +12,9 @@ const DEFAULT_META: PaginationMeta = { page: 1, limit: 10, total: 0, totalPages:
  *
  * Uso:
  * const { data, meta, isLoading, error, refetch } =
+ *   usePaginatedList<Empresa>('/cxc/empresas', { page, limit: 10, search });
+ *
+ * const { data, meta, isLoading, error, refetch } =
  *   usePaginatedList<GestionCobro>('/cxc/gestiones-cobro', { page, limit: 10, search });
  */
 export function usePaginatedList<T>(

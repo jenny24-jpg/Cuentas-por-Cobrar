@@ -2,6 +2,13 @@
 import type { RouteObject } from 'react-router-dom';
 import MainLayout from '../layouts/MainLayout';
 
+// --- CXC / Organización ---
+import { OrganizacionLayout } from '../modules/cxc/organizacion/organizacionLayout';
+import { EmpresasPage } from '../modules/cxc/organizacion/EmpresasPage';
+import { SucursalesPage } from '../modules/cxc/organizacion/SucursalesPage';
+import { RutasPage } from '../modules/cxc/organizacion/RutasPage';
+import { RutaDetallePage } from '../modules/cxc/organizacion/RutaDetallePage';
+
 // --- CXC / Cobranza ---
 import { CobranzaLayout } from '../modules/cxc/cobranza/cobranzaLayout';
 import { GestionesCobroPage } from '../modules/cxc/cobranza/GestionesCobroPage';
@@ -25,6 +32,48 @@ import { RecibosPage } from '../modules/cxc/pagos/RecibosPage';
 import { FormasPagoPage } from '../modules/cxc/pagos/FormasPagoPage';
 
 export const routes: RouteObject[] = [
+  // --- CXC / Organización ---
+  {
+    path: '/cxc/organizacion/empresas',
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <EmpresasPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/organizacion/sucursales',
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <SucursalesPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/organizacion/rutas',
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <RutasPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/organizacion/rutas/:id',
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <RutaDetallePage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
+  },
+
   // --- CXC / Cobranza ---
   {
     path: '/cxc/cobranza/gestiones-cobro',
