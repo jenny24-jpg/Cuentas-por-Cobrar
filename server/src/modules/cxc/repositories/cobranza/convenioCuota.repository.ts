@@ -1,6 +1,7 @@
 import type { Connection } from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { ConvenioCuota, UpdateConvenioCuotaInput } from '@erp/contracts';
+import { BadRequestError, NotFoundError } from '../../../../shared/errors/AppError';
 
 interface ConvenioCuotaRow {
   ID_CUOTA: number;
@@ -144,10 +145,18 @@ export async function registrarPago(
     );
     const row = current.rows?.[0];
     if (!row) {
-      throw Object.assign(new Error(`Cuota ${id} no encontrada`), { name: 'NotFoundError' });
+      throw new NotFoundError(`Cuota ${id} no encontrada`);
     }
 
-    const nuevoSaldo = Math.max(0, Number(row.SALDO) - montoPagado);
+    const saldoActual = Number(row.SALDO);
+    if (saldoActual <= 0 || row.ESTADO === 'PAGADA') {
+      throw new BadRequestError('La cuota ya está pagada');
+    }
+    if (montoPagado > saldoActual) {
+      throw new BadRequestError('El monto pagado no puede superar el saldo de la cuota');
+    }
+
+    const nuevoSaldo = Math.round((saldoActual - montoPagado) * 100) / 100;
     const nuevoEstado = nuevoSaldo === 0 ? 'PAGADA' : row.ESTADO;
 
     await conn.execute(

@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-﻿// Exportación unificada de todos los contratos y esquemas del ERP
-export * from './pagination';
-=======
 // Exportación unificada de todos los contratos y esquemas del ERP
 export * from './common/pagination';
->>>>>>> 47734d722b35479d2e64768d6550469f3f0888ce
 export * from './modules/compras';
 export * from './modules/bancos';
 export * from './modules/cxp';
@@ -22,3 +17,5 @@ export { ESTADOS_PROMESA_PAGO } from './modules/cxc/cobranza/promesa-pago';
 export { ESTADOS_CONVENIO_PAGO } from './modules/cxc/cobranza/convenio-pago';
 export { ESTADOS_CUOTA } from './modules/cxc/cobranza/convenio-cuota';
 export { ESTADOS_FORMA_PAGO } from './modules/cxc/pagos/forma-pago';
+
+export { ESTADOS_DOCUMENTO } from './modules/cxc/documentos/documento';

@@ -5,14 +5,8 @@ import {
   type PaginatedResponse,
   type Sucursal,
 } from '@erp/contracts';
+import { NotFoundError } from '../../../../shared/errors/AppError';
 import * as sucursalRepository from '../../repositories/organizacion/sucursal.repository';
-
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
 
 export async function listSucursales(query: {
   page?: string;

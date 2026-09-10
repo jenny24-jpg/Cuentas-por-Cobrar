@@ -5,14 +5,8 @@ import {
   type PaginatedResponse,
   type Empresa,
 } from '@erp/contracts';
+import { NotFoundError } from '../../../../shared/errors/AppError';
 import * as empresaRepository from '../../repositories/organizacion/empresa.repository';
-
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
 
 export async function listEmpresas(query: {
   page?: string;

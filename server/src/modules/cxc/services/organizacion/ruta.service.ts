@@ -5,14 +5,8 @@ import {
   type PaginatedResponse,
   type Ruta,
 } from '@erp/contracts';
+import { NotFoundError } from '../../../../shared/errors/AppError';
 import * as rutaRepository from '../../repositories/organizacion/ruta.repository';
-
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
 
 export async function listRutas(query: {
   page?: string;

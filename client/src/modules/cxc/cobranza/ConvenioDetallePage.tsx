@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, DollarSign } from 'lucide-react';
+import { ArrowLeft, DollarSign, Save, X } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput, Select } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { apiClient, ApiError } from '../../../shared/api';
-import { validateRequiredSelect, validateNumber, hasErrors, type ValidationErrors } from '../../../shared/validation';
+import { validateRequiredSelect, validateMoney, validateIdentifier, hasErrors, type ValidationErrors } from '../../../shared/validation';
 import type { ConvenioPago, ConvenioCuota, FormaPagoOption } from '@erp/contracts';
 
 const ESTADO_CUOTA_TONE: Record<string, string> = {
@@ -72,7 +72,7 @@ export const ConvenioDetallePage = () => {
     if (!montoPagado || montoPagado.trim() === '') {
       next.montoPagado = 'El monto pagado es obligatorio.';
     } else {
-      const montoErr = validateNumber(montoPagado, 'El monto pagado', { positive: true });
+      const montoErr = validateMoney(montoPagado, 'El monto pagado', { required: true, positive: true });
       if (montoErr) {
         next.montoPagado = montoErr;
       } else if (cuotaAPagar && Number(montoPagado) > Number(cuotaAPagar.saldo)) {
@@ -87,16 +87,28 @@ export const ConvenioDetallePage = () => {
     // (cheque, transferencia, depósito...) — efectivo, por ejemplo, no.
     if (formaPagoSeleccionada?.requiereReferencia && (!referenciaPago || referenciaPago.trim() === '')) {
       next.referenciaPago = `${formaPagoSeleccionada.label} requiere un número de referencia.`;
+    } else if (referenciaPago) {
+      const referenciaErr = validateIdentifier(referenciaPago, 'La referencia');
+      if (referenciaErr) next.referenciaPago = referenciaErr;
     }
 
     return next;
   };
 
+  const payValidationErrors = useMemo(() => validate(), [
+    montoPagado,
+    idFormaPago,
+    referenciaPago,
+    cuotaAPagar,
+    formaPagoSeleccionada,
+  ]);
+  const isPayFormValid = !!cuotaAPagar && !hasErrors(payValidationErrors);
+
   const handlePagar = async () => {
     if (!cuotaAPagar) return;
     setPayError(null);
 
-    const validationErrors = validate();
+    const validationErrors = payValidationErrors;
     if (hasErrors(validationErrors)) {
       setErrors(validationErrors);
       return;
@@ -206,7 +218,11 @@ export const ConvenioDetallePage = () => {
           <TextInput
             label="Monto pagado"
             type="number"
+            restriction="decimal"
+            decimalPlaces={2}
             step="0.01"
+            min="0.01"
+            max={cuotaAPagar ? String(cuotaAPagar.saldo) : undefined}
             required
             value={montoPagado}
             onChange={(e: any) => setMontoPagado(e.target.value)}
@@ -228,6 +244,9 @@ export const ConvenioDetallePage = () => {
             <TextInput
               label="Número de referencia"
               required={formaPagoSeleccionada.requiereReferencia}
+              restriction="identifier"
+              uppercase
+              maxLength={50}
               value={referenciaPago}
               onChange={(e: any) => setReferenciaPago(e.target.value)}
               error={errors.referenciaPago}
@@ -241,11 +260,17 @@ export const ConvenioDetallePage = () => {
 
           {payError && <p className="text-sm text-red-600 font-medium">{payError}</p>}
 
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setCuotaAPagar(null)} disabled={isPaying}>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button variant="danger" icon={X} onClick={() => setCuotaAPagar(null)} disabled={isPaying}>
               Cancelar
             </Button>
-            <Button variant="success" onClick={handlePagar} disabled={isPaying}>
+            <Button
+              variant={isPayFormValid ? 'success' : 'primary'}
+              icon={Save}
+              onClick={handlePagar}
+              disabled={isPaying || !isPayFormValid}
+              title={isPayFormValid ? 'Datos válidos: listo para registrar' : 'Revisa los campos y sus reglas'}
+            >
               {isPaying ? 'Registrando...' : 'Registrar pago'}
             </Button>
           </div>

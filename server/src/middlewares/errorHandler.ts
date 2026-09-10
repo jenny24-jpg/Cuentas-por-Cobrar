@@ -1,19 +1,18 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { AppError } from '../shared/errors/AppError';
 
 /**
- * Manejador de errores centralizado. Los controladores deben usar
- * try/catch y llamar a next(err) — nunca res.status(500) manualmente,
- * para que todos los módulos (compras, bancos, cxp, cxc) respondan errores
- * con el mismo formato.
+ * Punto único para transformar errores de dominio/validación en HTTP.
+ * Nunca devuelve stack traces, SQL, credenciales ni mensajes internos al
+ * navegador. El detalle técnico se conserva solo en el log del servidor.
  */
 export function errorHandler(
-  err: any,
+  err: unknown,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ) {
-  // Errores de validación de entrada (esquemas de @erp/contracts)
   if (err instanceof ZodError) {
     res.status(400).json({
       error: 'Datos inválidos',
@@ -25,14 +24,23 @@ export function errorHandler(
     return;
   }
 
-  // Recurso no encontrado (services de cada módulo lanzan NotFoundError)
-  if (err?.name === 'NotFoundError') {
-    res.status(404).json({ error: err.message });
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      error: err.expose ? err.message : 'No fue posible completar la operación',
+      code: err.code,
+    });
     return;
   }
 
-  console.error(err);
+  // Compatibilidad con módulos que todavía lancen su NotFoundError local.
+  if (err instanceof Error && err.name === 'NotFoundError') {
+    res.status(404).json({ error: err.message, code: 'NOT_FOUND' });
+    return;
+  }
+
+  console.error('[ERP Server] Error no controlado:', err);
   res.status(500).json({
-    error: 'Error interno del servidor'
+    error: 'Error interno del servidor',
+    code: 'INTERNAL_ERROR',
   });
 }

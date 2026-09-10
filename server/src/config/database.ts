@@ -29,7 +29,7 @@ export async function initOraclePool(): Promise<oracledb.Pool> {
     );
   }
 
-  console.log(`[Oracle] Conectando como ${user} a ${connectString}...`);
+  console.log(`[Oracle] Inicializando pool para el usuario ${user}...`);
 
   pool = await oracledb.createPool({
     user,

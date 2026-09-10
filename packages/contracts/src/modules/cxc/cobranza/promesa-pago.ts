@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isoDateSchema, optionalIsoDateSchema, moneySchema, optionalTrimmedText } from '../validation';
 
 export const ESTADOS_PROMESA_PAGO = ['PENDIENTE', 'CUMPLIDA', 'INCUMPLIDA'] as const;
 
@@ -14,21 +15,24 @@ export const promesaPagoSchema = z.object({
   estado: z.enum(ESTADOS_PROMESA_PAGO),
   observaciones: z.string().nullable(),
 });
-
 export type PromesaPago = z.infer<typeof promesaPagoSchema>;
 
-export const createPromesaPagoSchema = z.object({
+const promesaInputBase = z.object({
   idCliente: z.number().int().positive('Selecciona un cliente'),
-  idDocumento: z.number().int().positive().nullable().optional(),
-  idGestion: z.number().int().positive().nullable().optional(),
-  fechaPromesa: z.string().min(1, 'La fecha de promesa es obligatoria'),
-  fechaCompromiso: z.string().optional(),
-  montoComprometido: z.number().positive('El monto comprometido debe ser mayor a 0'),
+  idDocumento: z.number().int().positive('Selecciona un documento válido').nullable().optional(),
+  idGestion: z.number().int().positive('Selecciona una gestión válida').nullable().optional(),
+  fechaPromesa: isoDateSchema('La fecha de la promesa'),
+  fechaCompromiso: optionalIsoDateSchema('La fecha comprometida de pago'),
+  montoComprometido: moneySchema('El monto comprometido', true),
   estado: z.enum(ESTADOS_PROMESA_PAGO).default('PENDIENTE'),
-  observaciones: z.string().max(500).optional(),
+  observaciones: optionalTrimmedText('Las observaciones', 500),
 });
 
+export const createPromesaPagoSchema = promesaInputBase.superRefine((data, ctx) => {
+  if (data.fechaCompromiso && data.fechaCompromiso < data.fechaPromesa) {
+    ctx.addIssue({ code: 'custom', path: ['fechaCompromiso'], message: 'La fecha comprometida de pago no puede ser anterior a la fecha de la promesa' });
+  }
+});
 export type CreatePromesaPagoInput = z.infer<typeof createPromesaPagoSchema>;
-
-export const updatePromesaPagoSchema = createPromesaPagoSchema.partial();
+export const updatePromesaPagoSchema = promesaInputBase.partial();
 export type UpdatePromesaPagoInput = z.infer<typeof updatePromesaPagoSchema>;
