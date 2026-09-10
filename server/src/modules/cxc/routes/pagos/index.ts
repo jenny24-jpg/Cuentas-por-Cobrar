@@ -8,6 +8,17 @@ import * as formaRepo from '../../repositories/pagos/formaPago.repository';
 import * as pagoRepo from '../../repositories/pagos/pago.repository';
 const router=Router();
 for (const [path,c] of [['/pagos',pago],['/aplicaciones-pago',aplicacion],['/anticipos',anticipo],['/recibos',recibo],['/formas-pago',forma]] as const){router.get(path,c.list);router.get(`${path}/:id`,c.getOne);router.post(path,c.create);router.patch(`${path}/:id`,c.update);router.delete(`${path}/:id`,c.remove);}
-router.get('/catalogos/pagos', async (_req,res,next)=>{try{res.json(await pagoRepo.listOptions());}catch(e){next(e);}});
+router.get('/catalogos/pagos', async (req, res, next) => {
+  try {
+    const rawIdCliente = req.query.idCliente;
+    const idCliente = rawIdCliente ? Number(rawIdCliente) : undefined;
+    if (rawIdCliente && (!Number.isInteger(idCliente) || (idCliente as number) <= 0)) {
+      return res.status(400).json({ message: 'idCliente debe ser un entero positivo' });
+    }
+    res.json(await pagoRepo.listOptions(idCliente));
+  } catch (e) {
+    next(e);
+  }
+});
 router.get('/catalogos/formas-pago', async (_req,res,next)=>{try{res.json(await formaRepo.listActivas());}catch(e){next(e);}});
 export default router;

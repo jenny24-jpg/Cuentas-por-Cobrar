@@ -1,3 +1,4 @@
+import { businessTodayIso } from '../../../../shared/date';
 import {
   createConvenioPagoSchema,
   updateConvenioPagoSchema,
@@ -9,80 +10,67 @@ import {
 } from '@erp/contracts';
 import * as convenioPagoRepository from '../../repositories/cobranza/convenioPago.repository';
 import * as convenioCuotaRepository from '../../repositories/cobranza/convenioCuota.repository';
-import { NotFoundError } from './gestionCobro.service';
+import * as catalogosRepository from '../../repositories/catalogos.repository';
+import { BadRequestError, NotFoundError } from '../../../../shared/errors/AppError';
 
-export async function listConvenios(query: {
-  page?: string;
-  limit?: string;
-  search?: string;
-}): Promise<PaginatedResponse<ConvenioPago>> {
+
+export async function listConvenios(query: { page?: string; limit?: string; search?: string }): Promise<PaginatedResponse<ConvenioPago>> {
   const page = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
-
   const { data, total } = await convenioPagoRepository.findAll({ page, limit, search: query.search });
   return { data, meta: buildPaginationMeta(total, page, limit) };
 }
 
 export async function getConvenio(id: number): Promise<ConvenioPago> {
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de convenio inválido');
   const convenio = await convenioPagoRepository.findById(id);
   if (!convenio) throw new NotFoundError(`Convenio de pago ${id} no encontrado`);
   return convenio;
 }
 
-/**
- * Genera las cuotas de un convenio distribuyendo el monto de la deuda en
- * partes iguales, con vencimiento mensual a partir de la fecha del convenio.
- * La última cuota absorbe el residuo del redondeo, para que la suma de
- * todas las cuotas sea exactamente igual a montoDeuda (nunca falte ni sobre
- * por centavos).
- */
-function generarPlanDeCuotas(
-  montoDeuda: number,
-  numeroCuotas: number,
-  fechaConvenio: string,
-): Array<{ numeroCuota: number; fechaVencimiento: string; monto: number }> {
-  const montoBase = Math.floor((montoDeuda / numeroCuotas) * 100) / 100;
-  const fechaBase = new Date(fechaConvenio);
+function addMonthsClamped(isoDate: string, months: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const targetMonthIndex = (month - 1) + months;
+  const targetYear = year + Math.floor(targetMonthIndex / 12);
+  const normalizedMonth = ((targetMonthIndex % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(day, lastDay);
+  return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+}
 
+function generarPlanDeCuotas(montoDeuda: number, numeroCuotas: number, fechaConvenio: string) {
+  const totalCentavos = Math.round(montoDeuda * 100);
+  const baseCentavos = Math.floor(totalCentavos / numeroCuotas);
+  const residuo = totalCentavos - baseCentavos * numeroCuotas;
   return Array.from({ length: numeroCuotas }, (_, i) => {
     const numeroCuota = i + 1;
-    const esUltima = numeroCuota === numeroCuotas;
-
-    const montoAcumuladoPrevio = montoBase * (numeroCuotas - 1);
-    const monto = esUltima
-      ? Math.round((montoDeuda - montoAcumuladoPrevio) * 100) / 100
-      : montoBase;
-
-    const fechaVencimiento = new Date(fechaBase);
-    fechaVencimiento.setMonth(fechaVencimiento.getMonth() + numeroCuota);
-
-    return {
-      numeroCuota,
-      fechaVencimiento: fechaVencimiento.toISOString().slice(0, 10),
-      monto,
-    };
+    const centavos = baseCentavos + (i === numeroCuotas - 1 ? residuo : 0);
+    return { numeroCuota, fechaVencimiento: addMonthsClamped(fechaConvenio, numeroCuota), monto: centavos / 100 };
   });
 }
 
 export async function createConvenio(rawInput: unknown): Promise<ConvenioPago> {
   const input = createConvenioPagoSchema.parse(rawInput);
+  if (input.fechaConvenio > businessTodayIso()) throw new BadRequestError('La fecha del convenio no puede ser futura');
+  if (!(await catalogosRepository.clienteExiste(input.idCliente))) throw new BadRequestError('El cliente seleccionado no existe');
   const id = await convenioPagoRepository.create(input);
-
   const plan = generarPlanDeCuotas(input.montoDeuda, input.numeroCuotas, input.fechaConvenio);
-  await convenioCuotaRepository.bulkCreate(id, plan);
-  // Nota: la creación del convenio y la generación de cuotas son dos
-  // transacciones separadas (cada repositorio hace su propio commit). Si el
-  // servidor cae justo entre ambas, quedaría un convenio sin cuotas. Para
-  // este alcance académico es un riesgo aceptable; si se quiere blindar,
-  // el siguiente paso es pasar una única Connection compartida entre los
-  // dos repositorios y commitear una sola vez al final.
-
+  try {
+    await convenioCuotaRepository.bulkCreate(id, plan);
+  } catch (error) {
+    // Compensación para no dejar un convenio sin cuotas si falla la segunda fase.
+    // La transacción única se verificará al revisar la capa Oracle/DDL.
+    await convenioPagoRepository.remove(id).catch(() => undefined);
+    throw error;
+  }
   return getConvenio(id);
 }
 
 export async function updateConvenio(id: number, rawInput: unknown): Promise<ConvenioPago> {
   const input = updateConvenioPagoSchema.parse(rawInput);
   await getConvenio(id);
+  // El repositorio solo permite editar estado/observaciones: monto, fecha y cuotas
+  // quedan inmutables para no desalinear el plan generado.
   await convenioPagoRepository.update(id, input);
   return getConvenio(id);
 }
@@ -93,11 +81,20 @@ export async function deleteConvenio(id: number): Promise<void> {
 }
 
 export async function getCuotasDeConvenio(idConvenio: number): Promise<ConvenioCuota[]> {
-  await getConvenio(idConvenio); // 404 si el convenio no existe
+  await getConvenio(idConvenio);
   return convenioCuotaRepository.findByConvenio(idConvenio);
 }
 
 export async function registrarPagoCuota(idCuota: number, rawInput: unknown): Promise<ConvenioCuota> {
+  if (!Number.isInteger(idCuota) || idCuota <= 0) throw new BadRequestError('ID de cuota inválido');
   const input = registrarPagoCuotaSchema.parse(rawInput);
-  return convenioCuotaRepository.registrarPago(idCuota, input.montoPagado, input.idFormaPago, input.referenciaPago);
+  const cuota = await convenioCuotaRepository.findById(idCuota);
+  if (!cuota) throw new NotFoundError(`Cuota ${idCuota} no encontrada`);
+  if (cuota.saldo <= 0 || cuota.estado === 'PAGADA') throw new BadRequestError('La cuota ya está pagada');
+  if (input.montoPagado > cuota.saldo) throw new BadRequestError('El monto pagado no puede superar el saldo de la cuota');
+  const formas = await catalogosRepository.listFormasPagoActivas();
+  const forma = formas.find((item) => item.id === input.idFormaPago);
+  if (!forma) throw new BadRequestError('La forma de pago seleccionada no está activa o no existe');
+  if (forma.requiereReferencia && !input.referenciaPago) throw new BadRequestError(`${forma.label} requiere un número de referencia`);
+  return convenioCuotaRepository.registrarPago(idCuota, input.montoPagado, input.idFormaPago, input.referenciaPago ?? undefined);
 }

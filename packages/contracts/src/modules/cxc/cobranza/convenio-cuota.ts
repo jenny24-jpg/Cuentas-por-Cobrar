@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isoDateSchema, moneySchema, optionalIdentifierSchema } from '../validation';
 
 export const ESTADOS_CUOTA = ['PENDIENTE', 'PAGADA', 'VENCIDA'] as const;
 
@@ -14,34 +15,23 @@ export const convenioCuotaSchema = z.object({
   nombreFormaPago: z.string().nullable().optional(),
   referenciaPago: z.string().nullable(),
 });
-
 export type ConvenioCuota = z.infer<typeof convenioCuotaSchema>;
 
 export const createConvenioCuotaSchema = z.object({
   idConvenio: z.number().int().positive(),
   numeroCuota: z.number().int().positive(),
-  fechaVencimiento: z.string().min(1, 'La fecha de vencimiento es obligatoria'),
-  monto: z.number().positive('El monto debe ser mayor a 0'),
-  saldo: z.number().nonnegative().optional(),
+  fechaVencimiento: isoDateSchema('La fecha de vencimiento'),
+  monto: moneySchema('El monto', true),
+  saldo: moneySchema('El saldo').optional(),
   estado: z.enum(ESTADOS_CUOTA).default('PENDIENTE'),
 });
-
 export type CreateConvenioCuotaInput = z.infer<typeof createConvenioCuotaSchema>;
-
 export const updateConvenioCuotaSchema = createConvenioCuotaSchema.partial();
 export type UpdateConvenioCuotaInput = z.infer<typeof updateConvenioCuotaSchema>;
 
-/**
- * Registrar un pago de cuota ahora exige forma de pago (catálogo compartido
- * CXC_FORMAS_PAGO). La referencia (número de cheque, de transferencia, etc.)
- * es obligatoria solo si esa forma de pago la requiere — eso se valida en
- * el frontend, donde ya se conoce el catálogo con el flag
- * REQUIERE_REFERENCIA; aquí en el backend queda como opcional para no
- * duplicar esa regla de forma frágil.
- */
 export const registrarPagoCuotaSchema = z.object({
-  montoPagado: z.number().positive('El monto pagado debe ser mayor a 0'),
+  montoPagado: moneySchema('El monto pagado', true),
   idFormaPago: z.number().int().positive('Selecciona una forma de pago'),
-  referenciaPago: z.string().max(50, 'La referencia no puede superar los 50 caracteres').optional(),
+  referenciaPago: optionalIdentifierSchema('La referencia de pago', 50),
 });
 export type RegistrarPagoCuotaInput = z.infer<typeof registrarPagoCuotaSchema>;

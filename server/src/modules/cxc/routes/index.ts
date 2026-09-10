@@ -4,6 +4,7 @@ import cobranzaRoutes from './cobranza';
 import creditoRoutes from './credito';
 import catalogosRoutes from './catalogos.routes';
 import pagosRoutes from './pagos';
+import documentosRoutes from './documentos';
 
 const router = Router();
 
@@ -24,7 +25,7 @@ router.use('/', pagosRoutes);
 // Rutas de Crédito
 router.use('/', creditoRoutes);
 
-// Cuando esté disponible el módulo de Documentos:
-// router.use('/', documentosRoutes);
+// Rutas de Documentos
+router.use('/', documentosRoutes);
 
 export default router;

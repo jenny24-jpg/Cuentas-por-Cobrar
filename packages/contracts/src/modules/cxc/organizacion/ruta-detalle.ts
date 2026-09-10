@@ -1,7 +1,6 @@
 import { z } from 'zod';
+import { moneySchema, optionalTrimmedText, timeSchema } from '../validation';
 
-// ESTADO_VISITA es VARCHAR2 libre (sin CHECK constraint). Ajustar si tu
-// equipo usa otros valores — ver misma nota en RutaDetalleForm.tsx.
 export const ESTADOS_VISITA = ['PENDIENTE', 'VISITADO', 'NO_ENCONTRADO', 'REPROGRAMADO'] as const;
 
 export const rutaDetalleSchema = z.object({
@@ -18,16 +17,14 @@ export const rutaDetalleSchema = z.object({
 });
 export type RutaDetalle = z.infer<typeof rutaDetalleSchema>;
 
-// idRuta NO va aquí: se toma del parámetro de la URL (/rutas/:id/detalle),
-// igual que las cuotas de un convenio en el módulo de cobranza.
 export const createRutaDetalleSchema = z.object({
   idCliente: z.number().int().positive('Selecciona un cliente'),
-  ordenVisita: z.number().int().positive().optional(),
-  direccion: z.string().max(200).optional(),
-  montoPendiente: z.number().nonnegative().optional(),
+  ordenVisita: z.number().int().positive('El orden debe ser un entero positivo').optional(),
+  direccion: optionalTrimmedText('La dirección', 200),
+  montoPendiente: moneySchema('El monto pendiente').optional(),
   estadoVisita: z.enum(ESTADOS_VISITA).optional(),
-  horaVisita: z.string().max(10).optional(),
-  observaciones: z.string().max(500).optional(),
+  horaVisita: timeSchema('La hora de visita'),
+  observaciones: optionalTrimmedText('Las observaciones', 500),
 });
 export type CreateRutaDetalleInput = z.infer<typeof createRutaDetalleSchema>;
 

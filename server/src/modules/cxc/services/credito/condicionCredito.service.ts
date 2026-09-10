@@ -6,14 +6,8 @@ import {
   type CondicionCredito,
 } from '@erp/contracts';
 
+import { NotFoundError } from '../../../../shared/errors/AppError';
 import * as condicionCreditoRepository from '../../repositories/credito/condicionCredito.repository';
-
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
 
 export async function listCondiciones(query: {
   page?: string;
