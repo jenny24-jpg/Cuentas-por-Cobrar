@@ -1,10 +1,7 @@
+import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '../../../shared/ui-kit';
 
-/**
- * Pestañas de navegación DENTRO del módulo de Organización (Navbar
- * superior). Si se agregan más pantallas, se agregan aquí.
- */
 const TABS = [
   { id: 'empresas', label: 'Empresas', path: '/cxc/organizacion/empresas' },
   { id: 'sucursales', label: 'Sucursales', path: '/cxc/organizacion/sucursales' },
@@ -16,7 +13,7 @@ const MODULE_ROUTES: Record<string, string> = {
 };
 
 interface OrganizacionLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export const OrganizacionLayout = ({ children }: OrganizacionLayoutProps) => {
