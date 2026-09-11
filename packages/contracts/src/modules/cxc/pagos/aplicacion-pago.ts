@@ -4,10 +4,13 @@ import { isoDateSchema, moneySchema } from '../validation';
 export const aplicacionPagoSchema = z.object({
   idAplicacion: z.number().int(),
   idPago: z.number().int(),
+  referenciaPago: z.string().nullable().optional(),
   idDocumento: z.number().int(),
+  referenciaDocumento: z.string().nullable().optional(),
   fechaAplicacion: z.string(),
   montoAplicado: z.number(),
   idEmpleado: z.number().int().nullable(),
+  nombreEmpleado: z.string().nullable().optional(),
 });
 export type AplicacionPago = z.infer<typeof aplicacionPagoSchema>;
 

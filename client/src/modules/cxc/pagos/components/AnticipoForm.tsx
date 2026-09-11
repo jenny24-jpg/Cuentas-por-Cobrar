@@ -5,14 +5,14 @@ import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
   todayIso,
-  validateIdentifier,
   validateMoney,
-  validateRequired,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { Anticipo, CatalogoOption } from '@erp/contracts';
+
+const ESTADOS_ANTICIPO = ['DISPONIBLE', 'APLICADO', 'AGOTADO', 'CANCELADO'] as const;
 
 export function AnticipoForm({
   item,
@@ -31,7 +31,7 @@ export function AnticipoForm({
   const [montoOriginal, setOriginal] = useState(item?.montoOriginal?.toString() ?? '');
   const [montoDisponible, setDisponible] = useState(item?.montoDisponible?.toString() ?? '');
   const [fecha, setFecha] = useState(item?.fecha?.slice(0, 10) ?? '');
-  const [estado, setEstado] = useState(item?.estado ?? '');
+  const [estado, setEstado] = useState(item?.estado ?? 'DISPONIBLE');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,13 +69,6 @@ export function AnticipoForm({
     const fechaErr = validateRequiredDate(fecha, 'La fecha', { notFuture: true, maxDate: todayIso() });
     if (fechaErr) next.fecha = fechaErr;
 
-    const estadoReq = validateRequired(estado, 'El estado');
-    if (estadoReq) next.estado = estadoReq;
-    else {
-      const estadoErr = validateIdentifier(estado, 'El estado');
-      if (estadoErr) next.estado = estadoErr;
-    }
-
     return next;
   }, [idCliente, montoOriginal, montoDisponible, fecha, estado]);
 
@@ -99,7 +92,7 @@ export function AnticipoForm({
       montoOriginal: Number(montoOriginal),
       montoDisponible: Number(montoDisponible),
       fecha,
-      estado: estado.trim().toUpperCase(),
+      estado,
     };
 
     try {
@@ -185,16 +178,16 @@ export function AnticipoForm({
         helperText="Fecha real del anticipo; no puede ser futura."
         error={errorFor('fecha', fecha)}
       />
-      <TextInput
+      <Select
         label="Estado"
         required
-        restriction="identifier"
-        uppercase
-        maxLength={20}
-        helperText="Estado operativo definido por el proceso de anticipos."
         value={estado}
         onChange={(e: any) => setEstado(e.target.value)}
-        error={errorFor('estado', estado)}
+        options={ESTADOS_ANTICIPO.map((value) => ({
+          value,
+          label: value.charAt(0) + value.slice(1).toLowerCase(),
+        }))}
+        helperText="Selecciona el estado actual del anticipo."
       />
 
       {formError && <p className="text-sm text-red-600 font-medium">{formError}</p>}

@@ -15,6 +15,8 @@ import {
 } from '../../../../shared/validation';
 import type { CatalogoOption, FormaPagoOption, Pago } from '@erp/contracts';
 
+const ESTADOS_PAGO = ['PENDIENTE', 'ACTIVO', 'APLICADO', 'CANCELADO'] as const;
+
 export function PagoForm({
   pago,
   onSuccess,
@@ -36,7 +38,7 @@ export function PagoForm({
   const [fechaPago, setFechaPago] = useState(pago?.fechaPago?.slice(0, 10) ?? '');
   const [monto, setMonto] = useState(pago?.monto?.toString() ?? '');
   const [numeroReferencia, setNumeroReferencia] = useState(pago?.numeroReferencia ?? '');
-  const [estado, setEstado] = useState(pago?.estado ?? '');
+  const [estado, setEstado] = useState(pago?.estado ?? 'PENDIENTE');
 
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -100,13 +102,6 @@ export function PagoForm({
       if (refErr) next.numeroReferencia = refErr;
     }
 
-    const estadoRequired = validateRequired(estado, 'El estado');
-    if (estadoRequired) next.estado = estadoRequired;
-    else {
-      const estadoErr = validateIdentifier(estado, 'El estado');
-      if (estadoErr) next.estado = estadoErr;
-    }
-
     return next;
   }, [idCliente, idFormaPago, idMoneda, idBanco, fechaPago, monto, numeroReferencia, estado, formaSeleccionada]);
 
@@ -133,7 +128,7 @@ export function PagoForm({
       fechaPago,
       monto: Number(monto),
       numeroReferencia: numeroReferencia.trim() || undefined,
-      estado: estado.trim().toUpperCase(),
+      estado,
     };
 
     try {
@@ -241,16 +236,16 @@ export function PagoForm({
         error={errorFor('numeroReferencia', numeroReferencia)}
       />
 
-      <TextInput
+      <Select
         label="Estado"
         required
-        restriction="identifier"
-        uppercase
-        maxLength={20}
-        helperText="Estado operativo definido por el proceso de pagos; se normaliza a mayúsculas."
         value={estado}
         onChange={(e: any) => setEstado(e.target.value)}
-        error={errorFor('estado', estado)}
+        options={ESTADOS_PAGO.map((value) => ({
+          value,
+          label: value.charAt(0) + value.slice(1).toLowerCase(),
+        }))}
+        helperText="Selecciona el estado actual del pago."
       />
 
       {formError && (
