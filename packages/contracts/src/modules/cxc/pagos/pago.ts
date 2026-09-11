@@ -1,16 +1,19 @@
 import { z } from 'zod';
-import { identifierSchema, isoDateSchema, moneySchema, optionalIdentifierSchema } from '../validation';
+import { isoDateSchema, moneySchema, optionalIdentifierSchema } from '../validation';
+
+export const ESTADOS_PAGO = ['PENDIENTE', 'ACTIVO', 'APLICADO', 'CANCELADO'] as const;
 
 export const pagoSchema = z.object({
   idPago: z.number().int(),
   idCliente: z.number().int(),
+  nombreCliente: z.string().nullable().optional(),
   idFormaPago: z.number().int(),
   idMoneda: z.number().int(),
   idBanco: z.number().int().nullable(),
   fechaPago: z.string(),
   monto: z.number(),
   numeroReferencia: z.string().nullable(),
-  estado: z.string(),
+  estado: z.enum(ESTADOS_PAGO),
 });
 export type Pago = z.infer<typeof pagoSchema>;
 
@@ -22,9 +25,7 @@ export const createPagoSchema = z.object({
   fechaPago: isoDateSchema('La fecha de pago'),
   monto: moneySchema('El monto', true),
   numeroReferencia: optionalIdentifierSchema('La referencia', 80),
-  // ESTADO aún es VARCHAR2 libre en el esquema recibido; restringimos el
-  // formato para impedir texto/símbolos arbitrarios sin inventar un enum.
-  estado: identifierSchema('El estado', 20).transform((value) => value.toUpperCase()),
+  estado: z.enum(ESTADOS_PAGO).default('PENDIENTE'),
 });
 export type CreatePagoInput = z.infer<typeof createPagoSchema>;
 
