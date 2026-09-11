@@ -9,6 +9,7 @@ import type {
 interface NotaCreditoRow {
   ID_NOTA_CREDITO: number;
   ID_CLIENTE: number;
+  NOMBRE_CLIENTE: string | null;
   ID_DOCUMENTO_REFERENCIA: number | null;
   DESCRIPCION: string | null;
   SERIE: string | null;
@@ -22,6 +23,7 @@ function mapRow(row: NotaCreditoRow): NotaCredito {
   return {
     idNotaCredito: row.ID_NOTA_CREDITO,
     idCliente: row.ID_CLIENTE,
+    nombreCliente: row.NOMBRE_CLIENTE,
     idDocumentoReferencia: row.ID_DOCUMENTO_REFERENCIA,
     descripcion: row.DESCRIPCION,
     serie: row.SERIE,
@@ -34,16 +36,19 @@ function mapRow(row: NotaCreditoRow): NotaCredito {
 
 const SELECT_BASE = `
   SELECT
-    ID_NOTA_CREDITO,
-    ID_CLIENTE,
-    ID_DOCUMENTO_REFERENCIA,
-    DESCRIPCION,
-    SERIE,
-    NUMERO,
-    FECHA,
-    MONTO,
-    ESTADO
-  FROM CXC_NOTAS_CREDITO
+    NC.ID_NOTA_CREDITO,
+    NC.ID_CLIENTE,
+    C.NOMBRE AS NOMBRE_CLIENTE,
+    NC.ID_DOCUMENTO_REFERENCIA,
+    NC.DESCRIPCION,
+    NC.SERIE,
+    NC.NUMERO,
+    NC.FECHA,
+    NC.MONTO,
+    NC.ESTADO
+  FROM CXC_NOTAS_CREDITO NC
+  LEFT JOIN CLIENTE C
+    ON C.ID_CLIENTE = NC.ID_CLIENTE
 `;
 
 export async function findAll(params: {
@@ -57,15 +62,16 @@ export async function findAll(params: {
     const offset = (params.page - 1) * params.limit;
 
     const whereClause = params.search
-      ? `
-        WHERE TO_CHAR(ID_CLIENTE) LIKE :search
-           OR TO_CHAR(ID_NOTA_CREDITO) LIKE :search
-           OR UPPER(NVL(DESCRIPCION, '')) LIKE UPPER(:search)
-           OR UPPER(NVL(SERIE, '')) LIKE UPPER(:search)
-           OR UPPER(NVL(NUMERO, '')) LIKE UPPER(:search)
-           OR UPPER(ESTADO) LIKE UPPER(:search)
-      `
-      : '';
+  ? `
+    WHERE TO_CHAR(NC.ID_CLIENTE) LIKE :search
+       OR TO_CHAR(NC.ID_NOTA_CREDITO) LIKE :search
+       OR UPPER(NVL(C.NOMBRE, '')) LIKE UPPER(:search)
+       OR UPPER(NVL(NC.DESCRIPCION, '')) LIKE UPPER(:search)
+       OR UPPER(NVL(NC.SERIE, '')) LIKE UPPER(:search)
+       OR UPPER(NVL(NC.NUMERO, '')) LIKE UPPER(:search)
+       OR UPPER(NC.ESTADO) LIKE UPPER(:search)
+  `
+  : '';
 
     const searchBind = params.search
       ? { search: `%${params.search}%` }
@@ -74,7 +80,7 @@ export async function findAll(params: {
     const dataResult = await conn.execute<NotaCreditoRow>(
       `${SELECT_BASE}
        ${whereClause}
-       ORDER BY ID_NOTA_CREDITO DESC
+       ORDER BY NC.ID_NOTA_CREDITO DESC
        OFFSET :offset ROWS
        FETCH NEXT :limit ROWS ONLY`,
       {
@@ -85,11 +91,13 @@ export async function findAll(params: {
     );
 
     const countResult = await conn.execute<{ TOTAL: number }>(
-      `SELECT COUNT(*) AS TOTAL
-       FROM CXC_NOTAS_CREDITO
-       ${whereClause}`,
-      searchBind,
-    );
+  `SELECT COUNT(*) AS TOTAL
+   FROM CXC_NOTAS_CREDITO NC
+   LEFT JOIN CLIENTE C
+     ON C.ID_CLIENTE = NC.ID_CLIENTE
+   ${whereClause}`,
+  searchBind,
+);
 
     return {
       data: (dataResult.rows ?? []).map(mapRow),
@@ -108,7 +116,7 @@ export async function findById(
   try {
     const result = await conn.execute<NotaCreditoRow>(
       `${SELECT_BASE}
-       WHERE ID_NOTA_CREDITO = :id`,
+       WHERE NC.ID_NOTA_CREDITO = :id`,
       { id },
     );
 

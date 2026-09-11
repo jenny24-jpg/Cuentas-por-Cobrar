@@ -115,9 +115,10 @@ export const NotasCreditoPage = () => {
             accessorKey: 'idNotaCredito',
           },
           {
-            header: 'Cliente',
-            accessorKey: 'idCliente',
-          },
+          header: 'Cliente',
+          accessorKey: 'nombreCliente',
+          cell: ({ value }: any) => value || '-',
+         },
           {
             header: 'Serie',
             accessorKey: 'serie',
