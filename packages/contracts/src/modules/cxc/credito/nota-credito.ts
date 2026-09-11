@@ -11,6 +11,7 @@ export const ESTADOS_NOTA_CREDITO = ['ACTIVA', 'ANULADA'] as const;
 export const notaCreditoSchema = z.object({
   idNotaCredito: z.number().int(),
   idCliente: z.number().int(),
+  nombreCliente: z.string().nullable(),
   idDocumentoReferencia: z.number().int().nullable(),
   descripcion: z.string().nullable(),
   serie: z.string().nullable(),

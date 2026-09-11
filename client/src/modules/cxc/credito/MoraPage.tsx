@@ -142,7 +142,7 @@ export const MoraPage = () => {
             cell: ({ value }: any) =>
               value === null || value === undefined
                 ? '-'
-                : `${Number(value).toFixed(4)}%`,
+                : `${Number(value).toFixed(2)}%`,
           },
           {
             header: 'Monto Mora',
@@ -166,7 +166,19 @@ export const MoraPage = () => {
           {
             header: 'Estado',
             accessorKey: 'estado',
-            cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—',
+            cell: ({ value }: any) => {
+              if (!value) return '—';
+
+              if (value === 'ANULADA') {
+                return (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+                    Anulada
+                  </span>
+                );
+              }
+
+              return <StatusBadge status={value} />;
+            },
           },
           {
             header: '',
