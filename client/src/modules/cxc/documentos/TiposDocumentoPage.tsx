@@ -73,10 +73,7 @@ export const TiposDocumentoPage = () => {
           {
             header: 'Estado',
             cell: ({ row }: any) => (
-              <StatusBadge
-                status={row.estado === 'A' ? 'aprobada' : 'rechazada'}
-                label={row.estado === 'A' ? 'Activo' : 'Inactivo'}
-              />
+              <StatusBadge status={row.estado} />
             ),
           },
           {

@@ -7,12 +7,6 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { validateRequiredSelect, validateMoney, validateIdentifier, hasErrors, type ValidationErrors } from '../../../shared/validation';
 import type { ConvenioPago, ConvenioCuota, FormaPagoOption } from '@erp/contracts';
 
-const ESTADO_CUOTA_TONE: Record<string, string> = {
-  PENDIENTE: 'pendiente',
-  PAGADA: 'aprobada',
-  VENCIDA: 'rechazada',
-};
-
 export const ConvenioDetallePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -156,7 +150,7 @@ export const ConvenioDetallePage = () => {
               Convenio del {convenio.fechaConvenio.slice(0, 10)} · {convenio.numeroCuotas} cuotas
             </p>
           </div>
-          <StatusBadge status={convenio.estado === 'ACTIVO' ? 'revision' : convenio.estado === 'CUMPLIDO' ? 'aprobada' : 'rechazada'} label={convenio.estado} />
+          <StatusBadge status={convenio.estado} />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-100 text-sm">
           <div>
@@ -189,7 +183,7 @@ export const ConvenioDetallePage = () => {
           { header: 'Forma de pago', cell: ({ row }: any) => row.nombreFormaPago ?? '—' },
           {
             header: 'Estado',
-            cell: ({ row }: any) => <StatusBadge status={ESTADO_CUOTA_TONE[row.estado]} label={row.estado} />,
+            cell: ({ row }: any) => <StatusBadge status={row.estado} />,
           },
           {
             header: '',

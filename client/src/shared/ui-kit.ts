@@ -21,7 +21,8 @@ import {
   TextArea as TextAreaBase,
   Checkbox as CheckboxBase,
 } from '../components/ui/FormControls';
-import { StatusBadge as StatusBadgeBase, AuditBanner as AuditBannerBase } from '../components/ui/Badges';
+import { AuditBanner as AuditBannerBase } from '../components/ui/Badges';
+import { UnifiedStatusBadge } from './components/UnifiedStatusBadge';
 import {
   Sidebar as SidebarBase,
   Navbar as NavbarBase,
@@ -39,7 +40,7 @@ export const TextInput = TextInputBase as FC<any>;
 export const Select = SelectBase as FC<any>;
 export const TextArea = TextAreaBase as FC<any>;
 export const Checkbox = CheckboxBase as FC<any>;
-export const StatusBadge = StatusBadgeBase as FC<any>;
+export const StatusBadge = UnifiedStatusBadge as FC<any>;
 export const AuditBanner = AuditBannerBase as FC<any>;
 export const Sidebar = SidebarBase as FC<any>;
 export const Navbar = NavbarBase as FC<any>;

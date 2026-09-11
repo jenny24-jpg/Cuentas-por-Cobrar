@@ -15,11 +15,6 @@ import { CondicionCreditoForm } from './components/CondicionCreditoForm';
 
 const PAGE_SIZE = 10;
 
-const ESTADO_TONE: Record<string, string> = {
-  A: 'aprobada',
-  I: 'rechazada',
-};
-
 export const CondicionesCreditoPage = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -136,10 +131,7 @@ export const CondicionesCreditoPage = () => {
           {
             header: 'Estado',
             cell: ({ row }: any) => (
-              <StatusBadge
-                status={ESTADO_TONE[row.estado] ?? 'pendiente'}
-                label={row.estado === 'A' ? 'Activo' : 'Inactivo'}
-              />
+              <StatusBadge status={row.estado} />
             ),
           },
           {

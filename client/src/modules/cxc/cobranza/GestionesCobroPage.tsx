@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Phone } from 'lucide-react';
-import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
+import { DataTable, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
@@ -79,7 +79,7 @@ export const GestionesCobroPage = () => {
             header: 'Compromiso',
             cell: ({ row }: any) =>
               row.montoCompromiso ? (
-                <StatusBadge status="pendiente" label={`Q ${Number(row.montoCompromiso).toFixed(2)}`} />
+                <span className="inline-flex h-6 items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-semibold text-slate-700">Q {Number(row.montoCompromiso).toFixed(2)}</span>
               ) : (
                 '—'
               ),

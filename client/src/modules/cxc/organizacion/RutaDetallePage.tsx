@@ -105,7 +105,7 @@ export const RutaDetallePage = () => {
           },
           {
             header: 'Estado visita',
-            cell: ({ row }: any) => (row.estadoVisita ? <StatusBadge status={row.estadoVisita} label={row.estadoVisita} /> : '—'),
+            cell: ({ row }: any) => (row.estadoVisita ? <StatusBadge status={row.estadoVisita} /> : '—'),
           },
           {
             header: '',

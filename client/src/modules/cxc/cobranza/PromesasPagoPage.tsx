@@ -10,12 +10,6 @@ import { PromesaPagoForm } from './components/PromesaPagoForm';
 
 const PAGE_SIZE = 10;
 
-const ESTADO_TONE: Record<string, string> = {
-  PENDIENTE: 'pendiente',
-  CUMPLIDA: 'aprobada',
-  INCUMPLIDA: 'rechazada',
-};
-
 export const PromesasPagoPage = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -79,7 +73,7 @@ export const PromesasPagoPage = () => {
           { header: 'Monto', accessorKey: 'montoComprometido', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           {
             header: 'Estado',
-            cell: ({ row }: any) => <StatusBadge status={ESTADO_TONE[row.estado] ?? 'pendiente'} label={row.estado} />,
+            cell: ({ row }: any) => <StatusBadge status={row.estado} />,
           },
           {
             header: '',
