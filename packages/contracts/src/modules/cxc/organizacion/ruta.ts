@@ -1,8 +1,6 @@
 import { z } from 'zod';
+import { identifierSchema, optionalIsoDateSchema, optionalTrimmedText } from '../validation';
 
-// ESTADO es VARCHAR2 libre en Oracle (sin CHECK constraint). Estos son los
-// valores que usamos por convención en el sistema. Si tu equipo definió
-// otros, ajusta esta lista Y la copia en RutaForm.tsx (ver nota ahí).
 export const ESTADOS_RUTA = ['PLANIFICADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA'] as const;
 
 export const rutaSchema = z.object({
@@ -18,14 +16,12 @@ export const rutaSchema = z.object({
 export type Ruta = z.infer<typeof rutaSchema>;
 
 export const createRutaSchema = z.object({
-  codigoRuta: z.string().max(20).optional(),
-  nombre: z.string().min(1, 'El nombre es obligatorio').max(150),
+  codigoRuta: identifierSchema('El código de ruta', 20).optional(),
+  nombre: z.string().trim().min(1, 'El nombre es obligatorio').max(150),
   idEmpleado: z.number().int().positive('Selecciona un empleado responsable'),
-  fecha: z.string().optional(),
+  fecha: optionalIsoDateSchema('La fecha'),
   estado: z.enum(ESTADOS_RUTA).default('PLANIFICADA'),
-  // OBSERVACIONES es NOT NULL en Oracle; el repository manda '' si no se
-  // envía nada, así que aquí se mantiene opcional para no forzar al usuario.
-  observaciones: z.string().max(500).optional(),
+  observaciones: optionalTrimmedText('Las observaciones', 500),
 });
 export type CreateRutaInput = z.infer<typeof createRutaSchema>;
 

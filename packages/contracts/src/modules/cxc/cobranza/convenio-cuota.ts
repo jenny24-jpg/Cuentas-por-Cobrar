@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isoDateSchema, moneySchema, optionalIdentifierSchema } from '../validation';
 
 export const ESTADOS_CUOTA = ['PENDIENTE', 'PAGADA', 'VENCIDA'] as const;
 
@@ -10,31 +11,27 @@ export const convenioCuotaSchema = z.object({
   monto: z.number(),
   saldo: z.number(),
   estado: z.enum(ESTADOS_CUOTA),
+  idFormaPago: z.number().int().nullable(),
+  nombreFormaPago: z.string().nullable().optional(),
+  referenciaPago: z.string().nullable(),
 });
-
 export type ConvenioCuota = z.infer<typeof convenioCuotaSchema>;
 
-// Las cuotas casi siempre se generan automáticamente al crear el convenio
-// (numeroCuotas del convenio), pero se deja el input manual disponible para
-// ajustes puntuales (agregar/corregir una cuota específica).
 export const createConvenioCuotaSchema = z.object({
   idConvenio: z.number().int().positive(),
   numeroCuota: z.number().int().positive(),
-  fechaVencimiento: z.string().min(1, 'La fecha de vencimiento es obligatoria'),
-  monto: z.number().positive('El monto debe ser mayor a 0'),
-  saldo: z.number().nonnegative().optional(), // si no se manda, saldo = monto
+  fechaVencimiento: isoDateSchema('La fecha de vencimiento'),
+  monto: moneySchema('El monto', true),
+  saldo: moneySchema('El saldo').optional(),
   estado: z.enum(ESTADOS_CUOTA).default('PENDIENTE'),
 });
-
 export type CreateConvenioCuotaInput = z.infer<typeof createConvenioCuotaSchema>;
-
 export const updateConvenioCuotaSchema = createConvenioCuotaSchema.partial();
 export type UpdateConvenioCuotaInput = z.infer<typeof updateConvenioCuotaSchema>;
 
-// Input especial: registrar el pago de una cuota (reduce el saldo, y si
-// llega a 0 la marca como PAGADA). Es la operación real que se va a usar
-// desde la pantalla de detalle de un convenio.
 export const registrarPagoCuotaSchema = z.object({
-  montoPagado: z.number().positive('El monto pagado debe ser mayor a 0'),
+  montoPagado: moneySchema('El monto pagado', true),
+  idFormaPago: z.number().int().positive('Selecciona una forma de pago'),
+  referenciaPago: optionalIdentifierSchema('La referencia de pago', 50),
 });
 export type RegistrarPagoCuotaInput = z.infer<typeof registrarPagoCuotaSchema>;

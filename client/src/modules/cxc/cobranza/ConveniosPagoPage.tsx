@@ -11,13 +11,6 @@ import { ConvenioPagoForm } from './components/ConvenioPagoForm';
 
 const PAGE_SIZE = 10;
 
-const ESTADO_TONE: Record<string, string> = {
-  ACTIVO: 'revision',
-  CUMPLIDO: 'aprobada',
-  INCUMPLIDO: 'rechazada',
-  CANCELADO: 'rechazada',
-};
-
 export const ConveniosPagoPage = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -83,7 +76,7 @@ export const ConveniosPagoPage = () => {
           { header: 'Cuotas', accessorKey: 'numeroCuotas', align: 'center' },
           {
             header: 'Estado',
-            cell: ({ row }: any) => <StatusBadge status={ESTADO_TONE[row.estado] ?? 'pendiente'} label={row.estado} />,
+            cell: ({ row }: any) => <StatusBadge status={row.estado} />,
           },
           {
             header: '',

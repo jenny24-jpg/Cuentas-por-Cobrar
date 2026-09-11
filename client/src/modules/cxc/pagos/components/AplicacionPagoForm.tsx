@@ -1,2 +1,227 @@
-import React,{useEffect,useState}from'react';import{TextInput,Select,Button}from'../../../../shared/ui-kit';import{apiClient,ApiError}from'../../../../shared/api';import type{AplicacionPago,CatalogoOption}from'@erp/contracts';
-export function AplicacionPagoForm({item,onSuccess,onCancel}:{item?:AplicacionPago|null;onSuccess:()=>void;onCancel:()=>void}){const[pagos,setPagos]=useState<CatalogoOption[]>([]);const[empleados,setEmpleados]=useState<CatalogoOption[]>([]);const[idPago,setIdPago]=useState(item?.idPago?.toString()??'');const[idDocumento,setIdDocumento]=useState(item?.idDocumento?.toString()??'');const[fechaAplicacion,setFecha]=useState(item?.fechaAplicacion?.slice(0,10)??'');const[montoAplicado,setMonto]=useState(item?.montoAplicado?.toString()??'');const[idEmpleado,setEmp]=useState(item?.idEmpleado?.toString()??'');const[errors,setErrors]=useState<Record<string,string>>({});const[formError,setFormError]=useState<string|null>(null);const[busy,setBusy]=useState(false);useEffect(()=>{apiClient.get<CatalogoOption[]>('/cxc/catalogos/pagos').then(setPagos).catch(()=>setPagos([]));apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados').then(setEmpleados).catch(()=>setEmpleados([]));},[]);const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setErrors({});setFormError(null);const payload={idPago:Number(idPago),idDocumento:Number(idDocumento),fechaAplicacion,montoAplicado:Number(montoAplicado),idEmpleado:idEmpleado?Number(idEmpleado):undefined};try{item?await apiClient.patch(`/cxc/aplicaciones-pago/${item.idAplicacion}`,payload):await apiClient.post('/cxc/aplicaciones-pago',payload);onSuccess();}catch(err){if(err instanceof ApiError&&err.status===400&&Array.isArray(err.details)){const x:Record<string,string>={};(err.details as any[]).forEach(d=>x[d.campo]=d.mensaje);setErrors(x);}else setFormError(err instanceof ApiError?err.message:'No se pudo guardar');}finally{setBusy(false);}};return <form onSubmit={submit} className="flex flex-col gap-4"><Select label="Pago" required value={idPago} onChange={(e:any)=>setIdPago(e.target.value)} options={pagos.map(x=>({value:x.id,label:x.label}))} error={errors.idPago}/><TextInput label="ID Documento" type="number" required value={idDocumento} onChange={(e:any)=>setIdDocumento(e.target.value)} error={errors.idDocumento}/><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><TextInput label="Fecha de aplicación" type="date" required value={fechaAplicacion} onChange={(e:any)=>setFecha(e.target.value)} error={errors.fechaAplicacion}/><TextInput label="Monto aplicado" type="number" step="0.01" required value={montoAplicado} onChange={(e:any)=>setMonto(e.target.value)} error={errors.montoAplicado}/></div><Select label="Empleado" value={idEmpleado} onChange={(e:any)=>setEmp(e.target.value)} options={empleados.map(x=>({value:x.id,label:x.label}))}/>{formError&&<p className="text-sm text-red-600">{formError}</p>}<div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button><Button type="submit" disabled={busy}>{busy?'Guardando...':'Guardar'}</Button></div></form>}
+import React, { useEffect, useMemo, useState } from 'react';
+import { TextInput, Select } from '../../../../shared/ui-kit';
+import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
+import { apiClient, ApiError } from '../../../../shared/api';
+import {
+  hasErrors,
+  todayIso,
+  validateMoney,
+  validateRequiredDate,
+  validateRequiredSelect,
+  type ValidationErrors,
+} from '../../../../shared/validation';
+import type { AplicacionPago, CatalogoOption } from '@erp/contracts';
+
+export function AplicacionPagoForm({
+  item,
+  onSuccess,
+  onCancel,
+}: {
+  item?: AplicacionPago | null;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const isEditing = Boolean(item);
+  const [pagos, setPagos] = useState<CatalogoOption[]>([]);
+  const [documentos, setDocumentos] = useState<CatalogoOption[]>([]);
+  const [empleados, setEmpleados] = useState<CatalogoOption[]>([]);
+  const [idPago, setIdPago] = useState(item?.idPago?.toString() ?? '');
+  const [idDocumento, setIdDocumento] = useState(item?.idDocumento?.toString() ?? '');
+  const [fechaAplicacion, setFecha] = useState(item?.fechaAplicacion?.slice(0, 10) ?? '');
+  const [montoAplicado, setMonto] = useState(item?.montoAplicado?.toString() ?? '');
+  const [idEmpleado, setEmp] = useState(item?.idEmpleado?.toString() ?? '');
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      apiClient.get<CatalogoOption[]>('/cxc/catalogos/pagos'),
+      apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados'),
+    ])
+      .then(([pagosData, empleadosData]) => {
+        setPagos(pagosData);
+        setEmpleados(empleadosData);
+      })
+      .catch(() => {
+        setPagos([]);
+        setEmpleados([]);
+      });
+  }, []);
+
+  const pagoSeleccionado = pagos.find((p) => String(p.id) === idPago);
+  const idClientePago = pagoSeleccionado?.idCliente;
+
+  useEffect(() => {
+    if (!idClientePago) {
+      setDocumentos([]);
+      return;
+    }
+
+    apiClient
+      .get<CatalogoOption[]>(`/cxc/catalogos/clientes/${idClientePago}/documentos-pendientes`)
+      .then((data) => {
+        setDocumentos(data);
+        if (!data.some((doc) => String(doc.id) === idDocumento)) {
+          setIdDocumento('');
+        }
+      })
+      .catch(() => {
+        setDocumentos([]);
+        setIdDocumento('');
+      });
+  }, [idClientePago]);
+
+  const documentoSeleccionado = documentos.find((d) => String(d.id) === idDocumento);
+
+  const validationErrors = useMemo<ValidationErrors>(() => {
+    const next: ValidationErrors = {};
+
+    const pagoErr = validateRequiredSelect(idPago, 'un pago');
+    if (pagoErr) next.idPago = pagoErr;
+
+    const documentoErr = validateRequiredSelect(idDocumento, 'un documento pendiente del cliente');
+    if (documentoErr) next.idDocumento = documentoErr;
+
+    const fechaErr = validateRequiredDate(fechaAplicacion, 'La fecha de aplicación', {
+      notFuture: true,
+      maxDate: todayIso(),
+    });
+    if (fechaErr) next.fechaAplicacion = fechaErr;
+
+    const montoErr = validateMoney(montoAplicado, 'El monto aplicado', {
+      required: true,
+      positive: true,
+    });
+    if (montoErr) next.montoAplicado = montoErr;
+    else if (
+      documentoSeleccionado?.saldo !== undefined &&
+      Number(montoAplicado) > Number(documentoSeleccionado.saldo)
+    ) {
+      next.montoAplicado = `El monto no puede superar el saldo pendiente (${Number(documentoSeleccionado.saldo).toFixed(2)}).`;
+    }
+
+    return next;
+  }, [idPago, idDocumento, fechaAplicacion, montoAplicado, documentoSeleccionado]);
+
+  const isFormValid = !hasErrors(validationErrors);
+  const errorFor = (field: string, value = '') =>
+    errors[field] ?? (value ? validationErrors[field] : undefined);
+
+  const handlePagoChange = (value: string) => {
+    setIdPago(value);
+    setIdDocumento('');
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+
+    if (!isFormValid) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setBusy(true);
+    setErrors({});
+    const payload = {
+      idPago: Number(idPago),
+      idDocumento: Number(idDocumento),
+      fechaAplicacion,
+      montoAplicado: Number(montoAplicado),
+      idEmpleado: idEmpleado ? Number(idEmpleado) : undefined,
+    };
+
+    try {
+      if (isEditing) await apiClient.patch(`/cxc/aplicaciones-pago/${item!.idAplicacion}`, payload);
+      else await apiClient.post('/cxc/aplicaciones-pago', payload);
+      onSuccess();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 400 && Array.isArray(err.details)) {
+        const fieldErrors: ValidationErrors = {};
+        (err.details as Array<{ campo: string; mensaje: string }>).forEach((d) => {
+          fieldErrors[d.campo] = d.mensaje;
+        });
+        setErrors(fieldErrors);
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'No se pudo guardar la aplicación');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+      <Select
+        label="Pago"
+        required
+        value={idPago}
+        onChange={(e: any) => handlePagoChange(e.target.value)}
+        options={pagos.map((x) => ({ value: x.id, label: x.label }))}
+        helperText="El pago determina el cliente y limita los documentos que pueden seleccionarse."
+        error={errorFor('idPago')}
+      />
+
+      <Select
+        label="Documento"
+        required
+        value={idDocumento}
+        onChange={(e: any) => setIdDocumento(e.target.value)}
+        options={documentos.map((x) => ({ value: x.id, label: x.label }))}
+        isReadOnly={!idClientePago}
+        placeholder={idClientePago ? 'Seleccionar documento pendiente' : 'Selecciona un pago primero'}
+        helperText="Solo se muestran documentos con saldo pendiente del mismo cliente del pago."
+        error={errorFor('idDocumento')}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <TextInput
+          label="Fecha de aplicación"
+          type="date"
+          required
+          max={todayIso()}
+          value={fechaAplicacion}
+          onChange={(e: any) => setFecha(e.target.value)}
+          helperText="Fecha real de la aplicación; no puede ser futura."
+          error={errorFor('fechaAplicacion', fechaAplicacion)}
+        />
+        <TextInput
+          label="Monto aplicado"
+          type="number"
+          restriction="decimal"
+          decimalPlaces={2}
+          min={0.01}
+          step="0.01"
+          required
+          value={montoAplicado}
+          onChange={(e: any) => setMonto(e.target.value)}
+          helperText="Mayor a 0 y no puede superar el saldo del documento seleccionado."
+          error={errorFor('montoAplicado', montoAplicado)}
+        />
+      </div>
+
+      <Select
+        label="Empleado"
+        value={idEmpleado}
+        onChange={(e: any) => setEmp(e.target.value)}
+        options={empleados.map((x) => ({ value: x.id, label: x.label }))}
+        helperText="Opcional: empleado responsable de registrar la aplicación."
+      />
+
+      {formError && (
+        <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {formError}
+        </p>
+      )}
+
+      <FormActionButtons
+        onCancel={onCancel}
+        isSubmitting={busy}
+        isEditing={isEditing}
+        isFormValid={isFormValid}
+        createLabel="Guardar aplicación"
+      />
+    </form>
+  );
+}

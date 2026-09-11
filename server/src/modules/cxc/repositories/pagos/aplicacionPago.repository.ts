@@ -8,3 +8,19 @@ export async function findById(id:number){const c=await getConnection();try{cons
 export async function create(i:CreateAplicacionPagoInput){const c=await getConnection();try{const r=await c.execute<{id:number[]}>(`INSERT INTO CXC_APLICACION_PAGOS (ID_PAGO,ID_DOCUMENTO,FECHA_APLICACION,MONTO_APLICADO,ID_EMPLEADO) VALUES (:idPago,:idDocumento,TO_DATE(:fechaAplicacion,'YYYY-MM-DD'),:montoAplicado,:idEmpleado) RETURNING ID_APLICACION INTO :id`,{idPago:i.idPago,idDocumento:i.idDocumento,fechaAplicacion:i.fechaAplicacion,montoAplicado:i.montoAplicado,idEmpleado:i.idEmpleado??null,id:{dir:oracledb.BIND_OUT,type:oracledb.NUMBER}});await c.commit();return r.outBinds!.id[0];}catch(e){await c.rollback();throw e;}finally{await c.close();}}
 export async function update(id:number,i:UpdateAplicacionPagoInput){const f:string[]=[];const b:any={id};if(i.idPago!==undefined){f.push('ID_PAGO=:idPago');b.idPago=i.idPago;}if(i.idDocumento!==undefined){f.push('ID_DOCUMENTO=:idDocumento');b.idDocumento=i.idDocumento;}if(i.fechaAplicacion!==undefined){f.push(`FECHA_APLICACION=TO_DATE(:fechaAplicacion,'YYYY-MM-DD')`);b.fechaAplicacion=i.fechaAplicacion;}if(i.montoAplicado!==undefined){f.push('MONTO_APLICADO=:montoAplicado');b.montoAplicado=i.montoAplicado;}if(i.idEmpleado!==undefined){f.push('ID_EMPLEADO=:idEmpleado');b.idEmpleado=i.idEmpleado;}if(!f.length)return;const c=await getConnection();try{await c.execute(`UPDATE CXC_APLICACION_PAGOS SET ${f.join(',')} WHERE ID_APLICACION=:id`,b);await c.commit();}catch(e){await c.rollback();throw e;}finally{await c.close();}}
 export async function remove(id:number){const c=await getConnection();try{await c.execute(`DELETE FROM CXC_APLICACION_PAGOS WHERE ID_APLICACION=:id`,{id});await c.commit();}catch(e){await c.rollback();throw e;}finally{await c.close();}}
+
+export async function sumAplicadoPorPago(idPago: number, excludeId?: number): Promise<number> {
+  const c = await getConnection();
+  try {
+    const result = await c.execute<{ TOTAL: number }>(
+      `SELECT NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
+         FROM CXC_APLICACION_PAGOS
+        WHERE ID_PAGO = :idPago
+          AND (:excludeId IS NULL OR ID_APLICACION <> :excludeId)`,
+      { idPago, excludeId: excludeId ?? null },
+    );
+    return Number(result.rows?.[0]?.TOTAL ?? 0);
+  } finally {
+    await c.close();
+  }
+}

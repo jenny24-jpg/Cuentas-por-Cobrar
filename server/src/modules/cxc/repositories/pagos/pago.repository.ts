@@ -9,4 +9,32 @@ export async function create(i:CreatePagoInput){const c=await getConnection();tr
 export async function update(id:number,i:UpdatePagoInput){const f:string[]=[];const b:any={id};if(i.idCliente!==undefined){f.push('ID_CLIENTE=:idCliente');b.idCliente=i.idCliente;}if(i.idFormaPago!==undefined){f.push('ID_FORMA_PAGO=:idFormaPago');b.idFormaPago=i.idFormaPago;}if(i.idMoneda!==undefined){f.push('ID_MONEDA=:idMoneda');b.idMoneda=i.idMoneda;}if(i.idBanco!==undefined){f.push('ID_BANCO=:idBanco');b.idBanco=i.idBanco;}if(i.fechaPago!==undefined){f.push(`FECHA_PAGO=TO_DATE(:fechaPago,'YYYY-MM-DD')`);b.fechaPago=i.fechaPago;}if(i.monto!==undefined){f.push('MONTO=:monto');b.monto=i.monto;}if(i.numeroReferencia!==undefined){f.push('NUMERO_REFERENCIA=:numeroReferencia');b.numeroReferencia=i.numeroReferencia;}if(i.estado!==undefined){f.push('ESTADO=:estado');b.estado=i.estado;}if(!f.length)return;const c=await getConnection();try{await c.execute(`UPDATE CXC_PAGOS SET ${f.join(',')} WHERE ID_PAGO=:id`,b);await c.commit();}catch(e){await c.rollback();throw e;}finally{await c.close();}}
 export async function remove(id:number){const c=await getConnection();try{await c.execute(`DELETE FROM CXC_PAGOS WHERE ID_PAGO=:id`,{id});await c.commit();}catch(e){await c.rollback();throw e;}finally{await c.close();}}
 
-export async function listOptions(){const c=await getConnection();try{const r=await c.execute<{ID_PAGO:number;MONTO:number;FECHA_PAGO:Date}>(`SELECT ID_PAGO,MONTO,FECHA_PAGO FROM CXC_PAGOS ORDER BY FECHA_PAGO DESC,ID_PAGO DESC FETCH FIRST 100 ROWS ONLY`);return(r.rows??[]).map(x=>({id:x.ID_PAGO,label:`Pago #${x.ID_PAGO} - ${x.MONTO}`}));}finally{await c.close();}}
+export async function listOptions(idCliente?: number) {
+  const c = await getConnection();
+  try {
+    const where = idCliente ? 'WHERE ID_CLIENTE = :idCliente' : '';
+    const binds = idCliente ? { idCliente } : {};
+    const r = await c.execute<{
+      ID_PAGO: number;
+      ID_CLIENTE: number;
+      MONTO: number;
+      FECHA_PAGO: Date;
+    }>(
+      `SELECT ID_PAGO, ID_CLIENTE, MONTO, FECHA_PAGO
+         FROM CXC_PAGOS
+        ${where}
+        ORDER BY FECHA_PAGO DESC, ID_PAGO DESC
+        FETCH FIRST 100 ROWS ONLY`,
+      binds,
+    );
+    return (r.rows ?? []).map((x) => ({
+      id: x.ID_PAGO,
+      idCliente: x.ID_CLIENTE,
+      monto: x.MONTO,
+      label: `Pago #${x.ID_PAGO} - ${Number(x.MONTO).toFixed(2)}`,
+    }));
+  } finally {
+    await c.close();
+  }
+}
+

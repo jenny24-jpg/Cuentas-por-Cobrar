@@ -232,3 +232,18 @@ export async function remove(
     await conn.close();
   }
 }
+export async function sumAplicadoPorNota(idNotaCredito: number, excludeId?: number): Promise<number> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ TOTAL: number }>(
+      `SELECT NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
+         FROM CXC_APLICACION_NOTA_CREDITO
+        WHERE ID_NOTA_CREDITO = :idNotaCredito
+          AND (:excludeId IS NULL OR ID_APLICACION_NC <> :excludeId)`,
+      { idNotaCredito, excludeId: excludeId ?? null },
+    );
+    return Number(result.rows?.[0]?.TOTAL ?? 0);
+  } finally {
+    await conn.close();
+  }
+}

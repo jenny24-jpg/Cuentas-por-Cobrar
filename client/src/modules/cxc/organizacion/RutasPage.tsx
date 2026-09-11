@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Route as RouteIcon } from 'lucide-react';
-import { DataTable, Button, TextInput } from '../../../shared/ui-kit';
+import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
@@ -80,7 +80,7 @@ export const RutasPage = () => {
           { header: 'Nombre', accessorKey: 'nombre' },
           { header: 'Empleado', accessorKey: 'nombreEmpleado' },
           { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => value?.slice(0, 10) ?? '—' },
-          { header: 'Estado', accessorKey: 'estado' },
+          { header: 'Estado', accessorKey: 'estado', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
           {
             header: '',
             align: 'right',

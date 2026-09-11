@@ -3,15 +3,9 @@ import {
   updateRutaDetalleSchema,
   type RutaDetalle,
 } from '@erp/contracts';
+import { NotFoundError } from '../../../../shared/errors/AppError';
 import * as rutaDetalleRepository from '../../repositories/organizacion/rutaDetalle.repository';
 import * as rutaRepository from '../../repositories/organizacion/ruta.repository';
-
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotFoundError';
-  }
-}
 
 export async function listDetalleByRuta(idRuta: number): Promise<RutaDetalle[]> {
   const ruta = await rutaRepository.findById(idRuta);

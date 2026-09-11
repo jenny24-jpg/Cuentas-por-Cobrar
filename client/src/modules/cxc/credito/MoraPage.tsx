@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import {
   DataTable,
+  StatusBadge,
   Button,
   TextInput,
 } from '../../../shared/ui-kit';
@@ -165,8 +166,7 @@ export const MoraPage = () => {
           {
             header: 'Estado',
             accessorKey: 'estado',
-            cell: ({ value }: any) =>
-              value || '-',
+            cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—',
           },
           {
             header: '',

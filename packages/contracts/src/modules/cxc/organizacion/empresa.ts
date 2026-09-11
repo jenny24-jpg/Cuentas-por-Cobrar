@@ -1,8 +1,6 @@
 import { z } from 'zod';
+import { nitSchema } from '../validation';
 
-// No hay CHECK constraint en Oracle para ESTADO (CHAR libre), así que
-// validamos los valores permitidos aquí. Ajustar si tu equipo usa otra
-// convención (ej. 'ACTIVA'/'INACTIVA' en vez de 'A'/'I').
 export const ESTADOS_EMPRESA = ['A', 'I'] as const;
 
 export const empresaSchema = z.object({
@@ -13,10 +11,9 @@ export const empresaSchema = z.object({
 });
 export type Empresa = z.infer<typeof empresaSchema>;
 
-// Input de creación: idEmpresa lo genera Oracle (IDENTITY).
 export const createEmpresaSchema = z.object({
-  nombre: z.string().min(1, 'El nombre es obligatorio').max(150),
-  nit: z.string().max(20).optional(),
+  nombre: z.string().trim().min(1, 'El nombre es obligatorio').max(150),
+  nit: nitSchema.nullable().optional(),
   estado: z.enum(ESTADOS_EMPRESA).default('A'),
 });
 export type CreateEmpresaInput = z.infer<typeof createEmpresaSchema>;

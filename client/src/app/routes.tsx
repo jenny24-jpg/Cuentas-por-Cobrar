@@ -30,6 +30,13 @@ import { AplicacionesPagoPage } from '../modules/cxc/pagos/AplicacionesPagoPage'
 import { AnticiposPage } from '../modules/cxc/pagos/AnticiposPage';
 import { RecibosPage } from '../modules/cxc/pagos/RecibosPage';
 import { FormasPagoPage } from '../modules/cxc/pagos/FormasPagoPage';
+// --- CXC / Documentos ---
+import { DocumentosLayout } from '../modules/cxc/documentos/documentosLayout';
+import { DocumentosPage } from '../modules/cxc/documentos/DocumentosPage';
+import { DocumentoDetallePage } from '../modules/cxc/documentos/DocumentoDetallePage';
+import { TiposDocumentoPage } from '../modules/cxc/documentos/TiposDocumentoPage';
+import { AjustesPage } from '../modules/cxc/documentos/AjustesPage';
+
 
 export const routes: RouteObject[] = [
   // --- CXC / Organización ---
@@ -199,6 +206,48 @@ export const routes: RouteObject[] = [
       <CreditoLayout>
         <MoraPage />
       </CreditoLayout>
+    ),
+  },
+
+  // --- CXC / Documentos ---
+  {
+    path: '/cxc/documentos/documentos',
+    element: (
+      <MainLayout>
+        <DocumentosLayout>
+          <DocumentosPage />
+        </DocumentosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/documentos/documentos/:id',
+    element: (
+      <MainLayout>
+        <DocumentosLayout>
+          <DocumentoDetallePage />
+        </DocumentosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/documentos/tipos-documento',
+    element: (
+      <MainLayout>
+        <DocumentosLayout>
+          <TiposDocumentoPage />
+        </DocumentosLayout>
+      </MainLayout>
+    ),
+  },
+  {
+    path: '/cxc/documentos/ajustes',
+    element: (
+      <MainLayout>
+        <DocumentosLayout>
+          <AjustesPage />
+        </DocumentosLayout>
+      </MainLayout>
     ),
   },
 ];
