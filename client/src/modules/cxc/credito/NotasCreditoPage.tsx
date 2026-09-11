@@ -15,11 +15,6 @@ import { NotaCreditoForm } from './components/NotaCreditoForm';
 
 const PAGE_SIZE = 10;
 
-const ESTADO_TONE: Record<string, string> = {
-  ACTIVA: 'aprobada',
-  ANULADA: 'rechazada',
-};
-
 export const NotasCreditoPage = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -153,14 +148,7 @@ export const NotasCreditoPage = () => {
           {
             header: 'Estado',
             cell: ({ row }: any) => (
-              <StatusBadge
-                status={ESTADO_TONE[row.estado] ?? 'pendiente'}
-                label={
-                  row.estado === 'ACTIVA'
-                    ? 'Activa'
-                    : 'Anulada'
-                }
-              />
+              <StatusBadge status={row.estado} />
             ),
           },
           {

@@ -11,13 +11,6 @@ import { DocumentoForm } from './components/DocumentoForm';
 
 const PAGE_SIZE = 10;
 
-const estadoTone = (estado: string) => {
-  const value = estado?.toUpperCase();
-  if (['PAGADO', 'CERRADO', 'APLICADO'].includes(value)) return 'aprobada';
-  if (['VENCIDO', 'ANULADO'].includes(value)) return 'rechazada';
-  return 'pendiente';
-};
-
 export const DocumentosPage = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -87,7 +80,7 @@ export const DocumentosPage = () => {
           { header: 'Saldo', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           {
             header: 'Estado',
-            cell: ({ row }: any) => <StatusBadge status={estadoTone(row.estado)} label={row.estado} />,
+            cell: ({ row }: any) => <StatusBadge status={row.estado} />,
           },
           {
             header: '',

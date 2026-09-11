@@ -77,10 +77,7 @@ export const SucursalesPage = () => {
           {
             header: 'Estado',
             cell: ({ row }: any) => (
-              <StatusBadge
-                status={row.estado === 'A' ? 'aprobado' : 'rechazado'}
-                label={row.estado === 'A' ? 'Activa' : 'Inactiva'}
-              />
+              <StatusBadge status={row.estado} label={row.estado === 'A' ? 'Activa' : 'Inactiva'} />
             ),
           },
           {

@@ -98,7 +98,7 @@ export const DocumentoDetallePage = () => {
               {documento.nombreCliente ?? `Cliente #${documento.idCliente}`} · {documento.nombreTipoDocumento ?? `Tipo #${documento.idTipoDocumento}`}
             </p>
           </div>
-          <StatusBadge status="pendiente" label={documento.estado} />
+          <StatusBadge status={documento.estado} />
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-100 text-sm">
@@ -183,8 +183,8 @@ export const DocumentoDetallePage = () => {
           emptyText="El documento no tiene historial"
           columns={[
             { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => value?.slice(0, 10) },
-            { header: 'Estado anterior', accessorKey: 'estadoAnterior' },
-            { header: 'Estado nuevo', accessorKey: 'estadoNuevo' },
+            { header: 'Estado anterior', accessorKey: 'estadoAnterior', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
+            { header: 'Estado nuevo', accessorKey: 'estadoNuevo', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
             { header: 'Empleado', accessorKey: 'nombreEmpleado' },
             {
               header: '',
