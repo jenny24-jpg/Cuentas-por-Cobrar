@@ -5,14 +5,17 @@ import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
   todayIso,
-  validateIdentifier,
   validateMoney,
-  validateRequired,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { Ajuste, DocumentoCatalogoOption } from '@erp/contracts';
+
+const TIPO_OPTIONS = [
+  { value: 'DEBITO', label: 'Débito — aumenta el saldo' },
+  { value: 'CREDITO', label: 'Crédito — reduce el saldo' },
+];
 
 interface Props {
   ajuste?: Ajuste | null;
@@ -65,20 +68,27 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
       .catch(() => setDocumentos([]));
   }, [idCliente]);
 
+  const selectedDocumento = documentos.find((d) => String(d.id) === idDocumento);
+
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
     const clienteErr = validateRequiredSelect(idCliente, 'un cliente');
     if (clienteErr) next.idCliente = clienteErr;
 
-    const tipoReq = validateRequired(tipoAjuste, 'El tipo de ajuste');
-    if (tipoReq) next.tipoAjuste = tipoReq;
-    else {
-      const tipoErr = validateIdentifier(tipoAjuste, 'El tipo de ajuste');
-      if (tipoErr) next.tipoAjuste = tipoErr;
+    if (!['DEBITO', 'CREDITO'].includes(tipoAjuste)) {
+      next.tipoAjuste = 'Selecciona Débito o Crédito.';
     }
 
     const montoErr = validateMoney(monto, 'El monto', { required: true, positive: true });
     if (montoErr) next.monto = montoErr;
+    if (
+      !montoErr &&
+      tipoAjuste === 'CREDITO' &&
+      selectedDocumento?.saldo !== undefined &&
+      Number(monto) > Number(selectedDocumento.saldo)
+    ) {
+      next.monto = `El crédito no puede superar el saldo pendiente (Q ${Number(selectedDocumento.saldo).toFixed(2)}).`;
+    }
 
     const fechaErr = validateRequiredDate(fecha, 'La fecha', { notFuture: true, maxDate: todayIso() });
     if (fechaErr) next.fecha = fechaErr;
@@ -86,9 +96,10 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
     const empleadoErr = validateRequiredSelect(idEmpleado, 'un empleado');
     if (empleadoErr) next.idEmpleado = empleadoErr;
 
-    if (motivo.length > 250) next.motivo = 'El motivo no puede superar 250 caracteres.';
+    if (motivo.trim().length < 10) next.motivo = 'Describe el motivo del ajuste con al menos 10 caracteres.';
+    else if (motivo.length > 250) next.motivo = 'El motivo no puede superar 250 caracteres.';
     return next;
-  }, [idCliente, tipoAjuste, monto, fecha, idEmpleado, motivo]);
+  }, [idCliente, tipoAjuste, monto, fecha, idEmpleado, motivo, selectedDocumento]);
 
   const isFormValid = !hasErrors(validationErrors);
   const errorFor = (field: string, value = '') =>
@@ -107,9 +118,9 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
     const payload = {
       idCliente: Number(idCliente),
       idDocumento: idDocumento ? Number(idDocumento) : undefined,
-      tipoAjuste: tipoAjuste.trim().toUpperCase(),
+      tipoAjuste,
       monto: Number(monto),
-      motivo: motivo.trim() || undefined,
+      motivo: motivo.trim(),
       fecha,
       idEmpleado: Number(idEmpleado),
     };
@@ -135,6 +146,10 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <strong>Control financiero:</strong> registrar un ajuste no modifica el saldo todavía. El efecto se aplicará únicamente al aprobarlo cuando se complete el flujo de autorización en Oracle.
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
           label="Cliente"
@@ -157,15 +172,13 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TextInput
+        <Select
           label="Tipo de ajuste"
           required
-          restriction="identifier"
-          uppercase
-          maxLength={30}
           value={tipoAjuste}
           onChange={(e: any) => setTipoAjuste(e.target.value)}
-          helperText="Código operativo del ajuste; admite letras, números, -, _ y /."
+          options={TIPO_OPTIONS}
+          helperText="Débito aumenta la deuda; Crédito la reduce cuando el ajuste sea aprobado."
           error={errorFor('tipoAjuste', tipoAjuste)}
         />
         <TextInput
@@ -178,15 +191,20 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
           required
           value={monto}
           onChange={(e: any) => setMonto(e.target.value)}
-          helperText="Monto del ajuste; mayor a 0 y máximo 2 decimales."
+          helperText={
+            tipoAjuste === 'CREDITO' && selectedDocumento?.saldo !== undefined
+              ? `Máximo según saldo pendiente: Q ${Number(selectedDocumento.saldo).toFixed(2)}.`
+              : 'Monto mayor a 0 y máximo 2 decimales.'
+          }
           error={errorFor('monto', monto)}
         />
       </div>
 
       <TextArea
         label="Motivo"
+        required
         maxLength={250}
-        helperText="Explica por qué se realiza el ajuste; máximo 250 caracteres."
+        helperText="Obligatorio. Explica la razón y soporte del ajuste (10–250 caracteres)."
         value={motivo}
         onChange={(e: any) => setMotivo(e.target.value)}
         rows={3}
@@ -205,12 +223,12 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
           error={errorFor('fecha', fecha)}
         />
         <Select
-          label="Empleado"
+          label="Empleado solicitante"
           required
           value={idEmpleado}
           onChange={(e: any) => setIdEmpleado(e.target.value)}
           options={empleados.map((e) => ({ value: e.id, label: e.label }))}
-          helperText="Empleado responsable de registrar el ajuste."
+          helperText="Empleado responsable de solicitar/registrar el ajuste."
           error={errorFor('idEmpleado')}
         />
       </div>
@@ -222,7 +240,7 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
         isSubmitting={isSubmitting}
         isEditing={isEditing}
         isFormValid={isFormValid}
-        createLabel="Crear ajuste"
+        createLabel="Registrar ajuste"
       />
     </form>
   );

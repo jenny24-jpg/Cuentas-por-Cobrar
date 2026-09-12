@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   UsersRound,
   WalletCards,
+  type LucideIcon,
 } from 'lucide-react';
 
 type CxcMenuItem = {
@@ -25,7 +26,7 @@ type CxcMenuItem = {
 type CxcMenuGroup = {
   id: string;
   label: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   matchPrefix: string;
   items: CxcMenuItem[];
 };

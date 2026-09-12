@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { TextInput, Select } from '../../../../shared/ui-kit';
+import { TextInput, Select, StatusBadge } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
 import {
@@ -15,6 +15,12 @@ import {
 } from '../../../../shared/validation';
 import type { CatalogoOption, FormaPagoOption, Pago } from '@erp/contracts';
 
+const REGISTRATION_STATES = [
+  { value: 'NO_IDENTIFICADO', label: 'No identificado' },
+  { value: 'NO_APLICADO', label: 'No aplicado' },
+  { value: 'EN_CUENTA', label: 'En cuenta' },
+];
+
 export function PagoForm({
   pago,
   onSuccess,
@@ -25,6 +31,10 @@ export function PagoForm({
   onCancel: () => void;
 }) {
   const isEditing = Boolean(pago);
+  const hasApplications = Number(pago?.montoAplicado ?? 0) > 0.005;
+  const terminalState = ['APLICADO', 'REVERSADO', 'ANULADO'].includes(String(pago?.estado ?? '').toUpperCase());
+  const isLocked = hasApplications || terminalState;
+
   const [clientes, setClientes] = useState<CatalogoOption[]>([]);
   const [formas, setFormas] = useState<FormaPagoOption[]>([]);
   const [monedas, setMonedas] = useState<CatalogoOption[]>([]);
@@ -33,10 +43,10 @@ export function PagoForm({
   const [idFormaPago, setIdFormaPago] = useState(pago?.idFormaPago?.toString() ?? '');
   const [idMoneda, setIdMoneda] = useState(pago?.idMoneda?.toString() ?? '');
   const [idBanco, setIdBanco] = useState(pago?.idBanco?.toString() ?? '');
-  const [fechaPago, setFechaPago] = useState(pago?.fechaPago?.slice(0, 10) ?? '');
+  const [fechaPago, setFechaPago] = useState(pago?.fechaPago?.slice(0, 10) ?? todayIso());
   const [monto, setMonto] = useState(pago?.monto?.toString() ?? '');
   const [numeroReferencia, setNumeroReferencia] = useState(pago?.numeroReferencia ?? '');
-  const [estado, setEstado] = useState(pago?.estado ?? '');
+  const [estado, setEstado] = useState(pago?.estado ?? 'NO_APLICADO');
 
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -61,6 +71,10 @@ export function PagoForm({
   }, []);
 
   const formaSeleccionada = formas.find((f) => String(f.id) === idFormaPago);
+  const stateOptions = useMemo(() => {
+    if (!estado || REGISTRATION_STATES.some((option) => option.value === estado)) return REGISTRATION_STATES;
+    return [...REGISTRATION_STATES, { value: estado, label: estado.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) }];
+  }, [estado]);
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
@@ -75,17 +89,11 @@ export function PagoForm({
     if (monedaErr) next.idMoneda = monedaErr;
 
     if (idBanco) {
-      const bancoErr = validateRequiredNumber(idBanco, 'El ID del banco', {
-        integer: true,
-        positive: true,
-      });
+      const bancoErr = validateRequiredNumber(idBanco, 'El ID del banco', { integer: true, positive: true });
       if (bancoErr) next.idBanco = bancoErr;
     }
 
-    const fechaErr = validateRequiredDate(fechaPago, 'La fecha de pago', {
-      notFuture: true,
-      maxDate: todayIso(),
-    });
+    const fechaErr = validateRequiredDate(fechaPago, 'La fecha de pago', { notFuture: true, maxDate: todayIso() });
     if (fechaErr) next.fechaPago = fechaErr;
 
     const montoErr = validateMoney(monto, 'El monto', { required: true, positive: true });
@@ -100,23 +108,25 @@ export function PagoForm({
       if (refErr) next.numeroReferencia = refErr;
     }
 
-    const estadoRequired = validateRequired(estado, 'El estado');
-    if (estadoRequired) next.estado = estadoRequired;
-    else {
-      const estadoErr = validateIdentifier(estado, 'El estado');
-      if (estadoErr) next.estado = estadoErr;
+    if (!['NO_IDENTIFICADO', 'NO_APLICADO', 'EN_CUENTA'].includes(estado) && !isLocked) {
+      next.estado = 'Selecciona un estado válido para registrar el pago.';
     }
 
     return next;
-  }, [idCliente, idFormaPago, idMoneda, idBanco, fechaPago, monto, numeroReferencia, estado, formaSeleccionada]);
+  }, [idCliente, idFormaPago, idMoneda, idBanco, fechaPago, monto, numeroReferencia, estado, formaSeleccionada, isLocked]);
 
-  const isFormValid = !hasErrors(validationErrors);
+  const isFormValid = !hasErrors(validationErrors) && !isLocked;
   const errorFor = (field: string, touchedValue = '') =>
     errors[field] ?? (touchedValue ? validationErrors[field] : undefined);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+
+    if (isLocked) {
+      setFormError('El pago ya tiene aplicaciones o está cerrado. Debe reversarse antes de modificarlo.');
+      return;
+    }
 
     if (!isFormValid) {
       setErrors(validationErrors);
@@ -133,7 +143,7 @@ export function PagoForm({
       fechaPago,
       monto: Number(monto),
       numeroReferencia: numeroReferencia.trim() || undefined,
-      estado: estado.trim().toUpperCase(),
+      estado,
     };
 
     try {
@@ -157,6 +167,25 @@ export function PagoForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+      {isEditing && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-slate-700">Estado:</span>
+            <StatusBadge status={pago?.estado} />
+            <span className="ml-auto text-slate-600">
+              Aplicado: <strong>Q {Number(pago?.montoAplicado ?? 0).toFixed(2)}</strong> · Disponible:{' '}
+              <strong>Q {Number(pago?.montoDisponible ?? pago?.monto ?? 0).toFixed(2)}</strong>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {isLocked && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Este pago ya tiene aplicaciones o está cerrado. Para corregirlo debe utilizarse el flujo de reversión.
+        </div>
+      )}
+
       <Select
         label="Cliente"
         required
@@ -165,6 +194,7 @@ export function PagoForm({
         options={clientes.map((x) => ({ value: x.id, label: x.label }))}
         helperText="Selecciona el cliente al que pertenece el pago."
         error={errorFor('idCliente')}
+        isReadOnly={isLocked}
       />
 
       <Select
@@ -175,6 +205,7 @@ export function PagoForm({
         options={formas.map((x) => ({ value: x.id, label: x.label }))}
         helperText="La referencia será obligatoria si la forma de pago así lo requiere."
         error={errorFor('idFormaPago')}
+        isReadOnly={isLocked}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -184,8 +215,9 @@ export function PagoForm({
           value={idMoneda}
           onChange={(e: any) => setIdMoneda(e.target.value)}
           options={monedas.map((x) => ({ value: x.id, label: x.label }))}
-          helperText="Selecciona una moneda del catálogo maestro; no se captura el ID manualmente."
+          helperText="Selecciona una moneda del catálogo maestro."
           error={errorFor('idMoneda')}
+          isReadOnly={isLocked}
         />
         <TextInput
           label="ID Banco"
@@ -194,8 +226,9 @@ export function PagoForm({
           min={1}
           value={idBanco}
           onChange={(e: any) => setIdBanco(e.target.value)}
-          helperText="Opcional. Se mantiene como ID hasta que el módulo Bancos publique un catálogo consultable."
+          helperText="Temporalmente se captura ID hasta integrar el catálogo de Bancos."
           error={errorFor('idBanco', idBanco)}
+          isReadOnly={isLocked}
         />
       </div>
 
@@ -209,6 +242,7 @@ export function PagoForm({
           onChange={(e: any) => setFechaPago(e.target.value)}
           helperText="Fecha real del pago; no puede ser futura."
           error={errorFor('fechaPago', fechaPago)}
+          isReadOnly={isLocked}
         />
         <TextInput
           label="Monto"
@@ -222,6 +256,7 @@ export function PagoForm({
           onChange={(e: any) => setMonto(e.target.value)}
           helperText="Monto recibido; mayor a 0 y máximo 2 decimales."
           error={errorFor('monto', monto)}
+          isReadOnly={isLocked}
         />
       </div>
 
@@ -233,24 +268,24 @@ export function PagoForm({
         required={Boolean(formaSeleccionada?.requiereReferencia)}
         helperText={
           formaSeleccionada?.requiereReferencia
-            ? 'Obligatoria para la forma de pago seleccionada. Admite letras, números, -, _ y /.'
-            : 'Referencia opcional del medio de pago. Admite letras, números, -, _ y /.'
+            ? 'Obligatoria para la forma de pago seleccionada.'
+            : 'Referencia opcional del medio de pago.'
         }
         value={numeroReferencia}
         onChange={(e: any) => setNumeroReferencia(e.target.value)}
         error={errorFor('numeroReferencia', numeroReferencia)}
+        isReadOnly={isLocked}
       />
 
-      <TextInput
-        label="Estado"
+      <Select
+        label="Estado al registrar"
         required
-        restriction="identifier"
-        uppercase
-        maxLength={20}
-        helperText="Estado operativo definido por el proceso de pagos; se normaliza a mayúsculas."
         value={estado}
         onChange={(e: any) => setEstado(e.target.value)}
+        options={stateOptions}
+        helperText="Después de aplicar el pago, el estado lo administra automáticamente el motor financiero."
         error={errorFor('estado', estado)}
+        isReadOnly={isLocked}
       />
 
       {formError && (

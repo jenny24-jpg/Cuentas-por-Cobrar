@@ -138,7 +138,7 @@ export const DocumentosPage = () => {
         onClose={() => setDocumentoAEliminar(null)}
         onConfirm={handleDelete}
         title="Eliminar documento"
-        description={`¿Eliminar el documento ${documentoAEliminar?.serie ?? ''}-${documentoAEliminar?.numeroDocumento ?? ''}? Esta acción no se puede deshacer.`}
+        description={`¿Eliminar el documento ${documentoAEliminar?.serie ?? ''}-${documentoAEliminar?.numeroDocumento ?? ''}? Solo se permitirá si no tiene movimientos financieros.`}
         confirmLabel="Eliminar"
         isLoading={isDeleting}
       />

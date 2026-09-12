@@ -1,14 +1,12 @@
 import {
   createAplicacionPagoSchema,
-  updateAplicacionPagoSchema,
   buildPaginationMeta,
   type PaginatedResponse,
   type AplicacionPago,
 } from '@erp/contracts';
+import { businessTodayIso } from '../../../../shared/date';
 import * as repository from '../../repositories/pagos/aplicacionPago.repository';
-import * as pagoRepository from '../../repositories/pagos/pago.repository';
-import * as documentoRepository from '../../repositories/documentos/documento.repository';
-import { BadRequestError, NotFoundError } from '../../../../shared/errors/AppError';
+import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
 
 export async function listAplicacionesPago(q: {
   page?: string;
@@ -22,60 +20,32 @@ export async function listAplicacionesPago(q: {
 }
 
 export async function getAplicacionPago(id: number): Promise<AplicacionPago> {
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de aplicación inválido');
   const item = await repository.findById(id);
   if (!item) throw new NotFoundError(`Aplicación de pago ${id} no encontrada`);
   return item;
 }
 
-async function assertRelaciones(idPago: number, idDocumento: number, montoAplicado: number, excludeId?: number) {
-  const [pago, documento, yaAplicado] = await Promise.all([
-    pagoRepository.findById(idPago),
-    documentoRepository.findById(idDocumento),
-    repository.sumAplicadoPorPago(idPago, excludeId),
-  ]);
-
-  if (!pago) throw new BadRequestError('El pago seleccionado no existe');
-  if (!documento) throw new BadRequestError('El documento seleccionado no existe');
-
-  if (pago.idCliente !== documento.idCliente) {
-    throw new BadRequestError('El pago y el documento deben pertenecer al mismo cliente');
-  }
-
-  if (documento.saldo <= 0) {
-    throw new BadRequestError('El documento seleccionado ya no tiene saldo pendiente');
-  }
-
-  if (montoAplicado > documento.saldo) {
-    throw new BadRequestError('El monto aplicado no puede superar el saldo del documento');
-  }
-
-  const disponiblePago = Math.max(0, Number(pago.monto) - yaAplicado);
-  if (montoAplicado > disponiblePago) {
-    throw new BadRequestError('El monto aplicado no puede superar el monto disponible del pago');
-  }
-}
-
 export async function createAplicacionPago(raw: unknown): Promise<AplicacionPago> {
   const input = createAplicacionPagoSchema.parse(raw);
-  await assertRelaciones(input.idPago, input.idDocumento, input.montoAplicado);
+  if (input.fechaAplicacion > businessTodayIso()) {
+    throw new BadRequestError('La fecha de aplicación no puede ser futura');
+  }
+
+  // repository.create ejecuta la operación completa en una única transacción
+  // y bloquea pago/documento para evitar sobre-aplicaciones concurrentes.
   const id = await repository.create(input);
   return getAplicacionPago(id);
 }
 
-export async function updateAplicacionPago(id: number, raw: unknown): Promise<AplicacionPago> {
-  const current = await getAplicacionPago(id);
-  const input = updateAplicacionPagoSchema.parse(raw);
-  const finalInput = {
-    idPago: input.idPago ?? current.idPago,
-    idDocumento: input.idDocumento ?? current.idDocumento,
-    montoAplicado: input.montoAplicado ?? current.montoAplicado,
-  };
-  await assertRelaciones(finalInput.idPago, finalInput.idDocumento, finalInput.montoAplicado, id);
-  await repository.update(id, input);
-  return getAplicacionPago(id);
+export async function updateAplicacionPago(_id: number, _raw: unknown): Promise<AplicacionPago> {
+  throw new ConflictError(
+    'Una aplicación confirmada no se edita. Debe reversarse mediante el flujo financiero de reversión (pendiente de cerrar con el esquema Oracle).',
+  );
 }
 
-export async function deleteAplicacionPago(id: number): Promise<void> {
-  await getAplicacionPago(id);
-  await repository.remove(id);
+export async function deleteAplicacionPago(_id: number): Promise<void> {
+  throw new ConflictError(
+    'Una aplicación confirmada no se elimina físicamente. Debe reversarse para conservar trazabilidad.',
+  );
 }

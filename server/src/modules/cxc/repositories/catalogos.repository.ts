@@ -82,6 +82,7 @@ export async function listDocumentosPendientesPorCliente(idCliente: number): Pro
        FROM CXC_DOCUMENTOS
        WHERE ID_CLIENTE = :idCliente
          AND SALDO > 0
+         AND UPPER(NVL(ESTADO,'PENDIENTE')) NOT IN ('PAGADO','PAGADA','ANULADO','ANULADA')
        ORDER BY FECHA_VENCIMIENTO ASC`,
       { idCliente },
     );
@@ -97,29 +98,43 @@ export async function listDocumentosPendientesPorCliente(idCliente: number): Pro
 }
 
 /**
- * Notas de crédito activas disponibles para seleccionar
- * al registrar una aplicación de nota de crédito.
+ * Notas de crédito con saldo disponible para aplicación.
+ * Se conserva ACTIVA temporalmente como compatibilidad con datos heredados.
  */
 export async function listNotasCreditoActivas(): Promise<CatalogoOption[]> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<{
       ID_NOTA_CREDITO: number;
+      ID_CLIENTE: number;
       SERIE: string | null;
       NUMERO: string | null;
       MONTO: number;
+      DISPONIBLE: number;
     }>(
-      `SELECT ID_NOTA_CREDITO, SERIE, NUMERO, MONTO
-       FROM CXC_NOTAS_CREDITO
-       WHERE ESTADO = 'ACTIVA'
-       ORDER BY FECHA DESC, ID_NOTA_CREDITO DESC`,
+      `SELECT n.ID_NOTA_CREDITO,
+              n.ID_CLIENTE,
+              n.SERIE,
+              n.NUMERO,
+              n.MONTO,
+              GREATEST(n.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) DISPONIBLE
+         FROM CXC_NOTAS_CREDITO n
+         LEFT JOIN CXC_APLICACION_NOTA_CREDITO a
+           ON a.ID_NOTA_CREDITO = n.ID_NOTA_CREDITO
+        WHERE UPPER(NVL(n.ESTADO,'PENDIENTE')) IN ('PENDIENTE','ACTIVA')
+        GROUP BY n.ID_NOTA_CREDITO,n.ID_CLIENTE,n.SERIE,n.NUMERO,n.MONTO,n.FECHA
+       HAVING GREATEST(n.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) > 0
+        ORDER BY n.FECHA DESC, n.ID_NOTA_CREDITO DESC`,
     );
 
     return (result.rows ?? []).map((r) => {
       const identificador = [r.SERIE, r.NUMERO].filter(Boolean).join('-') || `Nota #${r.ID_NOTA_CREDITO}`;
       return {
         id: r.ID_NOTA_CREDITO,
-        label: `${identificador} (monto: ${r.MONTO})`,
+        idCliente: r.ID_CLIENTE,
+        monto: r.MONTO,
+        saldo: r.DISPONIBLE,
+        label: `${identificador} · Disponible Q ${Number(r.DISPONIBLE).toFixed(2)}`,
       };
     });
   } finally {
@@ -209,6 +224,40 @@ export async function empleadoExiste(idEmpleado: number): Promise<boolean> {
       { idEmpleado },
     );
     return (result.rows?.[0]?.TOTAL ?? 0) > 0;
+  } finally {
+    await conn.close();
+  }
+}
+
+/**
+ * Regla de negocio para convenios: el cliente debe tener al menos una promesa
+ * incumplida o una mora vigente/activa asociada a un documento con saldo.
+ */
+export async function clienteElegibleParaConvenio(idCliente: number): Promise<boolean> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ELEGIBLE: number }>(
+      `SELECT CASE
+                WHEN EXISTS (
+                  SELECT 1
+                    FROM CXC_PROMESAS_PAGO p
+                   WHERE p.ID_CLIENTE = :idCliente
+                     AND UPPER(NVL(p.ESTADO, 'PENDIENTE')) = 'INCUMPLIDA'
+                )
+                  OR EXISTS (
+                  SELECT 1
+                    FROM CXC_MORA m
+                    JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = m.ID_DOCUMENTO
+                   WHERE d.ID_CLIENTE = :idCliente
+                     AND d.SALDO > 0
+                     AND UPPER(NVL(m.ESTADO, 'ACTIVA')) = 'ACTIVA'
+                )
+                THEN 1 ELSE 0
+              END AS ELEGIBLE
+         FROM DUAL`,
+      { idCliente },
+    );
+    return Number(result.rows?.[0]?.ELEGIBLE ?? 0) === 1;
   } finally {
     await conn.close();
   }

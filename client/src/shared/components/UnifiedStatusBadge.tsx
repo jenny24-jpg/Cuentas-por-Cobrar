@@ -25,6 +25,17 @@ const STATUS_TONES: Record<string, Tone> = {
   PAGADA: 'green',
 
   PENDIENTE: 'yellow',
+  NO_APLICADO: 'yellow',
+  'NO APLICADO': 'yellow',
+  NO_IDENTIFICADO: 'orange',
+  'NO IDENTIFICADO': 'orange',
+  EN_CUENTA: 'blue',
+  'EN CUENTA': 'blue',
+  APLICADO: 'green',
+  APLICADA: 'green',
+  EMITIDO: 'green',
+  REVERSADO: 'gray',
+  REVERSADA: 'gray',
 
   VENCIDO: 'red',
   VENCIDA: 'red',
@@ -116,6 +127,17 @@ const DISPLAY_LABELS: Record<string, string> = {
   PAGADO: 'Pagado',
   PAGADA: 'Pagada',
   PENDIENTE: 'Pendiente',
+  NO_APLICADO: 'No aplicado',
+  'NO APLICADO': 'No aplicado',
+  NO_IDENTIFICADO: 'No identificado',
+  'NO IDENTIFICADO': 'No identificado',
+  EN_CUENTA: 'En cuenta',
+  'EN CUENTA': 'En cuenta',
+  APLICADO: 'Aplicado',
+  APLICADA: 'Aplicada',
+  EMITIDO: 'Emitido',
+  REVERSADO: 'Reversado',
+  REVERSADA: 'Reversada',
   VENCIDO: 'Vencido',
   VENCIDA: 'Vencida',
   MORA: 'Mora',
@@ -147,7 +169,7 @@ const DISPLAY_LABELS: Record<string, string> = {
 
 const formatFallbackLabel = (value: string) =>
   value
-    .replaceAll('_', ' ')
+    .replace(/_/g, ' ')
     .toLocaleLowerCase('es-GT')
     .replace(/^./, (char) => char.toLocaleUpperCase('es-GT'));
 
