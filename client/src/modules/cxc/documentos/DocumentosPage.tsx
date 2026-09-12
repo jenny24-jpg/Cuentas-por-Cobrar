@@ -6,6 +6,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Documento } from '@erp/contracts';
 import { DocumentoForm } from './components/DocumentoForm';
 
@@ -75,7 +76,7 @@ export const DocumentosPage = () => {
             cell: ({ row }: any) => [row.serie, row.numeroDocumento].filter(Boolean).join('-'),
           },
           { header: 'Tipo', accessorKey: 'nombreTipoDocumento' },
-          { header: 'Vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => value?.slice(0, 10) },
+          { header: 'Vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Total', accessorKey: 'total', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           { header: 'Saldo', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           {

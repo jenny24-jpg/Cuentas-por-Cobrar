@@ -10,6 +10,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Mora } from '@erp/contracts';
 import { MoraForm } from './components/MoraForm';
 
@@ -158,10 +159,7 @@ export const MoraPage = () => {
           {
             header: 'Fecha Cálculo',
             accessorKey: 'fechaCalculo',
-            cell: ({ value }: any) =>
-              value
-                ? new Date(value).toLocaleDateString('es-GT')
-                : '-',
+            cell: ({ value }: any) => formatDateGT(value, '-'),
           },
           {
             header: 'Estado',

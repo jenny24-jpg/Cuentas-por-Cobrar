@@ -5,6 +5,7 @@ import { DataTable, StatusBadge, Button } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Documento, DocumentoDetalle, DocumentoHistorial } from '@erp/contracts';
 import { DocumentoDetalleForm } from './components/DocumentoDetalleForm';
 import { DocumentoHistorialForm } from './components/DocumentoHistorialForm';
@@ -108,7 +109,7 @@ export const DocumentoDetallePage = () => {
           </div>
           <div>
             <p className="text-slate-400 text-xs uppercase font-semibold">Fecha</p>
-            <p className="font-bold text-slate-900 mt-1">{documento.fechaDocumento.slice(0, 10)}</p>
+            <p className="font-bold text-slate-900 mt-1">{formatDateGT(documento.fechaDocumento)}</p>
           </div>
           <div>
             <p className="text-slate-400 text-xs uppercase font-semibold">Total</p>
@@ -182,7 +183,7 @@ export const DocumentoDetallePage = () => {
           data={historial}
           emptyText="El documento no tiene historial"
           columns={[
-            { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => value?.slice(0, 10) },
+            { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => formatDateGT(value) },
             { header: 'Estado anterior', accessorKey: 'estadoAnterior', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
             { header: 'Estado nuevo', accessorKey: 'estadoNuevo', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
             { header: 'Empleado', accessorKey: 'nombreEmpleado' },

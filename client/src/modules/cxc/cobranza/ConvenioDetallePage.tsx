@@ -4,6 +4,7 @@ import { ArrowLeft, DollarSign, Save, X } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput, Select } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import { validateRequiredSelect, validateMoney, validateIdentifier, hasErrors, type ValidationErrors } from '../../../shared/validation';
 import type { ConvenioPago, ConvenioCuota, FormaPagoOption } from '@erp/contracts';
 
@@ -147,7 +148,7 @@ export const ConvenioDetallePage = () => {
           <div>
             <h1 className="text-xl font-bold text-slate-900">{convenio.nombreCliente}</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Convenio del {convenio.fechaConvenio.slice(0, 10)} · {convenio.numeroCuotas} cuotas
+              Convenio del {formatDateGT(convenio.fechaConvenio)} · {convenio.numeroCuotas} cuotas
             </p>
           </div>
           <StatusBadge status={convenio.estado} />
@@ -177,7 +178,7 @@ export const ConvenioDetallePage = () => {
         emptyText="Este convenio no tiene cuotas generadas"
         columns={[
           { header: '#', accessorKey: 'numeroCuota', align: 'center' },
-          { header: 'Vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => value?.slice(0, 10) },
+          { header: 'Vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Monto', accessorKey: 'monto', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           { header: 'Saldo', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           { header: 'Forma de pago', cell: ({ row }: any) => row.nombreFormaPago ?? '—' },

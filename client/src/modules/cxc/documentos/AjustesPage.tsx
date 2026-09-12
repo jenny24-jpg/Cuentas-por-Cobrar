@@ -5,6 +5,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Ajuste } from '@erp/contracts';
 import { AjusteForm } from './components/AjusteForm';
 
@@ -71,7 +72,7 @@ export const AjustesPage = () => {
           { header: 'Documento', accessorKey: 'idDocumento', cell: ({ value }: any) => value ?? '—' },
           { header: 'Tipo', accessorKey: 'tipoAjuste' },
           { header: 'Monto', accessorKey: 'monto', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
-          { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => value?.slice(0, 10) },
+          { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Empleado', accessorKey: 'nombreEmpleado' },
           {
             header: '',

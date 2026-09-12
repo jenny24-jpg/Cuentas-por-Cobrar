@@ -5,12 +5,12 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { NotaCredito } from '@erp/contracts';
 import { NotaCreditoForm } from './components/NotaCreditoForm';
 
 const PAGE_SIZE = 10;
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const date = (value: unknown) => value ? new Date(String(value)).toLocaleDateString('es-GT') : '—';
 
 export const NotasCreditoPage = () => {
   const [page, setPage] = useState(1);
@@ -79,7 +79,7 @@ export const NotasCreditoPage = () => {
           { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || `Cliente #${row.idCliente}` },
           { header: 'Serie', accessorKey: 'serie', cell: ({ value }: any) => value || '—' },
           { header: 'Número', accessorKey: 'numero', cell: ({ value }: any) => value || '—' },
-          { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => date(value) },
+          { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Monto', accessorKey: 'monto', cell: ({ value }: any) => money(value) },
           { header: 'Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
           { header: 'Disponible', accessorKey: 'montoDisponible', cell: ({ value }: any) => money(value) },
