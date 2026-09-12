@@ -3,12 +3,12 @@ import { Plus, Search } from 'lucide-react';
 import { DataTable, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { usePaginatedList } from '../../../shared/hooks';
+import { formatDateGT } from '../../../shared/date';
 import type { AplicacionNotaCredito } from '@erp/contracts';
 import { AplicacionNotaCreditoForm } from './components/AplicacionNotaCreditoForm';
 
 const PAGE_SIZE = 10;
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const date = (value: unknown) => value ? new Date(String(value)).toLocaleDateString('es-GT') : '—';
 
 export const AplicacionesNotaCreditoPage = () => {
   const [page, setPage] = useState(1);
@@ -55,7 +55,7 @@ export const AplicacionesNotaCreditoPage = () => {
           { header: 'Nota de Crédito', cell: ({ row }: any) => `NC #${row.idNotaCredito}` },
           { header: 'Documento', cell: ({ row }: any) => `Documento #${row.idDocumento}` },
           { header: 'Monto Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
-          { header: 'Fecha de Aplicación', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => date(value) },
+          { header: 'Fecha de Aplicación', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => formatDateGT(value) },
         ]}
         paginationProps={{
           currentPage: meta.page,

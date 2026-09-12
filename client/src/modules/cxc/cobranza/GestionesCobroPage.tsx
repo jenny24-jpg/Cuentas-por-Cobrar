@@ -5,6 +5,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { GestionCobro } from '@erp/contracts';
 import { GestionCobroForm } from './components/GestionCobroForm';
 
@@ -71,7 +72,7 @@ export const GestionesCobroPage = () => {
         data={data}
         emptyText="No hay gestiones de cobro registradas"
         columns={[
-          { header: 'Fecha', accessorKey: 'fechaGestion', cell: ({ value }: any) => value?.slice(0, 10) },
+          { header: 'Fecha', accessorKey: 'fechaGestion', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Empleado', accessorKey: 'nombreEmpleado' },
           { header: 'Tipo', accessorKey: 'tipoGestion', cell: ({ value }: any) => value ?? '—' },
@@ -132,7 +133,7 @@ export const GestionesCobroPage = () => {
         onClose={() => { setGestionAEliminar(null); setDeleteError(null); }}
         onConfirm={handleDelete}
         title="Eliminar gestión de cobro"
-        description={`¿Eliminar la gestión del ${gestionAEliminar?.fechaGestion?.slice(0, 10)} con ${gestionAEliminar?.nombreCliente}? Esta acción no se puede deshacer.`}
+        description={`¿Eliminar la gestión del ${formatDateGT(gestionAEliminar?.fechaGestion)} con ${gestionAEliminar?.nombreCliente}? Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         isLoading={isDeleting}
       />

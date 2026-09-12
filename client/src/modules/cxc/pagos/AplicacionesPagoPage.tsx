@@ -3,6 +3,7 @@ import { Plus, Search } from 'lucide-react';
 import { DataTable, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { usePaginatedList } from '../../../shared/hooks';
+import { formatDateGT } from '../../../shared/date';
 import type { AplicacionPago } from '@erp/contracts';
 import { AplicacionPagoForm } from './components/AplicacionPagoForm';
 
@@ -11,9 +12,6 @@ const money = (value: unknown) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-
-const date = (value: unknown) =>
-  value ? new Date(String(value)).toLocaleDateString('es-GT') : '—';
 
 export const AplicacionesPagoPage = () => {
   const [page, setPage] = useState(1);
@@ -81,7 +79,7 @@ export const AplicacionesPagoPage = () => {
           {
             header: 'Fecha',
             accessorKey: 'fechaAplicacion',
-            cell: ({ value }: any) => date(value),
+            cell: ({ value }: any) => formatDateGT(value),
           },
           {
             header: 'Monto aplicado',

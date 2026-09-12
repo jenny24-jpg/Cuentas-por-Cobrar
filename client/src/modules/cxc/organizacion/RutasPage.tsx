@@ -6,6 +6,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Ruta } from '@erp/contracts';
 import { RutaForm } from './components/RutaForm';
 
@@ -79,7 +80,7 @@ export const RutasPage = () => {
           { header: 'Código', accessorKey: 'codigoRuta', cell: ({ value }: any) => value ?? '—' },
           { header: 'Nombre', accessorKey: 'nombre' },
           { header: 'Empleado', accessorKey: 'nombreEmpleado' },
-          { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => value?.slice(0, 10) ?? '—' },
+          { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Estado', accessorKey: 'estado', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
           {
             header: '',

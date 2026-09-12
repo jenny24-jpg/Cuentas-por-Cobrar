@@ -6,6 +6,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { ConvenioPago } from '@erp/contracts';
 import { ConvenioPagoForm } from './components/ConvenioPagoForm';
 
@@ -71,7 +72,7 @@ export const ConveniosPagoPage = () => {
         onRowClick={(row: ConvenioPago) => navigate(`/cxc/cobranza/convenios-pago/${row.idConvenio}`)}
         columns={[
           { header: 'Cliente', accessorKey: 'nombreCliente' },
-          { header: 'Fecha', accessorKey: 'fechaConvenio', cell: ({ value }: any) => value?.slice(0, 10) },
+          { header: 'Fecha', accessorKey: 'fechaConvenio', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Monto deuda', accessorKey: 'montoDeuda', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           { header: 'Cuotas', accessorKey: 'numeroCuotas', align: 'center' },
           {
