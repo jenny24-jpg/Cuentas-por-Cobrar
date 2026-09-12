@@ -98,7 +98,7 @@ export const DocumentoDetallePage = () => {
               {documento.nombreCliente ?? `Cliente #${documento.idCliente}`} · {documento.nombreTipoDocumento ?? `Tipo #${documento.idTipoDocumento}`}
             </p>
           </div>
-          <StatusBadge status={documento.estado} />
+          <div className="flex items-center gap-2"><StatusBadge status={documento.estado} />{documento.condicion === 'VENCIDA' && <StatusBadge status="VENCIDA" />}</div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-100 text-sm">

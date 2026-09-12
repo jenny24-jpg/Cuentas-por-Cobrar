@@ -1,40 +1,207 @@
 import oracledb from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { Pago, CreatePagoInput, UpdatePagoInput } from '@erp/contracts';
-interface Row { ID_PAGO:number; ID_CLIENTE:number; NOMBRE_CLIENTE:string|null; ID_FORMA_PAGO:number; ID_MONEDA:number; ID_BANCO:number|null; FECHA_PAGO:Date; MONTO:number; NUMERO_REFERENCIA:string|null; ESTADO:string; }
-const mapRow=(r:Row):Pago=>({idPago:r.ID_PAGO,idCliente:r.ID_CLIENTE,nombreCliente:r.NOMBRE_CLIENTE,idFormaPago:r.ID_FORMA_PAGO,idMoneda:r.ID_MONEDA,idBanco:r.ID_BANCO,fechaPago:r.FECHA_PAGO?.toISOString()??'',monto:r.MONTO,numeroReferencia:r.NUMERO_REFERENCIA,estado:r.ESTADO as Pago['estado']});
-export async function findAll({page,limit,search}:{page:number;limit:number;search?:string}){const c=await getConnection();try{const offset=(page-1)*limit;const where=search?`WHERE UPPER(c.NOMBRE) LIKE UPPER(:search) OR UPPER(p.NUMERO_REFERENCIA) LIKE UPPER(:search) OR UPPER(p.ESTADO) LIKE UPPER(:search) OR TO_CHAR(p.ID_PAGO) LIKE :search`:'';const sb=search?{search:`%${search}%`}:{ };const data=await c.execute<Row>(`SELECT p.ID_PAGO,p.ID_CLIENTE,c.NOMBRE AS NOMBRE_CLIENTE,p.ID_FORMA_PAGO,p.ID_MONEDA,p.ID_BANCO,p.FECHA_PAGO,p.MONTO,p.NUMERO_REFERENCIA,p.ESTADO FROM CXC_PAGOS p JOIN CLIENTE c ON c.ID_CLIENTE=p.ID_CLIENTE ${where} ORDER BY p.FECHA_PAGO DESC,p.ID_PAGO DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,{...sb,offset,limit});const cnt=await c.execute<{TOTAL:number}>(`SELECT COUNT(*) TOTAL FROM CXC_PAGOS p JOIN CLIENTE c ON c.ID_CLIENTE=p.ID_CLIENTE ${where}`,sb);return{data:(data.rows??[]).map(mapRow),total:cnt.rows?.[0]?.TOTAL??0};}finally{await c.close();}}
-export async function findById(id:number){const c=await getConnection();try{const r=await c.execute<Row>(`SELECT p.ID_PAGO,p.ID_CLIENTE,c.NOMBRE AS NOMBRE_CLIENTE,p.ID_FORMA_PAGO,p.ID_MONEDA,p.ID_BANCO,p.FECHA_PAGO,p.MONTO,p.NUMERO_REFERENCIA,p.ESTADO FROM CXC_PAGOS p JOIN CLIENTE c ON c.ID_CLIENTE=p.ID_CLIENTE WHERE p.ID_PAGO=:id`,{id});return r.rows?.[0]?mapRow(r.rows[0]):null;}finally{await c.close();}}
-export async function create(i:CreatePagoInput){const c=await getConnection();try{const r=await c.execute<{id:number[]}>(`INSERT INTO CXC_PAGOS (ID_CLIENTE,ID_FORMA_PAGO,ID_MONEDA,ID_BANCO,FECHA_PAGO,MONTO,NUMERO_REFERENCIA,ESTADO) VALUES (:idCliente,:idFormaPago,:idMoneda,:idBanco,TO_DATE(:fechaPago,'YYYY-MM-DD'),:monto,:numeroReferencia,:estado) RETURNING ID_PAGO INTO :id`,{idCliente:i.idCliente,idFormaPago:i.idFormaPago,idMoneda:i.idMoneda,idBanco:i.idBanco??null,fechaPago:i.fechaPago,monto:i.monto,numeroReferencia:i.numeroReferencia??null,estado:i.estado,id:{dir:oracledb.BIND_OUT,type:oracledb.NUMBER}});await c.commit();return r.outBinds!.id[0];}catch(e){await c.rollback();throw e;}finally{await c.close();}}
-export async function update(id:number,i:UpdatePagoInput){const f:string[]=[];const b:any={id};if(i.idCliente!==undefined){f.push('ID_CLIENTE=:idCliente');b.idCliente=i.idCliente;}if(i.idFormaPago!==undefined){f.push('ID_FORMA_PAGO=:idFormaPago');b.idFormaPago=i.idFormaPago;}if(i.idMoneda!==undefined){f.push('ID_MONEDA=:idMoneda');b.idMoneda=i.idMoneda;}if(i.idBanco!==undefined){f.push('ID_BANCO=:idBanco');b.idBanco=i.idBanco;}if(i.fechaPago!==undefined){f.push(`FECHA_PAGO=TO_DATE(:fechaPago,'YYYY-MM-DD')`);b.fechaPago=i.fechaPago;}if(i.monto!==undefined){f.push('MONTO=:monto');b.monto=i.monto;}if(i.numeroReferencia!==undefined){f.push('NUMERO_REFERENCIA=:numeroReferencia');b.numeroReferencia=i.numeroReferencia;}if(i.estado!==undefined){f.push('ESTADO=:estado');b.estado=i.estado;}if(!f.length)return;const c=await getConnection();try{await c.execute(`UPDATE CXC_PAGOS SET ${f.join(',')} WHERE ID_PAGO=:id`,b);await c.commit();}catch(e){await c.rollback();throw e;}finally{await c.close();}}
-export async function remove(id:number){const c=await getConnection();try{await c.execute(`DELETE FROM CXC_PAGOS WHERE ID_PAGO=:id`,{id});await c.commit();}catch(e){await c.rollback();throw e;}finally{await c.close();}}
 
-export async function listOptions(idCliente?: number) {
+interface Row {
+  ID_PAGO: number;
+  ID_CLIENTE: number;
+  NOMBRE_CLIENTE: string | null;
+  ID_FORMA_PAGO: number;
+  ID_MONEDA: number;
+  ID_BANCO: number | null;
+  FECHA_PAGO: Date;
+  MONTO: number;
+  MONTO_APLICADO: number;
+  MONTO_DISPONIBLE: number;
+  NUMERO_REFERENCIA: string | null;
+  ESTADO: string;
+}
+
+const mapRow = (r: Row): Pago => ({
+  idPago: r.ID_PAGO,
+  idCliente: r.ID_CLIENTE,
+  nombreCliente: r.NOMBRE_CLIENTE,
+  idFormaPago: r.ID_FORMA_PAGO,
+  idMoneda: r.ID_MONEDA,
+  idBanco: r.ID_BANCO,
+  fechaPago: r.FECHA_PAGO?.toISOString() ?? '',
+  monto: r.MONTO,
+  montoAplicado: Number(r.MONTO_APLICADO ?? 0),
+  montoDisponible: Number(r.MONTO_DISPONIBLE ?? r.MONTO),
+  numeroReferencia: r.NUMERO_REFERENCIA,
+  estado: r.ESTADO,
+});
+
+const SELECT_BASE = `
+  SELECT p.ID_PAGO,
+         p.ID_CLIENTE,
+         c.NOMBRE AS NOMBRE_CLIENTE,
+         p.ID_FORMA_PAGO,
+         p.ID_MONEDA,
+         p.ID_BANCO,
+         p.FECHA_PAGO,
+         p.MONTO,
+         NVL((SELECT SUM(a.MONTO_APLICADO)
+                FROM CXC_APLICACION_PAGOS a
+               WHERE a.ID_PAGO = p.ID_PAGO), 0) AS MONTO_APLICADO,
+         GREATEST(
+           p.MONTO - NVL((SELECT SUM(a.MONTO_APLICADO)
+                            FROM CXC_APLICACION_PAGOS a
+                           WHERE a.ID_PAGO = p.ID_PAGO), 0),
+           0
+         ) AS MONTO_DISPONIBLE,
+         p.NUMERO_REFERENCIA,
+         p.ESTADO
+    FROM CXC_PAGOS p
+    LEFT JOIN CLIENTE c ON c.ID_CLIENTE = p.ID_CLIENTE
+`;
+
+export async function findAll({ page, limit, search }: { page: number; limit: number; search?: string }) {
   const c = await getConnection();
   try {
-    const where = idCliente ? 'WHERE ID_CLIENTE = :idCliente' : '';
-    const binds = idCliente ? { idCliente } : {};
-    const r = await c.execute<{
-      ID_PAGO: number;
-      ID_CLIENTE: number;
-      MONTO: number;
-      FECHA_PAGO: Date;
-    }>(
-      `SELECT ID_PAGO, ID_CLIENTE, MONTO, FECHA_PAGO
-         FROM CXC_PAGOS
-        ${where}
-        ORDER BY FECHA_PAGO DESC, ID_PAGO DESC
-        FETCH FIRST 100 ROWS ONLY`,
-      binds,
+    const offset = (page - 1) * limit;
+    const where = search
+      ? `WHERE UPPER(NVL(p.NUMERO_REFERENCIA,'')) LIKE UPPER(:search)
+          OR UPPER(NVL(p.ESTADO,'')) LIKE UPPER(:search)
+          OR UPPER(NVL(c.NOMBRE,'')) LIKE UPPER(:search)
+          OR TO_CHAR(p.ID_PAGO) LIKE :search`
+      : '';
+    const sb = search ? { search: `%${search}%` } : {};
+    const data = await c.execute<Row>(
+      `${SELECT_BASE}
+       ${where}
+       ORDER BY p.FECHA_PAGO DESC,p.ID_PAGO DESC
+       OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+      { ...sb, offset, limit },
     );
-    return (r.rows ?? []).map((x) => ({
-      id: x.ID_PAGO,
-      idCliente: x.ID_CLIENTE,
-      monto: x.MONTO,
-      label: `Pago #${x.ID_PAGO} - ${Number(x.MONTO).toFixed(2)}`,
-    }));
+    const cnt = await c.execute<{ TOTAL: number }>(
+      `SELECT COUNT(*) TOTAL
+         FROM CXC_PAGOS p
+         LEFT JOIN CLIENTE c ON c.ID_CLIENTE = p.ID_CLIENTE
+         ${where}`,
+      sb,
+    );
+    return { data: (data.rows ?? []).map(mapRow), total: cnt.rows?.[0]?.TOTAL ?? 0 };
   } finally {
     await c.close();
   }
 }
 
+export async function findById(id: number) {
+  const c = await getConnection();
+  try {
+    const r = await c.execute<Row>(`${SELECT_BASE} WHERE p.ID_PAGO=:id`, { id });
+    return r.rows?.[0] ? mapRow(r.rows[0]) : null;
+  } finally {
+    await c.close();
+  }
+}
+
+export async function create(i: CreatePagoInput) {
+  const c = await getConnection();
+  try {
+    const r = await c.execute<{ id: number[] }>(
+      `INSERT INTO CXC_PAGOS
+         (ID_CLIENTE,ID_FORMA_PAGO,ID_MONEDA,ID_BANCO,FECHA_PAGO,MONTO,NUMERO_REFERENCIA,ESTADO)
+       VALUES
+         (:idCliente,:idFormaPago,:idMoneda,:idBanco,TO_DATE(:fechaPago,'YYYY-MM-DD'),:monto,:numeroReferencia,:estado)
+       RETURNING ID_PAGO INTO :id`,
+      {
+        idCliente: i.idCliente,
+        idFormaPago: i.idFormaPago,
+        idMoneda: i.idMoneda,
+        idBanco: i.idBanco ?? null,
+        fechaPago: i.fechaPago,
+        monto: i.monto,
+        numeroReferencia: i.numeroReferencia ?? null,
+        estado: i.estado ?? 'NO_APLICADO',
+        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      },
+    );
+    await c.commit();
+    return r.outBinds!.id[0];
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
+export async function update(id: number, i: UpdatePagoInput) {
+  const f: string[] = [];
+  const b: Record<string, any> = { id };
+  if (i.idCliente !== undefined) { f.push('ID_CLIENTE=:idCliente'); b.idCliente = i.idCliente; }
+  if (i.idFormaPago !== undefined) { f.push('ID_FORMA_PAGO=:idFormaPago'); b.idFormaPago = i.idFormaPago; }
+  if (i.idMoneda !== undefined) { f.push('ID_MONEDA=:idMoneda'); b.idMoneda = i.idMoneda; }
+  if (i.idBanco !== undefined) { f.push('ID_BANCO=:idBanco'); b.idBanco = i.idBanco; }
+  if (i.fechaPago !== undefined) { f.push(`FECHA_PAGO=TO_DATE(:fechaPago,'YYYY-MM-DD')`); b.fechaPago = i.fechaPago; }
+  if (i.monto !== undefined) { f.push('MONTO=:monto'); b.monto = i.monto; }
+  if (i.numeroReferencia !== undefined) { f.push('NUMERO_REFERENCIA=:numeroReferencia'); b.numeroReferencia = i.numeroReferencia; }
+  if (i.estado !== undefined) { f.push('ESTADO=:estado'); b.estado = i.estado; }
+  if (!f.length) return;
+
+  const c = await getConnection();
+  try {
+    await c.execute(`UPDATE CXC_PAGOS SET ${f.join(',')} WHERE ID_PAGO=:id`, b);
+    await c.commit();
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
+export async function remove(id: number) {
+  const c = await getConnection();
+  try {
+    await c.execute(`DELETE FROM CXC_PAGOS WHERE ID_PAGO=:id`, { id });
+    await c.commit();
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
+export async function listOptions(idCliente?: number) {
+  const c = await getConnection();
+  try {
+    const where = idCliente ? 'WHERE p.ID_CLIENTE = :idCliente' : '';
+    const r = await c.execute<{
+      ID_PAGO: number;
+      ID_CLIENTE: number;
+      NUMERO_REFERENCIA: string | null;
+      MONTO: number;
+      DISPONIBLE: number;
+      ESTADO: string;
+    }>(
+      `SELECT p.ID_PAGO,
+              p.ID_CLIENTE,
+              p.NUMERO_REFERENCIA,
+              p.MONTO,
+              GREATEST(p.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) DISPONIBLE,
+              p.ESTADO
+         FROM CXC_PAGOS p
+         LEFT JOIN CXC_APLICACION_PAGOS a ON a.ID_PAGO = p.ID_PAGO
+         ${where}
+        GROUP BY p.ID_PAGO,p.ID_CLIENTE,p.NUMERO_REFERENCIA,p.MONTO,p.ESTADO
+       HAVING GREATEST(p.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) > 0
+          AND UPPER(NVL(p.ESTADO,'NO_APLICADO')) NOT IN ('ANULADO','REVERSADO')
+        ORDER BY p.ID_PAGO DESC`,
+      idCliente ? { idCliente } : {},
+    );
+    return (r.rows ?? []).map((x) => ({
+      id: x.ID_PAGO,
+      idCliente: x.ID_CLIENTE,
+      label: `Pago #${x.ID_PAGO}${x.NUMERO_REFERENCIA ? ` · ${x.NUMERO_REFERENCIA}` : ''} · Disponible Q ${Number(x.DISPONIBLE).toFixed(2)}`,
+      monto: x.MONTO,
+      saldo: x.DISPONIBLE,
+      estado: x.ESTADO,
+    }));
+  } finally {
+    await c.close();
+  }
+}

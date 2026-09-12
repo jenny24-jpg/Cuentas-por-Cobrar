@@ -5,6 +5,7 @@ import type {
   CreateDocumentoInput,
   UpdateDocumentoInput,
 } from '@erp/contracts';
+import { deriveDocumentoCondicion } from '../../shared/financialRules';
 
 interface DocumentoRow {
   ID_DOCUMENTO: number;
@@ -24,6 +25,7 @@ interface DocumentoRow {
 }
 
 function mapRow(row: DocumentoRow): Documento {
+  const estado = row.ESTADO?.trim();
   return {
     idDocumento: row.ID_DOCUMENTO,
     idCliente: row.ID_CLIENTE,
@@ -32,7 +34,8 @@ function mapRow(row: DocumentoRow): Documento {
     idTipoDocumento: row.ID_TIPO_DOCUMENTO,
     nombreTipoDocumento: row.NOMBRE_TIPO_DOCUMENTO,
     idMoneda: row.ID_MONEDA,
-    estado: row.ESTADO?.trim(),
+    estado,
+    condicion: deriveDocumentoCondicion(row.FECHA_VENCIMIENTO, row.SALDO, estado),
     serie: row.SERIE,
     numeroDocumento: row.NUMERO_DOCUMENTO,
     fechaDocumento: row.FECHA_DOCUMENTO?.toISOString() ?? '',
@@ -118,7 +121,7 @@ export async function findById(id: number): Promise<Documento | null> {
   }
 }
 
-export async function create(input: CreateDocumentoInput): Promise<number> {
+export async function create(input: CreateDocumentoInput & { nitCliente?: string | null }): Promise<number> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<{ id: number[] }>(
@@ -126,24 +129,22 @@ export async function create(input: CreateDocumentoInput): Promise<number> {
          (ID_CLIENTE, NIT_CLIENTE, ID_TIPO_DOCUMENTO, ID_MONEDA, ESTADO,
           SERIE, NUMERO_DOCUMENTO, FECHA_DOCUMENTO, FECHA_VENCIMIENTO, TOTAL, SALDO)
        VALUES
-         (:idCliente, :nitCliente, :idTipoDocumento, :idMoneda, :estado,
+         (:idCliente, :nitCliente, :idTipoDocumento, :idMoneda, 'PENDIENTE',
           :serie, :numeroDocumento,
           TO_DATE(:fechaDocumento, 'YYYY-MM-DD'),
           TO_DATE(:fechaVencimiento, 'YYYY-MM-DD'),
-          :total, NVL(:saldo, :total))
+          :total, :total)
        RETURNING ID_DOCUMENTO INTO :id`,
       {
         idCliente: input.idCliente,
         nitCliente: input.nitCliente ?? null,
         idTipoDocumento: input.idTipoDocumento,
         idMoneda: input.idMoneda,
-        estado: input.estado ?? 'PENDIENTE',
         serie: input.serie ?? null,
         numeroDocumento: input.numeroDocumento,
         fechaDocumento: input.fechaDocumento,
         fechaVencimiento: input.fechaVencimiento,
         total: input.total,
-        saldo: input.saldo ?? null,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
     );
@@ -157,7 +158,13 @@ export async function create(input: CreateDocumentoInput): Promise<number> {
   }
 }
 
-export async function update(id: number, input: UpdateDocumentoInput): Promise<void> {
+export type DocumentoInternalUpdate = UpdateDocumentoInput & {
+  nitCliente?: string | null;
+  saldo?: number;
+  estado?: string;
+};
+
+export async function update(id: number, input: DocumentoInternalUpdate): Promise<void> {
   const fields: string[] = [];
   const binds: Record<string, any> = { id };
 
@@ -165,7 +172,6 @@ export async function update(id: number, input: UpdateDocumentoInput): Promise<v
   if (input.nitCliente !== undefined) { fields.push('NIT_CLIENTE = :nitCliente'); binds.nitCliente = input.nitCliente; }
   if (input.idTipoDocumento !== undefined) { fields.push('ID_TIPO_DOCUMENTO = :idTipoDocumento'); binds.idTipoDocumento = input.idTipoDocumento; }
   if (input.idMoneda !== undefined) { fields.push('ID_MONEDA = :idMoneda'); binds.idMoneda = input.idMoneda; }
-  if (input.estado !== undefined) { fields.push('ESTADO = :estado'); binds.estado = input.estado; }
   if (input.serie !== undefined) { fields.push('SERIE = :serie'); binds.serie = input.serie; }
   if (input.numeroDocumento !== undefined) { fields.push('NUMERO_DOCUMENTO = :numeroDocumento'); binds.numeroDocumento = input.numeroDocumento; }
   if (input.fechaDocumento !== undefined) {
@@ -177,7 +183,9 @@ export async function update(id: number, input: UpdateDocumentoInput): Promise<v
     binds.fechaVencimiento = input.fechaVencimiento;
   }
   if (input.total !== undefined) { fields.push('TOTAL = :total'); binds.total = input.total; }
+  // saldo/estado solo pueden llegar desde lógica interna del servidor.
   if (input.saldo !== undefined) { fields.push('SALDO = :saldo'); binds.saldo = input.saldo; }
+  if (input.estado !== undefined) { fields.push('ESTADO = :estado'); binds.estado = input.estado; }
 
   if (fields.length === 0) return;
 

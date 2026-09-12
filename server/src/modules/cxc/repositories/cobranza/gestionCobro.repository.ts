@@ -10,7 +10,7 @@ interface GestionCobroRow {
   ID_EMPLEADO: number;
   NOMBRE_EMPLEADO: string | null;
   FECHA_GESTION: Date;
-  TIPO_GESTION: string | null;
+  TIPO_GESTION: GestionCobro['tipoGestion'];
   RESULTADO: string | null;
   OBSERVACION: string | null;
   FECHA_COMPROMISO: Date | null;

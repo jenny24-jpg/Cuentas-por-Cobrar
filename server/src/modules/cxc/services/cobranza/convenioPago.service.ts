@@ -53,6 +53,9 @@ export async function createConvenio(rawInput: unknown): Promise<ConvenioPago> {
   const input = createConvenioPagoSchema.parse(rawInput);
   if (input.fechaConvenio > businessTodayIso()) throw new BadRequestError('La fecha del convenio no puede ser futura');
   if (!(await catalogosRepository.clienteExiste(input.idCliente))) throw new BadRequestError('El cliente seleccionado no existe');
+  if (!(await catalogosRepository.clienteElegibleParaConvenio(input.idCliente))) {
+    throw new BadRequestError('El cliente debe tener al menos una promesa incumplida o una mora vigente antes de generar un convenio.');
+  }
   const id = await convenioPagoRepository.create(input);
   const plan = generarPlanDeCuotas(input.montoDeuda, input.numeroCuotas, input.fechaConvenio);
   try {
