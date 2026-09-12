@@ -7,12 +7,13 @@ import {
   todayIso,
   validateIdentifier,
   validateMoney,
-  validateRequired,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { Recibo, CatalogoOption } from '@erp/contracts';
+
+const ESTADOS_RECIBO = ['EMITIDO', 'CANCELADO'] as const;
 
 export function ReciboForm({
   item,
@@ -31,7 +32,7 @@ export function ReciboForm({
   const [numeroRecibo, setNumero] = useState(item?.numeroRecibo ?? '');
   const [fecha, setFecha] = useState(item?.fecha?.slice(0, 10) ?? '');
   const [monto, setMonto] = useState(item?.monto?.toString() ?? '');
-  const [estado, setEstado] = useState(item?.estado ?? '');
+  const [estado, setEstado] = useState(item?.estado ?? 'EMITIDO');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -77,13 +78,6 @@ export function ReciboForm({
       next.monto = `El monto del recibo no puede superar el pago seleccionado (${Number(pagoSeleccionado.monto).toFixed(2)}).`;
     }
 
-    const estadoReq = validateRequired(estado, 'El estado');
-    if (estadoReq) next.estado = estadoReq;
-    else {
-      const estadoErr = validateIdentifier(estado, 'El estado');
-      if (estadoErr) next.estado = estadoErr;
-    }
-
     return next;
   }, [idCliente, idPago, numeroRecibo, fecha, monto, estado, pagoSeleccionado]);
 
@@ -107,7 +101,7 @@ export function ReciboForm({
       numeroRecibo: numeroRecibo.trim() || undefined,
       fecha,
       monto: Number(monto),
-      estado: estado.trim().toUpperCase(),
+      estado,
     };
 
     try {
@@ -184,16 +178,16 @@ export function ReciboForm({
           error={errorFor('monto', monto)}
         />
       </div>
-      <TextInput
+      <Select
         label="Estado"
         required
-        restriction="identifier"
-        uppercase
-        maxLength={20}
-        helperText="Estado operativo definido por el proceso de recibos."
         value={estado}
         onChange={(e: any) => setEstado(e.target.value)}
-        error={errorFor('estado', estado)}
+        options={ESTADOS_RECIBO.map((value) => ({
+          value,
+          label: value.charAt(0) + value.slice(1).toLowerCase(),
+        }))}
+        helperText="Selecciona el estado actual del recibo."
       />
 
       {formError && <p className="text-sm text-red-600 font-medium">{formError}</p>}
