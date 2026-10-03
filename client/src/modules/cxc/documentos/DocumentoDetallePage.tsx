@@ -5,6 +5,7 @@ import { DataTable, StatusBadge, Button } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Documento, DocumentoDetalle, DocumentoHistorial } from '@erp/contracts';
 import { DocumentoDetalleForm } from './components/DocumentoDetalleForm';
 import { DocumentoHistorialForm } from './components/DocumentoHistorialForm';
@@ -98,7 +99,7 @@ export const DocumentoDetallePage = () => {
               {documento.nombreCliente ?? `Cliente #${documento.idCliente}`} · {documento.nombreTipoDocumento ?? `Tipo #${documento.idTipoDocumento}`}
             </p>
           </div>
-          <StatusBadge status={documento.estado} />
+          <div className="flex items-center gap-2"><StatusBadge status={documento.estado} />{documento.condicion === 'VENCIDA' && <StatusBadge status="VENCIDA" />}</div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-100 text-sm">
@@ -108,7 +109,7 @@ export const DocumentoDetallePage = () => {
           </div>
           <div>
             <p className="text-slate-400 text-xs uppercase font-semibold">Fecha</p>
-            <p className="font-bold text-slate-900 mt-1">{documento.fechaDocumento.slice(0, 10)}</p>
+            <p className="font-bold text-slate-900 mt-1">{formatDateGT(documento.fechaDocumento)}</p>
           </div>
           <div>
             <p className="text-slate-400 text-xs uppercase font-semibold">Total</p>
@@ -182,31 +183,59 @@ export const DocumentoDetallePage = () => {
           data={historial}
           emptyText="El documento no tiene historial"
           columns={[
-            { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => value?.slice(0, 10) },
+            { header: 'Fecha', accessorKey: 'fecha', cell: ({ value }: any) => formatDateGT(value) },
+            {
+              header: 'Movimiento',
+              cell: ({ row }: any) =>
+                row.tipoEvento ? (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-slate-700">
+                      {String(row.tipoEvento).replace(/_/g, ' ')}
+                    </span>
+                    {row.descripcion && (
+                      <span className="text-[11px] text-slate-400 max-w-[220px] truncate" title={row.descripcion}>
+                        {row.descripcion}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400">Manual</span>
+                ),
+            },
+            {
+              header: 'Monto',
+              cell: ({ row }: any) =>
+                row.monto != null ? (
+                  <span className={row.naturaleza === 'CARGO' ? 'text-red-600' : 'text-emerald-600'}>
+                    {row.naturaleza === 'CARGO' ? '+' : '-'} Q {Number(row.monto).toFixed(2)}
+                  </span>
+                ) : '—',
+            },
             { header: 'Estado anterior', accessorKey: 'estadoAnterior', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
             { header: 'Estado nuevo', accessorKey: 'estadoNuevo', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
             { header: 'Empleado', accessorKey: 'nombreEmpleado' },
             {
               header: '',
               align: 'right',
-              cell: ({ row }: any) => (
-                <div className="flex justify-end gap-1">
-                  <button
-                    onClick={() => setHistorialModal({ mode: 'edit', historial: row })}
-                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
-                    title="Editar"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    onClick={() => setHistorialEliminar(row)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
-                    title="Eliminar"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ),
+              cell: ({ row }: any) =>
+                row.tipoEvento ? null : (
+                  <div className="flex justify-end gap-1">
+                    <button
+                      onClick={() => setHistorialModal({ mode: 'edit', historial: row })}
+                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
+                      title="Editar"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => setHistorialEliminar(row)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                      title="Eliminar"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ),
             },
           ]}
         />

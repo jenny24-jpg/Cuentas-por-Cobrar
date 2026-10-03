@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, RefreshCw } from 'lucide-react';
 import {
   DataTable,
   StatusBadge,
@@ -10,6 +10,7 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { Mora } from '@erp/contracts';
 import { MoraForm } from './components/MoraForm';
 
@@ -28,6 +29,9 @@ export const MoraPage = () => {
     useState<Mora | null>(null);
 
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRecalculando, setIsRecalculando] = useState(false);
+  const [confirmRecalcularOpen, setConfirmRecalcularOpen] = useState(false);
+  const [recalculoMensaje, setRecalculoMensaje] = useState<string | null>(null);
 
   const { data, meta, isLoading, error, refetch } =
     usePaginatedList<Mora>(
@@ -38,6 +42,23 @@ export const MoraPage = () => {
         search,
       },
     );
+
+  const handleRecalcular = async () => {
+    setConfirmRecalcularOpen(false);
+    setIsRecalculando(true);
+    setRecalculoMensaje(null);
+    try {
+      const resultado = await apiClient.post<{ activas: number; cerradas: number }>('/cxc/mora/recalcular', {});
+      setRecalculoMensaje(
+        `Recalculado: ${resultado.activas} en mora activa, ${resultado.cerradas} cerradas por saldo pagado.`,
+      );
+      refetch();
+    } catch (err) {
+      setRecalculoMensaje(err instanceof ApiError ? err.message : 'No se pudo recalcular la mora');
+    } finally {
+      setIsRecalculando(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!moraAEliminar) return;
@@ -73,17 +94,33 @@ export const MoraPage = () => {
           </p>
         </div>
 
-        <Button
-          icon={Plus}
-          onClick={() =>
-            setModalState({
-              mode: 'create',
-            })
-          }
-        >
-          Nueva Mora
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            icon={RefreshCw}
+            onClick={() => setConfirmRecalcularOpen(true)}
+            disabled={isRecalculando}
+          >
+            {isRecalculando ? 'Recalculando...' : 'Recalcular Mora'}
+          </Button>
+          <Button
+            icon={Plus}
+            onClick={() =>
+              setModalState({
+                mode: 'create',
+              })
+            }
+          >
+            Nueva Mora
+          </Button>
+        </div>
       </div>
+
+      {recalculoMensaje && (
+        <p className="text-sm text-blue-700 font-medium bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+          {recalculoMensaje}
+        </p>
+      )}
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
@@ -142,7 +179,7 @@ export const MoraPage = () => {
             cell: ({ value }: any) =>
               value === null || value === undefined
                 ? '-'
-                : `${Number(value).toFixed(4)}%`,
+                : `${Number(value).toFixed(2)}%`,
           },
           {
             header: 'Monto Mora',
@@ -158,15 +195,24 @@ export const MoraPage = () => {
           {
             header: 'Fecha Cálculo',
             accessorKey: 'fechaCalculo',
-            cell: ({ value }: any) =>
-              value
-                ? new Date(value).toLocaleDateString('es-GT')
-                : '-',
+            cell: ({ value }: any) => formatDateGT(value, '-'),
           },
           {
             header: 'Estado',
             accessorKey: 'estado',
-            cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—',
+            cell: ({ value }: any) => {
+              if (!value) return '—';
+
+              if (value === 'ANULADA') {
+                return (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+                    Anulada
+                  </span>
+                );
+              }
+
+              return <StatusBadge status={value} />;
+            },
           },
           {
             header: '',
@@ -225,6 +271,16 @@ export const MoraPage = () => {
           }}
         />
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmRecalcularOpen}
+        onClose={() => setConfirmRecalcularOpen(false)}
+        onConfirm={handleRecalcular}
+        title="Confirmar recálculo de mora"
+        description="¿Estás seguro de recalcular la mora? Se actualizarán los registros activos y se cerrarán los que ya no apliquen."
+        confirmLabel="Sí, recalcular"
+        variant="primary"
+      />
 
       <ConfirmDialog
         isOpen={!!moraAEliminar}

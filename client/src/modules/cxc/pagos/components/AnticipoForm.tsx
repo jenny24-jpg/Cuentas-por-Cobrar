@@ -5,9 +5,7 @@ import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
   todayIso,
-  validateIdentifier,
   validateMoney,
-  validateRequired,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
@@ -24,6 +22,7 @@ export function AnticipoForm({
   onCancel: () => void;
 }) {
   const isEditing = Boolean(item);
+  const isLocked = isEditing && item?.estado !== 'DISPONIBLE';
   const [clientes, setClientes] = useState<CatalogoOption[]>([]);
   const [pagos, setPagos] = useState<CatalogoOption[]>([]);
   const [idCliente, setCliente] = useState(item?.idCliente?.toString() ?? '');
@@ -31,7 +30,6 @@ export function AnticipoForm({
   const [montoOriginal, setOriginal] = useState(item?.montoOriginal?.toString() ?? '');
   const [montoDisponible, setDisponible] = useState(item?.montoDisponible?.toString() ?? '');
   const [fecha, setFecha] = useState(item?.fecha?.slice(0, 10) ?? '');
-  const [estado, setEstado] = useState(item?.estado ?? '');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,23 +67,20 @@ export function AnticipoForm({
     const fechaErr = validateRequiredDate(fecha, 'La fecha', { notFuture: true, maxDate: todayIso() });
     if (fechaErr) next.fecha = fechaErr;
 
-    const estadoReq = validateRequired(estado, 'El estado');
-    if (estadoReq) next.estado = estadoReq;
-    else {
-      const estadoErr = validateIdentifier(estado, 'El estado');
-      if (estadoErr) next.estado = estadoErr;
-    }
-
     return next;
-  }, [idCliente, montoOriginal, montoDisponible, fecha, estado]);
+  }, [idCliente, montoOriginal, montoDisponible, fecha]);
 
-  const isFormValid = !hasErrors(validationErrors);
+  const isFormValid = !hasErrors(validationErrors) && !isLocked;
   const errorFor = (field: string, value = '') =>
     errors[field] ?? (value ? validationErrors[field] : undefined);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    if (isLocked) {
+      setFormError('Este anticipo ya tiene aplicaciones o está anulado. Para corregirlo, reversa la aplicación o anúlalo desde la lista.');
+      return;
+    }
     if (!isFormValid) {
       setErrors(validationErrors);
       return;
@@ -99,7 +94,6 @@ export function AnticipoForm({
       montoOriginal: Number(montoOriginal),
       montoDisponible: Number(montoDisponible),
       fecha,
-      estado: estado.trim().toUpperCase(),
     };
 
     try {
@@ -121,6 +115,11 @@ export function AnticipoForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+      {isLocked && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Este anticipo ya tiene aplicaciones o está anulado; su cabecera queda bloqueada para proteger la trazabilidad.
+        </div>
+      )}
       <Select
         label="Cliente"
         required
@@ -129,13 +128,14 @@ export function AnticipoForm({
         options={clientes.map((x) => ({ value: x.id, label: x.label }))}
         helperText="Selecciona el cliente propietario del anticipo."
         error={errorFor('idCliente')}
+        isReadOnly={isLocked}
       />
       <Select
         label="Pago relacionado"
         value={idPago}
         onChange={(e: any) => setPago(e.target.value)}
         options={pagos.map((x) => ({ value: x.id, label: x.label }))}
-        isReadOnly={!idCliente}
+        isReadOnly={!idCliente || isLocked}
         placeholder={idCliente ? 'Seleccionar pago (opcional)' : 'Selecciona un cliente primero'}
         helperText="Opcional; solo se muestran pagos del cliente seleccionado."
       />
@@ -155,6 +155,7 @@ export function AnticipoForm({
           }}
           helperText="Importe inicial del anticipo; mayor a 0."
           error={errorFor('montoOriginal', montoOriginal)}
+          isReadOnly={isLocked}
         />
         <TextInput
           label="Monto disponible"
@@ -166,7 +167,7 @@ export function AnticipoForm({
           required
           value={montoDisponible}
           onChange={(e: any) => setDisponible(e.target.value)}
-          isReadOnly={!isEditing}
+          isReadOnly={!isEditing || isLocked}
           helperText={
             isEditing
               ? 'Debe estar entre 0 y el monto original.'
@@ -184,18 +185,11 @@ export function AnticipoForm({
         onChange={(e: any) => setFecha(e.target.value)}
         helperText="Fecha real del anticipo; no puede ser futura."
         error={errorFor('fecha', fecha)}
+        isReadOnly={isLocked}
       />
-      <TextInput
-        label="Estado"
-        required
-        restriction="identifier"
-        uppercase
-        maxLength={20}
-        helperText="Estado operativo definido por el proceso de anticipos."
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        error={errorFor('estado', estado)}
-      />
+      {isEditing && (
+        <TextInput label="Estado" value={item?.estado ?? ''} isReadOnly helperText="El estado lo administra el motor financiero (aplicar/reversar) o la anulación formal; no se edita aquí." />
+      )}
 
       {formError && <p className="text-sm text-red-600 font-medium">{formError}</p>}
 

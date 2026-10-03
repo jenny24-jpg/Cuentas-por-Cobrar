@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, AlertTriangle } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
+import { formatDateGT } from '../../../shared/date';
 import type { PromesaPago } from '@erp/contracts';
 import { PromesaPagoForm } from './components/PromesaPagoForm';
 
@@ -68,12 +69,25 @@ export const PromesasPagoPage = () => {
         emptyText="No hay promesas de pago registradas"
         columns={[
           { header: 'Cliente', accessorKey: 'nombreCliente' },
-          { header: 'Fecha promesa', accessorKey: 'fechaPromesa', cell: ({ value }: any) => value?.slice(0, 10) },
-          { header: 'Fecha compromiso', accessorKey: 'fechaCompromiso', cell: ({ value }: any) => value?.slice(0, 10) ?? '—' },
+          { header: 'Fecha promesa', accessorKey: 'fechaPromesa', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Fecha compromiso', accessorKey: 'fechaCompromiso', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Monto', accessorKey: 'montoComprometido', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           {
             header: 'Estado',
-            cell: ({ row }: any) => <StatusBadge status={row.estado} />,
+            cell: ({ row }: any) => (
+              <div className="flex items-center gap-1.5">
+                <StatusBadge status={row.estado} />
+                {row.estaVencida && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600"
+                    title="La fecha comprometida ya pasó sin marcarse cumplida o incumplida"
+                  >
+                    <AlertTriangle size={12} />
+                    Vencida
+                  </span>
+                )}
+              </div>
+            ),
           },
           {
             header: '',

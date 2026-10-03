@@ -12,7 +12,7 @@ import {
 import type { CatalogoOption, RutaDetalle } from '@erp/contracts';
 
 const ESTADOS_VISITA = ['PENDIENTE', 'VISITADO', 'NO_ENCONTRADO', 'REPROGRAMADO'] as const;
-const ESTADO_OPTIONS = ESTADOS_VISITA.map((e) => ({ value: e, label: e.replaceAll('_', ' ') }));
+const ESTADO_OPTIONS = ESTADOS_VISITA.map((e) => ({ value: e, label: e.replace(/_/g, ' ') }));
 
 interface RutaDetalleFormProps {
   idRuta: number;

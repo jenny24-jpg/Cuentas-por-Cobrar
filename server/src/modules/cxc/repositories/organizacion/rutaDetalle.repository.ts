@@ -1,8 +1,20 @@
 import oracledb from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { RutaDetalle, CreateRutaDetalleInput, UpdateRutaDetalleInput } from '@erp/contracts';
+import { NotFoundError, ConflictError } from '../../../../shared/errors/AppError';
+import { lockRuta } from './rutaOperacion.repository';
+
+async function guardLegacy(conn: Awaited<ReturnType<typeof getConnection>>, id:number) {
+  const parent=await conn.execute<{ID_RUTA:number}>('SELECT ID_RUTA FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE=:id',{id});
+  if(!parent.rows?.length) throw new NotFoundError('Parada no encontrada');
+  await lockRuta(conn,parent.rows[0].ID_RUTA);
+  const row=await conn.execute<{ID_DOCUMENTO:number|null}>('SELECT ID_DOCUMENTO FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE=:id FOR UPDATE',{id});
+  if(!row.rows?.length) throw new NotFoundError('Parada no encontrada');
+  if(row.rows[0].ID_DOCUMENTO!==null) throw new ConflictError('La asignación conserva su documento, cobrador y monto. Registra las actividades en su bitácora');
+}
 
 interface RutaDetalleRow {
+  ID_DOCUMENTO: number | null;
   ID_RUTA_DETALLE: number;
   ID_RUTA: number;
   ID_CLIENTE: number;
@@ -18,6 +30,7 @@ interface RutaDetalleRow {
 function mapRow(row: RutaDetalleRow): RutaDetalle {
   return {
     idRutaDetalle: row.ID_RUTA_DETALLE,
+    idDocumento: row.ID_DOCUMENTO,
     idRuta: row.ID_RUTA,
     idCliente: row.ID_CLIENTE,
     nombreCliente: row.NOMBRE_CLIENTE,
@@ -31,12 +44,14 @@ function mapRow(row: RutaDetalleRow): RutaDetalle {
 }
 
 // OJO: la tabla de clientes en la base se llama CLIENTE (no CXC_CLIENTES).
+// LEFT JOIN (no JOIN normal): un ID_CLIENTE huérfano no debe borrar la parada
+// de la ruta del listado del cobrador ni causar un falso 404 en findById.
 const SELECT_BASE = `
-  SELECT d.ID_RUTA_DETALLE, d.ID_RUTA, d.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE,
+  SELECT d.ID_RUTA_DETALLE, d.ID_DOCUMENTO, d.ID_RUTA, d.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE,
          d.ORDEN_VISITA, d.DIRECCION, d.MONTO_PENDIENTE,
          d.ESTADO_VISITA, d.HORA_VISITA, d.OBSERVACIONES
   FROM CXC_RUTA_DETALLE d
-  JOIN CLIENTE c ON c.ID_CLIENTE = d.ID_CLIENTE
+  LEFT JOIN CLIENTE c ON c.ID_CLIENTE = d.ID_CLIENTE
 `;
 
 /** Lista las paradas de UNA ruta específica, ordenadas por orden de visita. */
@@ -67,6 +82,7 @@ export async function findById(id: number): Promise<RutaDetalle | null> {
 export async function create(idRuta: number, input: CreateRutaDetalleInput): Promise<number> {
   const conn = await getConnection();
   try {
+    await lockRuta(conn, idRuta);
     const result = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_RUTA_DETALLE
          (ID_RUTA, ID_CLIENTE, ORDEN_VISITA, DIRECCION, MONTO_PENDIENTE, ESTADO_VISITA, HORA_VISITA, OBSERVACIONES)
@@ -107,11 +123,16 @@ export async function update(id: number, input: UpdateRutaDetalleInput): Promise
   if (input.horaVisita !== undefined) { fields.push('HORA_VISITA = :horaVisita'); binds.horaVisita = input.horaVisita; }
   if (input.observaciones !== undefined) { fields.push('OBSERVACIONES = :observaciones'); binds.observaciones = input.observaciones; }
 
-  if (fields.length === 0) return;
+  if (fields.length === 0) {
+    if (!(await findById(id))) throw new NotFoundError(`Parada de ruta ${id} no encontrada`);
+    return;
+  }
 
   const conn = await getConnection();
   try {
-    await conn.execute(`UPDATE CXC_RUTA_DETALLE SET ${fields.join(', ')} WHERE ID_RUTA_DETALLE = :id`, binds);
+    await guardLegacy(conn,id);
+    const result = await conn.execute(`UPDATE CXC_RUTA_DETALLE SET ${fields.join(', ')} WHERE ID_RUTA_DETALLE = :id`, binds);
+    if (!result.rowsAffected) throw new NotFoundError(`Parada de ruta ${id} no encontrada`);
     await conn.commit();
   } catch (err) {
     await conn.rollback();
@@ -124,7 +145,9 @@ export async function update(id: number, input: UpdateRutaDetalleInput): Promise
 export async function remove(id: number): Promise<void> {
   const conn = await getConnection();
   try {
-    await conn.execute(`DELETE FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE = :id`, { id });
+    await guardLegacy(conn,id);
+    const result = await conn.execute(`DELETE FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE = :id`, { id });
+    if (!result.rowsAffected) throw new NotFoundError(`Parada de ruta ${id} no encontrada`);
     await conn.commit();
   } catch (err) {
     await conn.rollback();

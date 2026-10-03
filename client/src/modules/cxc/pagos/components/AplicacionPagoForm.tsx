@@ -27,7 +27,7 @@ export function AplicacionPagoForm({
   const [empleados, setEmpleados] = useState<CatalogoOption[]>([]);
   const [idPago, setIdPago] = useState(item?.idPago?.toString() ?? '');
   const [idDocumento, setIdDocumento] = useState(item?.idDocumento?.toString() ?? '');
-  const [fechaAplicacion, setFecha] = useState(item?.fechaAplicacion?.slice(0, 10) ?? '');
+  const [fechaAplicacion, setFecha] = useState(item?.fechaAplicacion?.slice(0, 10) ?? todayIso());
   const [montoAplicado, setMonto] = useState(item?.montoAplicado?.toString() ?? '');
   const [idEmpleado, setEmp] = useState(item?.idEmpleado?.toString() ?? '');
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -73,6 +73,10 @@ export function AplicacionPagoForm({
   }, [idClientePago]);
 
   const documentoSeleccionado = documentos.find((d) => String(d.id) === idDocumento);
+  const maxAplicable = Math.min(
+    pagoSeleccionado?.saldo ?? Number.POSITIVE_INFINITY,
+    documentoSeleccionado?.saldo ?? Number.POSITIVE_INFINITY,
+  );
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
@@ -82,6 +86,9 @@ export function AplicacionPagoForm({
 
     const documentoErr = validateRequiredSelect(idDocumento, 'un documento pendiente del cliente');
     if (documentoErr) next.idDocumento = documentoErr;
+
+    const empleadoErr = validateRequiredSelect(idEmpleado, 'el empleado que aplica el pago');
+    if (empleadoErr) next.idEmpleado = empleadoErr;
 
     const fechaErr = validateRequiredDate(fechaAplicacion, 'La fecha de aplicación', {
       notFuture: true,
@@ -94,15 +101,12 @@ export function AplicacionPagoForm({
       positive: true,
     });
     if (montoErr) next.montoAplicado = montoErr;
-    else if (
-      documentoSeleccionado?.saldo !== undefined &&
-      Number(montoAplicado) > Number(documentoSeleccionado.saldo)
-    ) {
-      next.montoAplicado = `El monto no puede superar el saldo pendiente (${Number(documentoSeleccionado.saldo).toFixed(2)}).`;
+    else if (Number.isFinite(maxAplicable) && Number(montoAplicado) > maxAplicable) {
+      next.montoAplicado = `El monto no puede superar Q ${maxAplicable.toFixed(2)}, según el disponible del pago y el saldo del documento.`;
     }
 
     return next;
-  }, [idPago, idDocumento, fechaAplicacion, montoAplicado, documentoSeleccionado]);
+  }, [idPago, idDocumento, idEmpleado, fechaAplicacion, montoAplicado, maxAplicable]);
 
   const isFormValid = !hasErrors(validationErrors);
   const errorFor = (field: string, value = '') =>
@@ -129,7 +133,7 @@ export function AplicacionPagoForm({
       idDocumento: Number(idDocumento),
       fechaAplicacion,
       montoAplicado: Number(montoAplicado),
-      idEmpleado: idEmpleado ? Number(idEmpleado) : undefined,
+      idEmpleado: Number(idEmpleado),
     };
 
     try {
@@ -192,21 +196,24 @@ export function AplicacionPagoForm({
           restriction="decimal"
           decimalPlaces={2}
           min={0.01}
+          max={Number.isFinite(maxAplicable) ? maxAplicable : undefined}
           step="0.01"
           required
           value={montoAplicado}
           onChange={(e: any) => setMonto(e.target.value)}
-          helperText="Mayor a 0 y no puede superar el saldo del documento seleccionado."
+          helperText={Number.isFinite(maxAplicable) ? `Máximo aplicable: Q ${maxAplicable.toFixed(2)} (menor entre disponible del pago y saldo del documento).` : "Mayor a 0, máximo 2 decimales."}
           error={errorFor('montoAplicado', montoAplicado)}
         />
       </div>
 
       <Select
         label="Empleado"
+        required
         value={idEmpleado}
         onChange={(e: any) => setEmp(e.target.value)}
         options={empleados.map((x) => ({ value: x.id, label: x.label }))}
-        helperText="Opcional: empleado responsable de registrar la aplicación."
+        helperText="Empleado responsable de registrar la aplicación."
+        error={errorFor('idEmpleado')}
       />
 
       {formError && (
