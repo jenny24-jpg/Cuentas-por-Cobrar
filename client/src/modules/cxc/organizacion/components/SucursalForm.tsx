@@ -94,45 +94,47 @@ export const SucursalForm = ({ sucursal, onSuccess, onCancel }: SucursalFormProp
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <Select
-        label="Empresa"
-        required
-        value={idEmpresa}
-        onChange={(e: any) => setIdEmpresa(e.target.value)}
-        options={empresas.map((e) => ({ value: e.id, label: e.label }))}
-        helperText="Selecciona la empresa propietaria de la sucursal."
-        error={errors.idEmpresa}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <Select
+          label="Empresa"
+          required
+          value={idEmpresa}
+          onChange={(e: any) => setIdEmpresa(e.target.value)}
+          options={empresas.map((e) => ({ value: e.id, label: e.label }))}
+          helperText="Empresa propietaria de la sucursal."
+          error={errors.idEmpresa}
+        />
 
-      <TextInput
-        label="Nombre de la sucursal"
-        required
-        maxLength={150}
-        value={nombre}
-        onChange={(e: any) => setNombre(sanitizeSoloLetras(e.target.value))}
-        error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
-        helperText="Solo letras y espacios, sin números ni signos; máximo 150 caracteres."
-        placeholder="Ej. Sucursal Centro"
-      />
+        <TextInput
+          label="Nombre de la sucursal"
+          required
+          maxLength={150}
+          value={nombre}
+          onChange={(e: any) => setNombre(sanitizeSoloLetras(e.target.value))}
+          error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
+          helperText="Solo letras y espacios; máximo 150."
+          placeholder="Ej. Sucursal Centro"
+        />
 
-      <TextInput
-        label="Dirección"
-        maxLength={200}
-        value={direccion}
-        onChange={(e: any) => setDireccion(e.target.value)}
-        error={errors.direccion ?? (direccion ? validationErrors.direccion : undefined)}
-        helperText="Dirección física; máximo 200 caracteres."
-        placeholder="Opcional"
-      />
+        <TextInput
+          label="Dirección"
+          maxLength={200}
+          value={direccion}
+          onChange={(e: any) => setDireccion(e.target.value)}
+          error={errors.direccion ?? (direccion ? validationErrors.direccion : undefined)}
+          helperText="Dirección física; máximo 200."
+          placeholder="Opcional"
+        />
 
-      <Select
-        label="Estado"
-        required
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        options={ESTADOS_SUCURSAL}
-        helperText="Las sucursales inactivas no deberían seleccionarse en procesos nuevos."
-      />
+        <Select
+          label="Estado"
+          required
+          value={estado}
+          onChange={(e: any) => setEstado(e.target.value)}
+          options={ESTADOS_SUCURSAL}
+          helperText="Las inactivas no se usan en procesos nuevos."
+        />
+      </div>
 
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">

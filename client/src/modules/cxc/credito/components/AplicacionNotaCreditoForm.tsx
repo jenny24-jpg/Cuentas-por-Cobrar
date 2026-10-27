@@ -75,8 +75,10 @@ export const AplicacionNotaCreditoForm = ({ aplicacion, onSuccess, onCancel }: A
   };
 
   return <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-    <Select label="Nota de Crédito" required value={idNotaCredito} onChange={(e:any)=>{setIdNotaCredito(e.target.value);setIdDocumento('');}} options={notasCredito.map(n=>({value:n.id,label:n.label}))} placeholder="Seleccionar nota de crédito" error={errors.idNotaCredito} helperText="Solo aparecen notas de crédito pendientes con saldo disponible." />
-    <Select label="Documento" required value={idDocumento} onChange={(e:any)=>setIdDocumento(e.target.value)} options={documentos.map(d=>({value:d.id,label:d.label}))} placeholder={idNotaCredito?'Seleccionar documento':'Selecciona una nota de crédito primero'} isReadOnly={!idNotaCredito || !notaSeleccionada} error={errors.idDocumento} helperText="Solo aparecen documentos pendientes del mismo cliente de la nota." />
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+      <Select label="Nota de Crédito" required value={idNotaCredito} onChange={(e:any)=>{setIdNotaCredito(e.target.value);setIdDocumento('');}} options={notasCredito.map(n=>({value:n.id,label:n.label}))} placeholder="Seleccionar nota" error={errors.idNotaCredito} helperText="Solo notas pendientes con saldo disponible." />
+      <Select label="Documento" required value={idDocumento} onChange={(e:any)=>setIdDocumento(e.target.value)} options={documentos.map(d=>({value:d.id,label:d.label}))} placeholder={idNotaCredito?'Seleccionar documento':'Selecciona una nota primero'} isReadOnly={!idNotaCredito || !notaSeleccionada} error={errors.idDocumento} helperText="Solo documentos pendientes del cliente de la nota." />
+    </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <TextInput label="Monto aplicado" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" max={Number.isFinite(maxAplicable) ? String(maxAplicable) : undefined} required value={montoAplicado} onChange={(e:any)=>setMontoAplicado(e.target.value)} error={errors.montoAplicado} placeholder="0.00" helperText={Number.isFinite(maxAplicable) ? `No puede superar ${maxAplicable.toFixed(2)}, según nota y saldo del documento.` : 'Monto positivo, máximo 2 decimales.'} />
       <TextInput label="Fecha de aplicación" type="date" required max={todayIso()} value={fechaAplicacion} onChange={(e:any)=>setFechaAplicacion(e.target.value)} error={errors.fechaAplicacion} helperText="Fecha real de la aplicación; no puede ser futura." />

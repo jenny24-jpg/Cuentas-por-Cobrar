@@ -112,7 +112,7 @@ export const FacturasPage = () => {
         }}
       />
 
-      <Modal isOpen={emitirOpen} onClose={() => setEmitirOpen(false)} title="Emitir factura" description="Se valida contra las reglas de la SAT (simulada) y se certifica al guardar." size="lg" closeOnBackdrop={false}>
+      <Modal isOpen={emitirOpen} onClose={() => setEmitirOpen(false)} title="Emitir factura" description="Se valida contra las reglas de la SAT (simulada) y se certifica al guardar."  closeOnBackdrop={false}>
         {emitirOpen && (
           <FacturaForm onCancel={() => setEmitirOpen(false)} onSuccess={(factura) => { setEmitirOpen(false); setDetalle(factura); refetch(); }} />
         )}

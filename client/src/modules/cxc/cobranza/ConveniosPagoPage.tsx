@@ -139,7 +139,7 @@ export const ConveniosPagoPage = () => {
         }}
       />
 
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nuevo Convenio de Pago" size="lg">
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nuevo Convenio de Pago">
         <ConvenioPagoForm
           onCancel={() => setIsCreateOpen(false)}
           onSuccess={() => { setIsCreateOpen(false); refetch(); }}

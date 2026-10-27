@@ -124,37 +124,48 @@ export function ReciboForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) => { setCliente(e.target.value); setPago(''); }}
-        options={clientes.map((x) => ({ value: x.id, label: x.label }))}
-        helperText="Selecciona el cliente al que pertenece el recibo."
-        error={errorFor('idCliente')}
-      />
-      <Select
-        label="Pago"
-        required
-        value={idPago}
-        onChange={(e: any) => setPago(e.target.value)}
-        options={pagos.map((x) => ({ value: x.id, label: x.label }))}
-        isReadOnly={!idCliente}
-        placeholder={idCliente ? 'Seleccionar pago' : 'Selecciona un cliente primero'}
-        helperText="Solo se muestran pagos del cliente seleccionado."
-        error={errorFor('idPago')}
-      />
-      <TextInput
-        label="Número de recibo"
-        restriction="identifier"
-        uppercase
-        maxLength={30}
-        helperText="Correlativo del recibo; admite letras, números, -, _ y /."
-        value={numeroRecibo}
-        onChange={(e: any) => setNumero(e.target.value)}
-        error={errorFor('numeroRecibo', numeroRecibo)}
-      />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) => { setCliente(e.target.value); setPago(''); }}
+          options={clientes.map((x) => ({ value: x.id, label: x.label }))}
+          helperText="Cliente al que pertenece el recibo."
+          error={errorFor('idCliente')}
+        />
+        <Select
+          label="Pago"
+          required
+          value={idPago}
+          onChange={(e: any) => setPago(e.target.value)}
+          options={pagos.map((x) => ({ value: x.id, label: x.label }))}
+          isReadOnly={!idCliente}
+          placeholder={idCliente ? 'Seleccionar pago' : 'Selecciona un cliente primero'}
+          helperText="Solo pagos del cliente seleccionado."
+          error={errorFor('idPago')}
+        />
+        <TextInput
+          label="Número de recibo"
+          restriction="identifier"
+          uppercase
+          maxLength={30}
+          helperText="Correlativo; letras, números, -, _ y /."
+          value={numeroRecibo}
+          onChange={(e: any) => setNumero(e.target.value)}
+          error={errorFor('numeroRecibo', numeroRecibo)}
+        />
+        <Select
+          label="Estado"
+          required
+          value={estado}
+          onChange={(e: any) => setEstado(e.target.value)}
+          options={ESTADOS_RECIBO.map((value) => ({
+            value,
+            label: value.charAt(0) + value.slice(1).toLowerCase(),
+          }))}
+          helperText="Estado actual del recibo."
+        />
         <TextInput
           label="Fecha"
           type="date"
@@ -175,21 +186,10 @@ export function ReciboForm({
           required
           value={monto}
           onChange={(e: any) => setMonto(e.target.value)}
-          helperText="Mayor a 0 y no puede superar el monto del pago seleccionado."
+          helperText="Mayor a 0; no puede superar el monto del pago."
           error={errorFor('monto', monto)}
         />
       </div>
-      <Select
-        label="Estado"
-        required
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        options={ESTADOS_RECIBO.map((value) => ({
-          value,
-          label: value.charAt(0) + value.slice(1).toLowerCase(),
-        }))}
-        helperText="Selecciona el estado actual del recibo."
-      />
 
       {formError && <p className="text-sm text-red-600 font-medium">{formError}</p>}
 

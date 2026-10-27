@@ -143,27 +143,29 @@ export function AplicacionPagoForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <Select
-        label="Pago"
-        required
-        value={idPago}
-        onChange={(e: any) => handlePagoChange(e.target.value)}
-        options={pagos.map((x) => ({ value: x.id, label: x.label }))}
-        helperText="El pago determina el cliente y limita los documentos que pueden seleccionarse."
-        error={errorFor('idPago')}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <Select
+          label="Pago"
+          required
+          value={idPago}
+          onChange={(e: any) => handlePagoChange(e.target.value)}
+          options={pagos.map((x) => ({ value: x.id, label: x.label }))}
+          helperText="El pago determina el cliente y los documentos disponibles."
+          error={errorFor('idPago')}
+        />
 
-      <Select
-        label="Documento"
-        required
-        value={idDocumento}
-        onChange={(e: any) => setIdDocumento(e.target.value)}
-        options={documentos.map((x) => ({ value: x.id, label: x.label }))}
-        isReadOnly={!idClientePago}
-        placeholder={idClientePago ? 'Seleccionar documento pendiente' : 'Selecciona un pago primero'}
-        helperText="Solo se muestran documentos con saldo pendiente del mismo cliente del pago."
-        error={errorFor('idDocumento')}
-      />
+        <Select
+          label="Documento"
+          required
+          value={idDocumento}
+          onChange={(e: any) => setIdDocumento(e.target.value)}
+          options={documentos.map((x) => ({ value: x.id, label: x.label }))}
+          isReadOnly={!idClientePago}
+          placeholder={idClientePago ? 'Seleccionar documento pendiente' : 'Selecciona un pago primero'}
+          helperText="Solo documentos con saldo pendiente del cliente del pago."
+          error={errorFor('idDocumento')}
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput

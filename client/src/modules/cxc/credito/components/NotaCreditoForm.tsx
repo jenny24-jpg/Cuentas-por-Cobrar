@@ -154,28 +154,30 @@ export const NotaCreditoForm = ({ nota, onSuccess, onCancel }: NotaCreditoFormPr
         </div>
       )}
 
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) => { setIdCliente(e.target.value); setIdDocumentoReferencia(''); }}
-        options={clientes.map((c) => ({ value: c.id, label: c.label }))}
-        error={errors.idCliente}
-        placeholder="Seleccionar cliente"
-        helperText="Cliente al que pertenece la nota de crédito."
-        isReadOnly={isLocked}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) => { setIdCliente(e.target.value); setIdDocumentoReferencia(''); }}
+          options={clientes.map((c) => ({ value: c.id, label: c.label }))}
+          error={errors.idCliente}
+          placeholder="Seleccionar cliente"
+          helperText="Cliente al que pertenece la nota de crédito."
+          isReadOnly={isLocked}
+        />
 
-      <Select
-        label="Documento de referencia"
-        value={idDocumentoReferencia}
-        onChange={(e: any) => setIdDocumentoReferencia(e.target.value)}
-        options={documentos.map((d) => ({ value: d.id, label: d.label }))}
-        placeholder={idCliente ? 'Seleccionar documento (opcional)' : 'Selecciona un cliente primero'}
-        isReadOnly={!idCliente || isLocked}
-        error={errors.idDocumentoReferencia}
-        helperText="Opcional; solo se muestran documentos con saldo pendiente del cliente."
-      />
+        <Select
+          label="Documento de referencia"
+          value={idDocumentoReferencia}
+          onChange={(e: any) => setIdDocumentoReferencia(e.target.value)}
+          options={documentos.map((d) => ({ value: d.id, label: d.label }))}
+          placeholder={idCliente ? 'Seleccionar (opcional)' : 'Selecciona un cliente primero'}
+          isReadOnly={!idCliente || isLocked}
+          error={errors.idDocumentoReferencia}
+          helperText="Opcional; solo documentos con saldo pendiente del cliente."
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput

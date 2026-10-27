@@ -87,18 +87,17 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <TextInput
-        label="Nombre"
-        required
-        maxLength={150}
-        value={nombre}
-        onChange={(e: any) => setNombre(sanitizeSoloLetras(e.target.value))}
-        error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
-        helperText="Solo letras y espacios, sin números ni signos; máximo 150 caracteres."
-        placeholder="Ej. Distribuidora Central"
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <TextInput
+          label="Nombre"
+          required
+          maxLength={150}
+          value={nombre}
+          onChange={(e: any) => setNombre(sanitizeSoloLetras(e.target.value))}
+          error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
+          helperText="Solo letras y espacios; máximo 150."
+          placeholder="Ej. Distribuidora Central"
+        />
         <TextInput
           label="NIT"
           restriction="nit"
@@ -107,7 +106,7 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
           value={nit}
           onChange={(e: any) => setNit(e.target.value)}
           error={errors.nit ?? (nit ? validationErrors.nit : undefined)}
-          helperText="NIT guatemalteco, por ejemplo 1234567-8; también admite CF."
+          helperText="NIT como 1234567-8; admite CF."
           placeholder="Ej. 1234567-8"
         />
         <Select
@@ -116,7 +115,7 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
           value={estado}
           onChange={(e: any) => setEstado(e.target.value)}
           options={ESTADOS_EMPRESA}
-          helperText="Controla si la empresa se encuentra disponible para otros catálogos."
+          helperText="Si la empresa está disponible en otros catálogos."
         />
       </div>
 

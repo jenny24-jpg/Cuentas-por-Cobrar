@@ -121,25 +121,27 @@ export function AnticipoForm({
           Este anticipo ya tiene aplicaciones o está anulado; su cabecera queda bloqueada para proteger la trazabilidad.
         </div>
       )}
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) => { setCliente(e.target.value); setPago(''); }}
-        options={clientes.map((x) => ({ value: x.id, label: x.label }))}
-        helperText="Selecciona el cliente propietario del anticipo."
-        error={errorFor('idCliente')}
-        isReadOnly={isLocked}
-      />
-      <Select
-        label="Pago relacionado"
-        value={idPago}
-        onChange={(e: any) => setPago(e.target.value)}
-        options={pagos.map((x) => ({ value: x.id, label: x.label }))}
-        isReadOnly={!idCliente || isLocked}
-        placeholder={idCliente ? 'Seleccionar pago (opcional)' : 'Selecciona un cliente primero'}
-        helperText="Opcional; solo se muestran pagos del cliente seleccionado."
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) => { setCliente(e.target.value); setPago(''); }}
+          options={clientes.map((x) => ({ value: x.id, label: x.label }))}
+          helperText="Cliente propietario del anticipo."
+          error={errorFor('idCliente')}
+          isReadOnly={isLocked}
+        />
+        <Select
+          label="Pago relacionado"
+          value={idPago}
+          onChange={(e: any) => setPago(e.target.value)}
+          options={pagos.map((x) => ({ value: x.id, label: x.label }))}
+          isReadOnly={!idCliente || isLocked}
+          placeholder={idCliente ? 'Seleccionar pago (opcional)' : 'Selecciona un cliente primero'}
+          helperText="Opcional; solo pagos del cliente seleccionado."
+        />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput
           label="Monto original"
@@ -177,20 +179,22 @@ export function AnticipoForm({
           error={errorFor('montoDisponible', montoDisponible)}
         />
       </div>
-      <TextInput
-        label="Fecha"
-        type="date"
-        required
-        max={todayIso()}
-        value={fecha}
-        onChange={(e: any) => setFecha(e.target.value)}
-        helperText="Fecha real del anticipo; no puede ser futura."
-        error={errorFor('fecha', fecha)}
-        isReadOnly={isLocked}
-      />
-      {isEditing && (
-        <TextInput label="Estado" value={item?.estado ?? ''} isReadOnly helperText="El estado lo administra el motor financiero (aplicar/reversar) o la anulación formal; no se edita aquí." />
-      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <TextInput
+          label="Fecha"
+          type="date"
+          required
+          max={todayIso()}
+          value={fecha}
+          onChange={(e: any) => setFecha(e.target.value)}
+          helperText="Fecha real del anticipo; no puede ser futura."
+          error={errorFor('fecha', fecha)}
+          isReadOnly={isLocked}
+        />
+        {isEditing && (
+          <TextInput label="Estado" value={item?.estado ?? ''} isReadOnly helperText="El estado lo administra el motor financiero (aplicar/reversar) o la anulación formal; no se edita aquí." />
+        )}
+      </div>
 
       {formError && <p className="text-sm text-red-600 font-medium">{formError}</p>}
 
