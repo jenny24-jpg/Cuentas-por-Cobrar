@@ -1,3 +1,18 @@
+/** Hora de negocio actual en formato HH:MM (24 h), en el mismo huso que businessTodayIso. */
+export function businessNowHHMM(
+  timeZone = process.env.APP_TIME_ZONE || 'America/Guatemala',
+): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '00';
+  return `${get('hour')}:${get('minute')}`;
+}
+
 /**
  * Fecha de negocio en formato YYYY-MM-DD.
  * CxC opera con fechas civiles (no instantes UTC). El huso puede cambiarse

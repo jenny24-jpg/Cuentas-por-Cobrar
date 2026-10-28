@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import * as controller from '../../controllers/facturacion/factura.controller';
+import { validarIdsDeRuta } from '../../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 // Facturación electrónica (FEL) simulada. /validar corre las reglas de la SAT
 // simulada sin guardar; POST /facturas certifica y crea el documento por cobrar.

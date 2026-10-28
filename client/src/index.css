@@ -10,6 +10,61 @@
   }
 }
 
+/* Estandarización tipográfica solicitada: títulos 14 px/negrita; texto normal 12 px/sin negrita. */
+@layer base {
+  body {
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  /* Texto corriente: incluye utilidades Tailwind estándar y tamaños arbitrarios. */
+  p, label, button, input, select, textarea, td, li, small,
+  .text-xs, .text-sm, .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl,
+  [class*="text-["] {
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    line-height: 1.5;
+  }
+
+  /* La cabecera de una tabla se trata como encabezado, no como texto de celda. */
+  th, th[class] {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1.45;
+  }
+
+  /* Neutraliza pesos utilitarios en texto corriente; los títulos semánticos se restauran abajo. */
+  [class~="font-medium"]:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6),
+  [class~="font-semibold"]:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6),
+  [class~="font-bold"]:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+    font-weight: 400 !important;
+  }
+
+  /* Títulos de campos de formulario (TextInput, Select, TextArea y etiquetas manuales). */
+  .form-label, label.form-label, .form-label[class] {
+    font-weight: 700 !important;
+  }
+
+  /* Algunos títulos existentes son párrafos con clases de énfasis. */
+  p.font-bold, p.font-semibold, p[class~="font-bold"], p[class~="font-semibold"] {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+  }
+
+  /* Regla final para todos los títulos semánticos, sin depender de la clase Tailwind original. */
+  h1, h2, h3, h4, h5, h6,
+  h1[class], h2[class], h3[class], h4[class], h5[class], h6[class],
+  [role="heading"] {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1.45;
+  }
+  h1 *, h2 *, h3 *, h4 *, h5 *, h6 *, [role="heading"] * {
+    font-size: inherit !important;
+    font-weight: inherit !important;
+  }
+}
+
 /* Custom subtle scrollbars for tabular & enterprise layouts */
 ::-webkit-scrollbar {
   width: 6px;
@@ -29,13 +84,164 @@
 /* ---------- Pantalla de acceso (login) ---------- */
 .auth-pattern {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 56px 56px;
 }
 @keyframes auth-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 50% { transform: translateX(4px); } 75% { transform: translateX(-2px); } }
 .auth-shake { animation: auth-shake 0.35s ease-in-out; }
 
+/* Panel institucional y fondo del formulario */
+.auth-hero {
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(30, 64, 175, 0.35) 0%, transparent 55%),
+    linear-gradient(160deg, #0e2238 0%, #0b1c30 60%, #0e2238 100%);
+}
+.auth-hero-glow { background: radial-gradient(circle, rgba(59, 130, 246, 0.18) 0%, transparent 70%); }
+.auth-hero-arc {
+  background: radial-gradient(circle at 70% 30%, rgba(30, 64, 175, 0.4) 0%, rgba(30, 64, 175, 0.12) 60%, transparent 72%);
+  border: 1px solid rgba(147, 197, 253, 0.12);
+}
+.auth-main { background: linear-gradient(180deg, #ffffff 0%, #F8FAFC 100%); }
+.auth-main-circle { background: radial-gradient(circle, rgba(219, 234, 254, 0.9) 0%, rgba(219, 234, 254, 0.35) 55%, transparent 72%); }
+.auth-dots {
+  background-image: radial-gradient(rgba(30, 64, 175, 0.45) 1.5px, transparent 1.6px);
+  background-size: 16px 16px;
+}
+
+/* Tipografía propia del acceso: se exime del estándar global de 12/14 px solo dentro de .auth-shell.
+   Va dentro de @layer base porque las reglas globales con !important de esa capa
+   ganan a cualquier !important fuera de capas; aquí gana la mayor especificidad. */
+@layer base {
+  .auth-shell .auth-hero-title {
+    font-size: 34px !important; font-weight: 700 !important; line-height: 1.22 !important; letter-spacing: -0.025em;
+  }
+  .auth-shell .auth-hero-text { font-size: 15px !important; line-height: 1.7 !important; }
+  .auth-shell .auth-hero-foot { font-size: 12.5px !important; }
+  .auth-shell .auth-mod-name { font-size: 14px !important; font-weight: 600 !important; line-height: 1.35 !important; }
+  .auth-shell .auth-mod-detail { font-size: 12.5px !important; line-height: 1.45 !important; }
+  .auth-shell .auth-title {
+    font-size: 34px !important; font-weight: 700 !important; line-height: 1.15 !important; letter-spacing: -0.025em;
+  }
+  .auth-shell .auth-lead { font-size: 15px !important; line-height: 1.6 !important; }
+  .auth-shell .auth-label { font-size: 13.5px !important; }
+  .auth-shell .auth-input { font-size: 14px !important; }
+  .auth-shell .auth-aux, .auth-shell .auth-aux * { font-size: 13px !important; }
+}
+@media (min-width: 1280px) {
+  @layer base { .auth-shell .auth-hero-title { font-size: 38px !important; } }
+}
+@media (max-width: 639px) {
+  @layer base {
+    .auth-shell .auth-title { font-size: 26px !important; }
+    .legal-page .legal-title { font-size: 30px !important; }
+    .legal-page .legal-section h2 { font-size: 19px !important; }
+  }
+}
+
+/* Página legal (/legal) */
+@layer base {
+  .legal-page .legal-title { font-size: 42px !important; font-weight: 700 !important; line-height: 1.12 !important; letter-spacing: -0.03em; }
+  .legal-page .legal-intro { font-size: 16px !important; line-height: 1.65 !important; }
+  .legal-page .legal-eyebrow { font-size: 11.5px !important; font-weight: 600 !important; letter-spacing: 0.08em; text-transform: uppercase; }
+  .legal-page .legal-back { font-size: 13px !important; }
+  .legal-page .legal-fact-label { font-size: 11.5px !important; letter-spacing: 0.04em; text-transform: uppercase; }
+  .legal-page .legal-fact-value { font-size: 15px !important; font-weight: 600 !important; line-height: 1.35 !important; }
+  .legal-page .legal-nav-heading { font-size: 11px !important; font-weight: 600 !important; letter-spacing: 0.1em; text-transform: uppercase; }
+  .legal-page .legal-nav, .legal-page .legal-nav * { font-size: 13.5px !important; line-height: 1.4 !important; }
+  .legal-page .legal-nav.is-active, .legal-page .legal-nav.is-active * { font-weight: 700 !important; }
+  .legal-page .legal-nav-num, .legal-page .legal-nav .legal-nav-num { font-size: 11.5px !important; font-weight: 600 !important; }
+  .legal-page .legal-section-num { font-size: 11px !important; font-weight: 600 !important; letter-spacing: 0.1em; text-transform: uppercase; }
+  .legal-page .legal-section h2 { font-size: 22px !important; font-weight: 700 !important; line-height: 1.3 !important; letter-spacing: -0.015em; }
+  .legal-page .legal-body h3 { font-size: 15px !important; font-weight: 700 !important; color: #0e2238; margin-top: 1.75rem; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.6rem; }
+  .legal-page .legal-body h3::before { content: ''; width: 14px; height: 2px; border-radius: 2px; background: #1e40af; flex-shrink: 0; }
+  .legal-page .legal-body > h3:first-child { margin-top: 0; }
+  .legal-page .legal-body p, .legal-page .legal-body li, .legal-page .legal-body td { font-size: 14px !important; line-height: 1.7 !important; color: #334155; }
+  .legal-page .legal-body th { font-size: 13px !important; color: #0e2238; text-align: left; }
+  .legal-page .legal-body strong { font-weight: 600; color: #0f172a; }
+  .legal-page .legal-body .legal-owners li { font-weight: 600 !important; }
+}
+.legal-body p + p, .legal-body .legal-list + p, .legal-body p + .legal-list { margin-top: 0.75rem; }
+.legal-list { list-style: disc; padding-left: 1.25rem; display: grid; gap: 0.35rem; }
+.legal-list li::marker { color: #1e40af; }
+.legal-owners { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.5rem; margin: 1rem 0; }
+.legal-owners li { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1rem; border: 1px solid #DBEAFE; border-radius: 0.85rem; background: linear-gradient(135deg, #EFF6FF 0%, #ffffff 100%); transition: border-color 0.2s, transform 0.2s; color: #0e2238 !important; font-weight: 600 !important; }
+.legal-owners li svg { color: #1e40af; flex-shrink: 0; }
+.legal-owners li:hover { border-color: #93C5FD; transform: translateY(-1px); }
+.legal-nav-list { scrollbar-width: none; }
+.legal-nav-list::-webkit-scrollbar { display: none; }
+html:has(.legal-page) { scroll-behavior: auto; }
+.legal-table-wrap { overflow-x: auto; margin: 1rem 0; border: 1px solid #E2E8F0; border-radius: 0.75rem; }
+.legal-table { width: 100%; border-collapse: collapse; min-width: 560px; }
+.legal-table th, .legal-table td { padding: 0.65rem 0.9rem; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+.legal-table thead { background: #F8FAFC; }
+.legal-table tr:last-child td { border-bottom: 0; }
+.legal-table code { font-size: 12.5px; background: #F1F5F9; padding: 0.1rem 0.35rem; border-radius: 0.3rem; color: #1e40af; }
+
+/* Rutas agrupadas por empleado: el nombre es el título de cada grupo. */
+@layer base {
+  .rutas-emp-nombre { font-size: 14px !important; font-weight: 700 !important; }
+}
+
+/* Pantalla "Módulo en construcción" */
+@layer base {
+  .obra-page .obra-title { font-size: 30px !important; font-weight: 700 !important; line-height: 1.15 !important; letter-spacing: -0.02em; }
+  .obra-page .obra-lead { font-size: 15px !important; line-height: 1.65 !important; }
+  .obra-page .obra-chip, .obra-page .obra-chip * { font-size: 12px !important; font-weight: 600 !important; }
+  .obra-page .obra-label { font-size: 12px !important; font-weight: 600 !important; letter-spacing: 0.06em; text-transform: uppercase; }
+  .obra-page .obra-btn { font-size: 14px !important; font-weight: 600 !important; }
+  .obra-page h2 { font-size: 17px !important; }
+  .obra-page .obra-item { font-size: 13.5px !important; }
+  .obra-page .obra-pronto { font-size: 11px !important; font-weight: 600 !important; }
+}
+.obra-cinta {
+  background: repeating-linear-gradient(-45deg, #FACC15 0 18px, #0e2238 18px 36px);
+  box-shadow: inset 0 0 0 1px rgba(14, 34, 56, 0.25);
+}
+.obra-progreso {
+  background: repeating-linear-gradient(-45deg, #FACC15 0 12px, #EAB308 12px 24px);
+  background-size: 34px 34px;
+  animation: obra-avance 1.2s linear infinite;
+}
+@keyframes obra-avance { from { background-position: 0 0; } to { background-position: 34px 0; } }
+.obra-gancho { animation: obra-balanceo 3.2s ease-in-out infinite; }
+@keyframes obra-balanceo { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+.obra-senal { animation: obra-senal 4s ease-in-out infinite; }
+@keyframes obra-senal { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-2deg); } }
+.obra-rise { animation: auth-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) {
-  .auth-shake { animation: none; }
+  .obra-progreso, .obra-gancho, .obra-senal, .obra-rise { animation: none; }
+}
+
+/* Mapa de rutas (Leaflet) */
+.ruta-mapa { overflow: hidden; background: #E8EEF4; font-family: 'Inter', system-ui, sans-serif; }
+.ruta-mapa .leaflet-tile-pane { filter: saturate(0.82) contrast(0.97); }
+.ruta-mapa .leaflet-control-zoom { border: 0 !important; box-shadow: 0 6px 18px -8px rgba(14, 34, 56, 0.45) !important; border-radius: 10px; overflow: hidden; }
+.ruta-mapa .leaflet-control-zoom a { width: 34px !important; height: 34px !important; line-height: 34px !important; color: #0e2238 !important; border-color: #E2E8F0 !important; }
+.ruta-mapa .leaflet-control-zoom a:hover { background: #EFF6FF !important; color: #1e40af !important; }
+.ruta-mapa .leaflet-control-attribution { background: rgba(255, 255, 255, 0.85) !important; border-top-left-radius: 8px; font-size: 10.5px !important; color: #64748B; }
+.ruta-mapa .leaflet-control-attribution a { color: #1e40af; }
+.ruta-mapa:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
+.ruta-pin__cuerpo {
+  width: 34px; height: 34px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: #1e40af; border: 3px solid #fff; box-shadow: 0 6px 14px -4px rgba(14, 34, 56, 0.55);
+  display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, background 0.15s ease;
+}
+.ruta-pin__cuerpo span { transform: rotate(45deg); color: #fff; font: 700 13px 'Inter', system-ui, sans-serif; }
+.ruta-pin__cuerpo.is-activo { background: #DC2626; transform: rotate(-45deg) scale(1.12); }
+.ruta-pin:hover .ruta-pin__cuerpo:not(.is-activo) { background: #1e3a8a; }
+.ruta-tooltip { border: 0 !important; border-radius: 8px !important; padding: 6px 10px !important; font: 500 12px 'Inter', system-ui, sans-serif !important; color: #0e2238 !important; box-shadow: 0 8px 20px -10px rgba(14, 34, 56, 0.5) !important; }
+
+/* El botón principal se mantiene tal como fue aprobado. */
+.auth-shell .auth-btn { font-size: 15px !important; font-weight: 600 !important; }
+.auth-btn-arrow { transition: transform 0.2s ease; }
+.auth-btn:hover:not(:disabled) .auth-btn-arrow { transform: translateX(3px); }
+
+/* Entrada suave de los bloques */
+@keyframes auth-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.auth-rise { animation: auth-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shake, .auth-rise { animation: none; }
+  .auth-btn, .auth-btn-arrow { transition: none; transform: none !important; }
 }

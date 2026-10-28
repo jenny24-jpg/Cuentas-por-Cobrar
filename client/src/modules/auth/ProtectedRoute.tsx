@@ -35,7 +35,7 @@ export function RequireRol({ roles, children }: { roles: Rol[]; children: ReactN
   return (
     <section role="alert" className="mx-auto mt-16 max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
       <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700" aria-hidden="true"><ShieldAlert size={24} /></span>
-      <h1 className="text-lg font-bold text-slate-900">No tienes permiso para ver esta pantalla</h1>
+      <h1 className="text-slate-900 text-sm font-bold">No tienes permiso para ver esta pantalla</h1>
       <p className="mt-2 text-sm text-slate-600">
         Esta sección es solo para: {roles.map((r) => ROL_LABEL[r]).join(', ')}. Tu rol actual es {usuario ? ROL_LABEL[usuario.rol] : 'desconocido'}.
         Si la necesitas, pídele a un administrador que cambie tu rol.

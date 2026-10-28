@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import * as dashboardController from '../controllers/dashboard.controller';
+import { validarIdsDeRuta } from '../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 router.get('/dashboard/resumen', dashboardController.getResumen);
 

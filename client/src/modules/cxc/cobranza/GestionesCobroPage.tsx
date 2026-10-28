@@ -43,7 +43,7 @@ export const GestionesCobroPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Gestiones de Cobro</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Gestiones de Cobro</h1>
           <p className="text-sm text-slate-500">Registro de llamadas, visitas y contactos de cobranza.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>

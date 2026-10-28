@@ -21,3 +21,6 @@ Thumbs.db
 # Playwright
 playwright-report/
 test-results/
+
+# Reporte HTML de cobertura (pnpm test:cobertura)
+tests/caja-blanca/cobertura/

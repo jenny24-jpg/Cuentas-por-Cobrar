@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { requireRole } from '../auth/auth.middleware';
 import type { ClientContext } from '../auth/auth.service';
 import * as service from './usuarios.service';
+import { validarIdsDeRuta } from '../../shared/idParams';
 
 const ctx = (req: Request): ClientContext => ({
   ip: req.ip ?? null,
@@ -12,7 +13,7 @@ const handle = (fn: (req: Request, res: Response) => Promise<void>) => (req: Req
   fn(req, res).catch(next);
 };
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 // Solo administradores (el montaje en index.ts ya exige sesión y clave no temporal).
 router.use(requireRole('ADMIN'));

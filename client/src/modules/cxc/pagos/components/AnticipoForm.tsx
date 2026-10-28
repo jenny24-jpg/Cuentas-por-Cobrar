@@ -523,7 +523,7 @@ export function AnticipoForm({
           type="number"
           restriction="decimal"
           decimalPlaces={2}
-          min={0}
+          min={0.01}
           step="0.01"
           required
           value={montoDisponible}

@@ -20,14 +20,14 @@ export const moraSchema = z.object({
 
 export type Mora = z.infer<typeof moraSchema>;
 
-const nullablePercentageSchema = percentageSchema('El porcentaje de mora').nullable().optional();
+const nullablePercentageSchema = percentageSchema('El porcentaje de mora', 4, true).nullable().optional();
 
 export const createMoraSchema = z.object({
   idDocumento: z.number().int().positive('El documento es obligatorio'),
-  diasMora: z.number().int().nonnegative('Los días de mora no pueden ser negativos').max(36500, 'Los días de mora exceden el rango permitido').nullable().optional(),
-  saldoVencido: optionalMoneySchema('El saldo vencido'),
+  diasMora: z.number().int().positive('Los días de mora deben ser mayores a 0').max(36500, 'Los días de mora exceden el rango permitido').nullable().optional(),
+  saldoVencido: optionalMoneySchema('El saldo vencido', true),
   porcentajeMora: nullablePercentageSchema,
-  montoMora: optionalMoneySchema('El monto de mora'),
+  montoMora: optionalMoneySchema('El monto de mora', true),
   fechaCalculo: nullableIsoDateSchema('La fecha de cálculo'),
   estado: z.enum(ESTADOS_MORA).default('ACTIVA'),
 });

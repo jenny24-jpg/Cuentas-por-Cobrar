@@ -63,7 +63,7 @@ export const ConveniosPagoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Convenios de Pago</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Convenios de Pago</h1>
           <p className="text-sm text-slate-500">Planes de pago a cuotas acordados con clientes en mora. Pagar una cuota reduce el saldo real de los documentos que cubre el convenio.</p>
         </div>
         <div className="flex gap-2">

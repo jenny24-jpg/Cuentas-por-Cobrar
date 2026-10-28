@@ -15,7 +15,7 @@ export function Panel({ titulo, subtitulo, acciones, children, className = '', c
     <section className={`flex flex-col rounded-lg border border-slate-200 bg-white ${className}`} aria-label={titulo}>
       <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <div className="min-w-0">
-          <h2 className="truncate text-[13px] font-semibold text-slate-800">{titulo}</h2>
+          <h2 className="truncate text-slate-800 text-sm font-bold">{titulo}</h2>
           {subtitulo && <p className="mt-0.5 text-[11.5px] leading-snug text-slate-500">{subtitulo}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -58,7 +58,7 @@ export function Encabezado({ titulo, descripcion, acciones }: { titulo: string; 
   return (
     <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">{titulo}</h1>
+        <h1 className="tracking-tight text-slate-900 text-sm font-bold">{titulo}</h1>
         <p className="mt-0.5 max-w-3xl text-[13px] text-slate-500">{descripcion}</p>
       </div>
       {acciones && <div className="flex items-center gap-2">{acciones}</div>}

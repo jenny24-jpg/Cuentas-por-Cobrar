@@ -5,8 +5,9 @@ import * as detalleController from '../../controllers/documentos/documentoDetall
 import * as historialController from '../../controllers/documentos/documentoHistorial.controller';
 import * as ajusteController from '../../controllers/documentos/ajuste.controller';
 import * as catalogosController from '../../controllers/documentos/catalogosDocumentos.controller';
+import { validarIdsDeRuta } from '../../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 // --- Catálogos de solo lectura para formularios de Documentos ---
 router.get('/documentos/catalogos/clientes', catalogosController.clientes);

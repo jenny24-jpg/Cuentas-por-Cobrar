@@ -4,7 +4,6 @@ import { businessTodayIso } from '../../../../shared/date';
 import type {
   AplicacionPago,
   CreateAplicacionPagoInput,
-  UpdateAplicacionPagoInput,
   ReversarAplicacionPagoInput,
 } from '@erp/contracts';
 import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
@@ -207,6 +206,8 @@ export async function create(i: CreateAplicacionPagoInput): Promise<number> {
         return a.ID_APLICACION; // Retry after timeout: no second application/receipt.
       }
       if(!ruta.rows?.length || !['PLANIFICADA','EN_PROCESO'].includes(ruta.rows[0].ESTADO.trim())) throw new ConflictError('La ruta está cerrada');
+      // El primer cobro pone la ruta en curso (misma transacción que el cobro).
+      await c.execute(`UPDATE CXC_RUTAS SET ESTADO='EN_PROCESO' WHERE ID_RUTA=:id AND TRIM(ESTADO)='PLANIFICADA'`, {id:detalle.rows[0].ID_RUTA});
       const aplicado=await c.execute<{TOTAL:number}>(`SELECT NVL(SUM(MONTO_APLICADO),0) TOTAL FROM CXC_APLICACION_PAGOS
         WHERE ID_RUTA_DETALLE=:id AND ESTADO='CONFIRMADA'`,{id:i.idRutaDetalle});
       if(roundMoney((aplicado.rows?.[0]?.TOTAL ?? 0)+i.montoAplicado)>roundMoney(asignacion.rows[0].MONTO_ASIGNADO)) {
@@ -353,75 +354,6 @@ export async function create(i: CreateAplicacionPagoInput): Promise<number> {
   }
 }
 
-// Se conservan por compatibilidad de interfaz, pero las operaciones financieras
-// confirmadas son inmutables desde el CRUD; el service las bloquea.
-export async function update(id: number, i: UpdateAplicacionPagoInput) {
-  const fields: string[] = [];
-  const binds: Record<string, any> = { id };
-  if (i.idPago !== undefined) { fields.push('ID_PAGO=:idPago'); binds.idPago = i.idPago; }
-  if (i.idDocumento !== undefined) { fields.push('ID_DOCUMENTO=:idDocumento'); binds.idDocumento = i.idDocumento; }
-  if (i.fechaAplicacion !== undefined) {
-    fields.push(`FECHA_APLICACION=TO_DATE(:fechaAplicacion,'YYYY-MM-DD')`);
-    binds.fechaAplicacion = i.fechaAplicacion;
-  }
-  if (i.montoAplicado !== undefined) {
-    fields.push('MONTO_APLICADO=:montoAplicado');
-    binds.montoAplicado = i.montoAplicado;
-  }
-  if (i.idEmpleado !== undefined) {
-    fields.push('ID_EMPLEADO=:idEmpleado');
-    binds.idEmpleado = i.idEmpleado;
-  }
-  if (!fields.length) return;
-
-  const c = await getConnection();
-  try {
-    await c.execute(
-      `UPDATE CXC_APLICACION_PAGOS SET ${fields.join(',')} WHERE ID_APLICACION=:id`,
-      binds,
-    );
-    await c.commit();
-  } catch (e) {
-    await c.rollback();
-    throw e;
-  } finally {
-    await c.close();
-  }
-}
-
-export async function remove(id: number) {
-  const c = await getConnection();
-  try {
-    await c.execute(
-      `DELETE FROM CXC_APLICACION_PAGOS WHERE ID_APLICACION=:id`,
-      { id },
-    );
-    await c.commit();
-  } catch (e) {
-    await c.rollback();
-    throw e;
-  } finally {
-    await c.close();
-  }
-}
-
-export async function sumAplicadoPorPago(idPago: number, excludeId?: number): Promise<number> {
-  const c = await getConnection();
-  try {
-    const result = await c.execute<{ TOTAL: number }>(
-      `SELECT NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
-         FROM CXC_APLICACION_PAGOS
-        WHERE ID_PAGO = :idPago
-          AND ESTADO = 'CONFIRMADA'
-          AND (:excludeId IS NULL OR ID_APLICACION <> :excludeId)`,
-      { idPago, excludeId: excludeId ?? null },
-    );
-    return Number(result.rows?.[0]?.TOTAL ?? 0);
-  } finally {
-    await c.close();
-  }
-}
-
 /**
  * Reversa una aplicación CONFIRMADA: bloquea aplicación + documento + pago
  * (pago antes de documento, igual que create(), para evitar deadlocks con aplicaciones
@@ -529,6 +461,27 @@ export async function reversar(id: number, input: ReversarAplicacionPagoInput): 
         id,
       },
     );
+
+    // El recibo automático nació en la misma transacción que la aplicación con
+    // estos mismos datos; si quedara EMITIDO, aplicar de nuevo el pago duplicaría
+    // el comprobante del mismo dinero.
+    const recibo = await c.execute<{ ID_RECIBO: number }>(
+      `SELECT ID_RECIBO
+         FROM CXC_RECIBOS
+        WHERE ID_PAGO = :idPago
+          AND MONTO = :monto
+          AND FECHA = TO_DATE(:fecha, 'YYYY-MM-DD')
+          AND ESTADO = 'EMITIDO'
+        ORDER BY ID_RECIBO DESC`,
+      { idPago: aplicacion.ID_PAGO, monto: montoAplicado, fecha: aplicacion.FECHA_APLICACION_ISO },
+    );
+    const idRecibo = recibo.rows?.[0]?.ID_RECIBO;
+    if (idRecibo) {
+      await c.execute(
+        `UPDATE CXC_RECIBOS SET ESTADO = 'CANCELADO' WHERE ID_RECIBO = :idRecibo AND ESTADO = 'EMITIDO'`,
+        { idRecibo },
+      );
+    }
 
     await registrarEvento(c, {
       idDocumento: aplicacion.ID_DOCUMENTO,

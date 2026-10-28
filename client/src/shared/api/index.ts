@@ -129,7 +129,13 @@ async function request<T>(path: string, { successMessage, ...options }: ApiOptio
     return body as T;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
+      // Cancelación pedida por la pantalla (cambio de página/filtro): no es un timeout.
+      if (externalSignal?.aborted) throw error;
       throw new ApiError('La solicitud tardó demasiado. Verifica tu conexión e intenta nuevamente.', 408);
+    }
+    // fetch rechaza con TypeError cuando no hay red o el servidor no responde.
+    if (error instanceof TypeError) {
+      throw new ApiError('No se pudo conectar con el servidor. Verifica tu conexión e intenta nuevamente.', 0);
     }
     throw error;
   } finally {

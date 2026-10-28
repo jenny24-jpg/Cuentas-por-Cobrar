@@ -20,9 +20,9 @@ export const createDocumentoDetalleSchema = z.object({
     .number()
     .positive('La cantidad debe ser mayor que cero')
     .refine((value) => hasAtMostDecimals(value, 4), 'La cantidad admite como máximo 4 decimales'),
-  precioUnitario: moneySchema('El precio unitario'),
+  precioUnitario: moneySchema('El precio unitario', true),
   // TOTAL se calcula en el servidor; se mantiene opcional por compatibilidad.
-  total: moneySchema('El total').optional(),
+  total: moneySchema('El total', true).optional(),
 });
 export type CreateDocumentoDetalleInput = z.infer<typeof createDocumentoDetalleSchema>;
 

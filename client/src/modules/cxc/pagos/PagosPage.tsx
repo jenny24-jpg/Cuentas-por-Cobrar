@@ -40,7 +40,7 @@ export const PagosPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Pagos</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Pagos</h1>
           <p className="text-sm text-slate-500">Registro de pagos recibidos. El saldo de una factura cambia únicamente al aplicar el pago.</p>
         </div>
         <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo Pago</Button>

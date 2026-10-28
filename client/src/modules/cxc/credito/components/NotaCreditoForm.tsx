@@ -356,10 +356,7 @@ export const NotaCreditoForm = ({
       {isEditing && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-700">
-              Estado:
-            </span>
-
+            <span className="form-label font-semibold text-slate-700">Estado:</span>
             <StatusBadge status={nota?.estado} />
 
             <span className="ml-auto text-slate-600">
