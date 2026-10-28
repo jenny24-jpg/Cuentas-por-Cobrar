@@ -25,7 +25,7 @@ export const AplicacionesNotaCreditoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Aplicaciones de Nota de Crédito</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Nota de Crédito</h1>
           <p className="text-sm text-slate-500">La NC reduce el saldo únicamente cuando se aplica al documento.</p>
         </div>
         <Button icon={Plus} onClick={() => setOpen(true)}>Nueva Aplicación</Button>

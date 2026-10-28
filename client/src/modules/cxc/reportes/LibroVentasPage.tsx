@@ -53,7 +53,7 @@ export const LibroVentasPage = () => {
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3" role="search" aria-label="Período del libro">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Período fiscal</span>
+        <span className="form-label text-[11px] font-semibold uppercase tracking-wide text-slate-500">Período fiscal</span>
         <label className="sr-only" htmlFor="lv-mes">Mes</label>
         <select id="lv-mes" className={selectCls} value={mes} onChange={(e) => setMes(e.target.value)}>
           {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}

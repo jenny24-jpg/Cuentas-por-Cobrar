@@ -106,8 +106,8 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
           value={nit}
           onChange={(e: any) => setNit(e.target.value)}
           error={errors.nit ?? (nit ? validationErrors.nit : undefined)}
-          helperText="NIT como 1234567-8; admite CF."
-          placeholder="Ej. 1234567-8"
+          helperText="NIT guatemalteco con dígito verificador válido, por ejemplo 1234567-9; también admite CF."
+          placeholder="Ej. 1234567-9"
         />
         <Select
           label="Estado"

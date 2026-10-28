@@ -153,7 +153,7 @@ export const ConvenioDetallePage = () => {
       <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{convenio.nombreCliente}</h1>
+            <h1 className="text-slate-900 text-sm font-bold">{convenio.nombreCliente}</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               Convenio del {formatDateGT(convenio.fechaConvenio)} · {convenio.numeroCuotas} cuotas
             </p>
@@ -224,7 +224,7 @@ export const ConvenioDetallePage = () => {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Documentos que cubre el convenio</h2>
+          <h2 className="text-slate-900 text-sm font-bold">Documentos que cubre el convenio</h2>
           <p className="text-sm text-slate-500">Al pagar una cuota, el monto se distribuye entre estos documentos (el más antiguo primero) y les reduce el saldo real.</p>
         </div>
         <DataTable

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react';
 import { ApiError } from '../../shared/api';
 import { useAuth } from '../../shared/auth/AuthContext';
 import { AuthShell } from './AuthShell';
@@ -109,6 +110,7 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
         <Campo
           label="Usuario" id="login-username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={50}
+          placeholder="Ingresa tu usuario" icono={<UserRound size={18} strokeWidth={1.75} />}
           inputRef={userRef} value={username} error={errores.username}
           onChange={(v) => { setUsername(v); if (errores.username) setErrores((x) => ({ ...x, username: undefined })); }}
         />
@@ -116,6 +118,7 @@ export default function LoginPage() {
         <div>
           <Campo
             label="Contraseña" id="login-password" name="password" autoComplete="current-password" maxLength={128}
+            placeholder="Ingresa tu contraseña" icono={<LockKeyhole size={18} strokeWidth={1.75} />}
             inputRef={passRef} value={password} error={errores.password}
             alternarVisible visible={visible} onAlternar={alternar}
             onChange={(v) => { setPassword(v); if (errores.password) setErrores((x) => ({ ...x, password: undefined })); }}
@@ -126,24 +129,31 @@ export default function LoginPage() {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 text-sm">
+        <div className="auth-aux flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <label className="flex cursor-pointer select-none items-center gap-2 text-slate-700">
-            <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} className="h-4 w-4 rounded border-slate-300 accent-blue-800" />
+            <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-800" />
             Recordar mi usuario
           </label>
-          <Link to="/recuperar-clave" className="font-medium text-blue-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+          <Link to="/recuperar-clave" className="font-medium text-blue-800 transition-colors hover:text-blue-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
             ¿Olvidaste tu contraseña?
           </Link>
         </div>
 
         <BotonPrincipal type="submit" cargando={enviando} textoCargando="Verificando…" disabled={bloqueado}>
-          {bloqueado ? <>Intenta en {mmss(espera)}</> : <>Iniciar sesión</>}
+          {bloqueado ? <>Intenta en {mmss(espera)}</> : <><ArrowRight size={19} className="auth-btn-arrow" aria-hidden="true" /> Iniciar sesión</>}
         </BotonPrincipal>
+
+        <p className="text-center text-xs leading-relaxed text-slate-500">
+          Al iniciar sesión aceptas los{' '}
+          <Link to="/legal#terminos" className="font-medium text-blue-800 hover:underline">Términos y condiciones</Link>{' '}y la{' '}
+          <Link to="/legal#seguridad" className="font-medium text-blue-800 hover:underline">Política de seguridad</Link>.
+        </p>
       </form>
 
-      <p className="mt-8 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
-        Por seguridad, la sesión se cierra automáticamente tras 30 minutos sin actividad.
-      </p>
+      <div className="mt-8 flex items-start gap-3 border-t border-slate-200 pt-5 text-slate-500">
+        <ShieldCheck size={17} className="mt-px shrink-0 text-slate-400" aria-hidden="true" />
+        <p className="text-xs leading-relaxed">Por seguridad, la sesión se cierra automáticamente tras 30 minutos sin actividad.</p>
+      </div>
     </AuthShell>
   );
 }

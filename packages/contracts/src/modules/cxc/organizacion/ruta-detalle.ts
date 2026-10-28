@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { moneySchema, optionalTrimmedText, timeSchema } from '../validation';
 
-// Hora de visita permitida: de 08:00 a 19:00.
-const HORA_VISITA_MIN = '08:00';
-const HORA_VISITA_MAX = '19:00';
+import { REGLAS_RUTA } from './ruta-reglas';
+
+// Hora de visita permitida: la jornada del cobrador (ver ruta-reglas.ts).
+const HORA_VISITA_MIN = REGLAS_RUTA.horaInicio;
+const HORA_VISITA_MAX = REGLAS_RUTA.horaFin;
 
 export const ESTADOS_VISITA = ['PENDIENTE', 'VISITADO', 'NO_ENCONTRADO', 'REPROGRAMADO'] as const;
 

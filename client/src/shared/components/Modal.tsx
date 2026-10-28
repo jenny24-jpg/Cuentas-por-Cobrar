@@ -115,7 +115,7 @@ export const Modal = ({
       >
         <div className="flex items-start justify-between px-6 py-4 border-b border-slate-200 shrink-0">
           <div>
-            <h2 id={titleId} className="text-base font-bold text-slate-900">{title}</h2>
+            <h2 id={titleId} className="text-sm font-bold text-slate-900">{title}</h2>
             {description && <p id={descriptionId} className="text-sm text-slate-500 mt-0.5">{description}</p>}
           </div>
           <button

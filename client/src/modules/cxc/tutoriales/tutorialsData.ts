@@ -339,7 +339,7 @@ export const TUTORIALS: Tutorial[] = [
     path: '/cxc/organizacion/empresas',
     steps: [
       { title: 'Catálogo de empresas', body: 'Las empresas son el nivel más alto de la organización. Las sucursales cuelgan de ellas.', target: 'header' },
-      { title: 'Nueva empresa', body: 'Registra nombre (razón social) y NIT (formato 1234567-8, o CF). Créala antes de sus sucursales.', target: 'action' },
+      { title: 'Nueva empresa', body: 'Registra nombre (razón social) y NIT (formato 1234567-9, con dígito verificador válido, o CF). Créala antes de sus sucursales.', target: 'action' },
       buscar('empresas por nombre o NIT'),
       tabla('Revisa el estado de cada empresa; las inactivas no deben usarse en otros catálogos.'),
       acciones('Edita con el lápiz. Evita eliminar una empresa que ya tiene sucursales o movimientos.'),

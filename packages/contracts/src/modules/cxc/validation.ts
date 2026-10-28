@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { esNitValido, esSoloCeros, NIT_EJEMPLO } from './nit';
 
 export const DATE_MIN = '1900-01-01';
 export const DATE_MAX = '2100-12-31';
@@ -71,11 +72,11 @@ export function optionalMoneySchema(fieldLabel: string, positive = false) {
   return moneySchema(fieldLabel, positive).nullable().optional();
 }
 
-export function percentageSchema(fieldLabel: string, decimals = 4) {
-  return z
-    .number()
-    .finite(`${fieldLabel} debe ser un número válido`)
-    .min(0, `${fieldLabel} no puede ser negativo`)
+export function percentageSchema(fieldLabel: string, decimals = 4, positive = false) {
+  const base = z.number().finite(`${fieldLabel} debe ser un número válido`);
+  return (positive
+    ? base.positive(`${fieldLabel} debe ser mayor a 0`)
+    : base.min(0, `${fieldLabel} no puede ser negativo`))
     .max(100, `${fieldLabel} no puede superar 100`)
     .refine(
       (value) => hasAtMostDecimals(value, decimals),
@@ -92,7 +93,8 @@ export const identifierSchema = (fieldLabel: string, max: number) =>
     .regex(
       /^[A-Za-z0-9][A-Za-z0-9\-_/]*$/,
       `${fieldLabel} solo admite letras, números, guion, guion bajo o diagonal`,
-    );
+    )
+    .refine((value) => !esSoloCeros(value), `${fieldLabel} no puede estar formado solo por ceros`);
 
 export const optionalIdentifierSchema = (fieldLabel: string, max: number) =>
   z
@@ -103,6 +105,7 @@ export const optionalIdentifierSchema = (fieldLabel: string, max: number) =>
       (value) => value === '' || /^[A-Za-z0-9][A-Za-z0-9\-_/]*$/.test(value),
       `${fieldLabel} solo admite letras, números, guion, guion bajo o diagonal`,
     )
+    .refine((value) => !esSoloCeros(value), `${fieldLabel} no puede estar formado solo por ceros`)
     .nullable()
     .optional();
 
@@ -112,8 +115,8 @@ export const nitSchema = z
   .toUpperCase()
   .max(20, 'El NIT no puede superar 20 caracteres')
   .refine(
-    (value) => value === 'CF' || /^\d{4,12}-?[0-9K]$/.test(value),
-    'El NIT debe tener un formato válido, por ejemplo 1234567-8',
+    (value) => esNitValido(value),
+    `El NIT no es válido: revisa el número y su dígito verificador (ejemplo ${NIT_EJEMPLO}) o usa CF`,
   );
 
 // Nombre que solo admite letras (con tildes y ñ) y espacios; sin números ni signos.

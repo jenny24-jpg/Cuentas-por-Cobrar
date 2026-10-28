@@ -8,7 +8,7 @@ import {
   validateRequiredDate,
   validateDate,
   validateMoney,
-  validateMaxLength,
+  validateTextOnly,
   hasErrors,
   type ValidationErrors,
 } from '../../../../shared/validation';
@@ -233,11 +233,7 @@ export const PromesaPagoForm = ({
         `(${Number(documentoSeleccionado.saldo).toFixed(2)}).`;
     }
 
-    const obsErr = validateMaxLength(
-      observaciones,
-      'Observaciones',
-      500,
-    );
+    const obsErr = validateTextOnly(observaciones, 'Observaciones', { required: true, minLength: 1, maxLength: 500 });
 
     if (obsErr) {
       next.observaciones = obsErr;
@@ -486,6 +482,7 @@ export const PromesaPagoForm = ({
 
       <TextArea
         label="Observaciones"
+        required
         value={observaciones}
         onChange={(e: any) =>
           setObservaciones(e.target.value)
@@ -493,7 +490,7 @@ export const PromesaPagoForm = ({
         rows={3}
         maxLength={500}
         error={errorFor('observaciones', observaciones)}
-        helperText="Detalle adicional; máximo 500 caracteres."
+        helperText="Obligatorias: solo letras y espacios; máximo 500 caracteres."
       />
 
       {!isEditing && <CampoUsuarioActual />}

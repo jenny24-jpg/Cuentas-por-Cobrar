@@ -42,7 +42,7 @@ export const SucursalesPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Sucursales</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Sucursales</h1>
           <p className="text-sm text-slate-500">Catálogo de sucursales por empresa.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>

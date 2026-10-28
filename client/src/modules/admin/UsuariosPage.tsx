@@ -236,7 +236,7 @@ export const UsuariosPage = () => {
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-700" aria-hidden="true"><ShieldCheck size={22} /></span>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Usuarios y accesos</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Usuarios y accesos</h1>
           <p className="text-sm text-slate-500">Crea cuentas, asigna roles, restablece contraseñas y revisa la actividad de seguridad.</p>
         </div>
       </div>

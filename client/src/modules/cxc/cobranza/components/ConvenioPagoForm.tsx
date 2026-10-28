@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { TextInput, Select, TextArea, Checkbox } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
-import { todayIso, validateRequiredSelect, validateRequiredDate, validateMoney, validateRequiredNumber, validateMaxLength, hasErrors, type ValidationErrors } from '../../../../shared/validation';
+import { todayIso, validateRequiredSelect, validateRequiredDate, validateMoney, validateRequiredNumber, validateTextOnly, hasErrors, type ValidationErrors } from '../../../../shared/validation';
 import type { CatalogoOption, ConvenioPago } from '@erp/contracts';
 import { SearchableSelect } from '../../../../shared/components/SearchableSelect';
 import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioActual';
@@ -12,9 +12,8 @@ const ESTADOS_CONVENIO_PAGO = ['ACTIVO', 'CUMPLIDO', 'INCUMPLIDO', 'CANCELADO'] 
 const ESTADO_OPTIONS = ESTADOS_CONVENIO_PAGO.map((e) => ({ value: e, label: e }));
 const ESTADO_NUEVO_OPTIONS = [{ value: 'ACTIVO', label: 'ACTIVO' }];
 const MAX_CUOTAS = 18;
-// Observaciones: solo texto (letras, espacios y . , ; : ' -). Sin números ni símbolos como $ % # " ( /
-const OBSERVACIONES_INVALIDOS = /[^\p{L}\s.,;:'’-]/gu;
-const OBSERVACIONES_VALIDAS = /^[\p{L}\s.,;:'’-]*$/u;
+// Observaciones: únicamente letras y espacios, según el requisito de validación.
+const OBSERVACIONES_INVALIDOS = /[^\p{L}\s]/gu;
 const soloTexto = (valor: string) => valor.replace(OBSERVACIONES_INVALIDOS, '');
 
 const round2 = (valor: number) => Math.round(valor * 100) / 100;
@@ -129,8 +128,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
     if (!isEditing) { const fechaErr = validateRequiredDate(fechaConvenio, 'La fecha del convenio', { minDate: todayIso() }); if (fechaErr) next.fechaConvenio = fechaErr; }
     const cuotasErr = validateRequiredNumber(numeroCuotas, 'El número de cuotas', { integer: true, min: 1, max: MAX_CUOTAS }); if (cuotasErr) next.numeroCuotas = cuotasErr;
     if (observacionesCambiaron) {
-      const obsErr = validateMaxLength(observaciones, 'Observaciones', 500); if (obsErr) next.observaciones = obsErr;
-      else if (!OBSERVACIONES_VALIDAS.test(observaciones)) next.observaciones = 'Las observaciones solo admiten texto: letras, espacios y . , ; : - (sin números ni símbolos).';
+      const obsErr = validateTextOnly(observaciones, 'Observaciones', { required: true, minLength: 1, maxLength: 500 }); if (obsErr) next.observaciones = obsErr;
     }
     if (!isEditing) {
       if (docsSeleccionados.length === 0) next.documentos = 'Selecciona al menos un documento que cubra el convenio.';
@@ -201,7 +199,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
       {!isEditing && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-700">
+            <label className="form-label text-xs font-semibold text-slate-700">
               Documentos que cubre el convenio <span className="text-red-500">*</span>
             </label>
             {documentosPendientes.length > 1 && (
@@ -243,7 +241,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
         </div>
       )}
 
-      <TextArea label="Observaciones" value={observaciones} onChange={(e: any) => setObservaciones(soloTexto(e.target.value))} rows={3} maxLength={500} error={errors.observaciones} helperText="Solo texto: letras, espacios y . , ; : - (sin números ni símbolos como $ % # &quot; ( /). Máximo 500 caracteres." />
+      <TextArea label="Observaciones" required value={observaciones} onChange={(e: any) => setObservaciones(soloTexto(e.target.value))} rows={3} maxLength={500} error={errors.observaciones} helperText="Obligatorias: solo letras y espacios, sin números ni caracteres especiales. Máximo 500 caracteres." />
       {!isEditing && <CampoUsuarioActual />}
       {formError && <p role="alert" className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
       <FormActionButtons onCancel={onCancel} isSubmitting={isSubmitting} isEditing={isEditing} createLabel="Crear convenio" isFormValid={isFormValid} blockers={validationErrors} />

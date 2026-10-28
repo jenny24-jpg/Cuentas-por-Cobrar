@@ -8,6 +8,7 @@ import {
   validateMoney,
   validateRequiredDate,
   validateRequiredSelect,
+  validateTextOnly,
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { Ajuste, DocumentoCatalogoOption } from '@erp/contracts';
@@ -89,8 +90,8 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
     if (fechaErr) next.fecha = fechaErr;
 
 
-    if (motivo.trim().length < 10) next.motivo = 'Describe el motivo del ajuste con al menos 10 caracteres.';
-    else if (motivo.length > 250) next.motivo = 'El motivo no puede superar 250 caracteres.';
+    const motivoErr = validateTextOnly(motivo, 'El motivo', { required: true, minLength: 10, maxLength: 250 });
+    if (motivoErr) next.motivo = motivoErr;
     return next;
   }, [idCliente, tipoAjuste, monto, fecha, motivo, selectedDocumento]);
 
@@ -209,7 +210,7 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
         label="Motivo"
         required
         maxLength={250}
-        helperText="Obligatorio. Explica la razón y soporte del ajuste (10–250 caracteres)."
+        helperText="Obligatorio: solo letras y espacios, entre 10 y 250 caracteres."
         value={motivo}
         onChange={(e: any) => setMotivo(e.target.value)}
         rows={3}

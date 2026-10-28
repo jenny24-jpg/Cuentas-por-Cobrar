@@ -24,7 +24,7 @@ const anticipoBaseSchema = z.object({
   idCliente: z.number().int().positive('Selecciona un cliente'),
   idPago: z.number().int().positive().nullable().optional(),
   montoOriginal: moneySchema('El monto original', true),
-  montoDisponible: moneySchema('El monto disponible'),
+  montoDisponible: moneySchema('El monto disponible', true),
   fecha: isoDateSchema('La fecha'),
 });
 

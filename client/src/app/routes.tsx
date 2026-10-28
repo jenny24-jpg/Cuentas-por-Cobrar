@@ -7,6 +7,8 @@ import { CxcAppLayout } from '../modules/cxc/shared/CxcAppLayout';
 import { DashboardPage } from '../modules/cxc/dashboard/DashboardPage';
 
 // --- CXC / Tutoriales ---
+// --- Módulos en construcción (Compras, Inventario, CxP, Bancos) ---
+import { ModuloEnConstruccionPage, type ModuloEnConstruccion } from '../modules/construccion/ModuloEnConstruccionPage';
 import { TutorialsPage } from '../modules/cxc/tutoriales';
 
 // --- CXC / Reportes ---
@@ -23,6 +25,7 @@ import { FacturasPage } from '../modules/cxc/facturacion/FacturasPage';
 // --- CXC / Organización ---
 import { OrganizacionLayout } from '../modules/cxc/organizacion/organizacionLayout';
 import { EmpresasPage } from '../modules/cxc/organizacion/EmpresasPage';
+import { ClientesPage } from '../modules/cxc/organizacion/ClientesPage';
 import { SucursalesPage } from '../modules/cxc/organizacion/SucursalesPage';
 import { RutasPage } from '../modules/cxc/organizacion/RutasPage';
 import { RutaDetallePage } from '../modules/cxc/organizacion/RutaDetallePage';
@@ -67,7 +70,24 @@ import { TiposDocumentoPage } from '../modules/cxc/documentos/TiposDocumentoPage
 import { AjustesPage } from '../modules/cxc/documentos/AjustesPage';
 
 
+const enConstruccion = (path: string, modulo: ModuloEnConstruccion): RouteObject => ({
+  path,
+  element: (
+    <MainLayout>
+      <CxcAppLayout>
+        <ModuloEnConstruccionPage modulo={modulo} />
+      </CxcAppLayout>
+    </MainLayout>
+  ),
+});
+
 export const routes: RouteObject[] = [
+  // --- Módulos en construcción ---
+  enConstruccion('/compras', 'compras'),
+  enConstruccion('/inventario', 'inventario'),
+  enConstruccion('/cuentas-por-pagar', 'cuentas-por-pagar'),
+  enConstruccion('/bancos', 'bancos'),
+
   // --- Administración (solo ADMIN) ---
   {
     path: '/admin/usuarios',
@@ -213,6 +233,16 @@ export const routes: RouteObject[] = [
   },
 
   // --- CXC / Organización ---
+  {
+    path: '/cxc/organizacion/clientes',
+    element: (
+      <MainLayout>
+        <OrganizacionLayout>
+          <ClientesPage />
+        </OrganizacionLayout>
+      </MainLayout>
+    ),
+  },
   {
     path: '/cxc/organizacion/empresas',
     element: (

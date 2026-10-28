@@ -35,7 +35,7 @@ export const TutorialsPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tutoriales guiados</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Tutoriales guiados</h1>
           <p className="text-sm text-slate-500">
             Recorridos paso a paso de cada pantalla de Cuentas por Cobrar. También puedes lanzarlos con el botón «Tutorial» dentro de cada pantalla.
           </p>
@@ -59,7 +59,7 @@ export const TutorialsPage = () => {
 
       {sections.map((section) => (
         <section key={section.id} aria-labelledby={`tut-group-${section.id}`} className="space-y-3">
-          <h2 id={`tut-group-${section.id}`} className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+          <h2 id={`tut-group-${section.id}`} className="uppercase tracking-wider text-slate-500 text-sm font-bold">
             {section.label}
           </h2>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -73,7 +73,7 @@ export const TutorialsPage = () => {
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">{tutorial.title}</h3>
+                      <h3 className="text-slate-900 text-sm font-bold">{tutorial.title}</h3>
                       {isDone && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 shrink-0">
                           <CheckCircle2 size={14} aria-hidden="true" />

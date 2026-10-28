@@ -1,3 +1,4 @@
+import logoCxcClaro from '../../../assets/brand/logo-cxc-light.png';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -147,6 +148,7 @@ const CXC_GROUPS: CxcMenuGroup[] = [
     matchPrefix: '/cxc/organizacion',
     items: [
       { id: 'empresas', label: 'Empresas', path: '/cxc/organizacion/empresas' },
+      { id: 'clientes', label: 'Clientes', path: '/cxc/organizacion/clientes' },
       { id: 'sucursales', label: 'Sucursales', path: '/cxc/organizacion/sucursales' },
       { id: 'rutas', label: 'Rutas', path: '/cxc/organizacion/rutas' },
     ],
@@ -157,14 +159,17 @@ const CXC_DASHBOARD_PATH = '/cxc/dashboard';
 const CXC_TUTORIALS_PATH = '/cxc/tutoriales';
 const ADMIN_USUARIOS_PATH = '/admin/usuarios';
 
+// `enConstruccion`: módulos sin desarrollar; su ruta muestra la pantalla "Módulo en construcción".
 const MAIN_MODULES = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'compras', label: 'Compras', icon: ShoppingCart },
-  { id: 'inventario', label: 'Inventario', icon: Package },
-  { id: 'cuentas_pagar', label: 'Cuentas por Pagar', icon: FileSpreadsheet },
-  { id: 'cuentas_cobrar', label: 'Cuentas por Cobrar', icon: Coins },
-  { id: 'bancos', label: 'Bancos', icon: Landmark },
+  { id: 'compras', label: 'Compras', icon: ShoppingCart, path: '/compras', enConstruccion: true },
+  { id: 'inventario', label: 'Inventario', icon: Package, path: '/inventario', enConstruccion: true },
+  { id: 'cuentas_pagar', label: 'Cuentas por Pagar', icon: FileSpreadsheet, path: '/cuentas-por-pagar', enConstruccion: true },
+  { id: 'cuentas_cobrar', label: 'Cuentas por Cobrar', icon: Coins, path: CXC_DASHBOARD_PATH, enConstruccion: false },
+  { id: 'bancos', label: 'Bancos', icon: Landmark, path: '/bancos', enConstruccion: true },
 ] as const;
+
+const moduloEnConstruccionActivo = (pathname: string) =>
+  MAIN_MODULES.find((m) => m.enConstruccion && pathname.startsWith(m.path));
 
 interface CxcAppLayoutProps {
   children: ReactNode;
@@ -179,13 +184,14 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
   const isDashboardActive = location.pathname === CXC_DASHBOARD_PATH;
   const isTutorialsActive = location.pathname === CXC_TUTORIALS_PATH;
   const isAdminActive = location.pathname.startsWith('/admin');
+  const moduloObra = moduloEnConstruccionActivo(location.pathname);
 
   const activeGroup = useMemo(
     () =>
-      isDashboardActive || isTutorialsActive || isAdminActive
+      isDashboardActive || isTutorialsActive || isAdminActive || moduloObra
         ? undefined
         : CXC_GROUPS.find((group) => location.pathname.startsWith(group.matchPrefix)) ?? CXC_GROUPS[0],
-    [location.pathname, isDashboardActive, isTutorialsActive, isAdminActive],
+    [location.pathname, isDashboardActive, isTutorialsActive, isAdminActive, moduloObra],
   );
 
   const pageTutorial = useMemo(() => getTutorialForPath(location.pathname), [location.pathname]);
@@ -246,11 +252,8 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
         className="w-72 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800 select-none"
         aria-label="Navegación principal del ERP"
       >
-        <div className="h-16 px-5 flex items-center gap-3 border-b border-slate-800/80">
-          <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-md shadow-blue-600/30 text-lg" aria-hidden="true">
-            E
-          </div>
-          <span className="font-bold text-white text-lg tracking-tight">System</span>
+        <div className="h-20 px-5 flex items-center border-b border-slate-800/80">
+          <img src={logoCxcClaro} alt="Cuentas por Cobrar CxC · ERP System" width={480} height={194} draggable={false} className="block h-14 w-auto select-none" />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Módulos del sistema">
@@ -259,16 +262,23 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
             const isCxc = item.id === 'cuentas_cobrar';
 
             if (!isCxc) {
+              const activo = moduloObra?.id === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => navigate('/')}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 group"
-                  aria-label={`Ir a ${item.label}`}
+                  onClick={() => navigate(item.path)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 group ${activo ? 'bg-slate-800 text-white shadow-sm border border-slate-700/50' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'}`}
+                  aria-label={item.enConstruccion ? `Ir a ${item.label} (en construcción)` : `Ir a ${item.label}`}
+                  aria-current={activo ? 'page' : undefined}
                 >
-                  <Icon size={18} className="text-slate-400 group-hover:text-slate-200" aria-hidden="true" />
+                  <Icon size={18} className={activo ? 'text-amber-300' : 'text-slate-400 group-hover:text-slate-200'} aria-hidden="true" />
                   <span className="truncate flex-1 text-left">{item.label}</span>
+                  {item.enConstruccion && (
+                    <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300" aria-hidden="true">
+                      Pronto
+                    </span>
+                  )}
                 </button>
               );
             }
@@ -414,9 +424,9 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 shrink-0 bg-white border-b border-slate-200 px-6 flex items-center justify-between gap-4" aria-label="Contexto de navegación">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">{isAdminActive ? 'Sistema' : 'Cuentas por Cobrar'}</p>
-            <h2 className="text-sm font-semibold text-slate-800 truncate">
-              {isAdminActive ? 'Administración' : isDashboardActive ? 'Dashboard' : isTutorialsActive ? 'Tutoriales' : activeGroup?.label}
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">{isAdminActive ? 'Sistema' : moduloObra ? 'Módulo en construcción' : 'Cuentas por Cobrar'}</p>
+            <h2 className="text-slate-800 truncate text-sm font-bold">
+              {isAdminActive ? 'Administración' : moduloObra ? moduloObra.label : isDashboardActive ? 'Dashboard' : isTutorialsActive ? 'Tutoriales' : activeGroup?.label}
             </h2>
           </div>
           {pageTutorial && (

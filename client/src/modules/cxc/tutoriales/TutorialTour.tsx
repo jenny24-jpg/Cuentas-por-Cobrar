@@ -178,7 +178,7 @@ export const TutorialTour = ({ tutorial, onClose }: TutorialTourProps) => {
           </button>
         </div>
 
-        <h3 id="tutorial-step-title" className="mt-1.5 text-base font-bold text-slate-900">
+        <h3 id="tutorial-step-title" className="mt-1.5 text-slate-900 text-sm font-bold">
           {step.title}
         </h3>
         <p id="tutorial-step-body" className="mt-1.5 text-sm text-slate-600 leading-relaxed">
