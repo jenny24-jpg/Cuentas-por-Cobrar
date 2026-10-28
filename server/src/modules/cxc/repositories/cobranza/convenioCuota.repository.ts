@@ -6,6 +6,7 @@ import { EPSILON, roundMoney, deriveDocumentoEstado } from '../../shared/financi
 import { businessTodayIso } from '../../../../shared/date';
 import { registrarEvento } from '../documentos/documentoHistorial.repository';
 import { crearReciboAutomatico } from '../pagos/recibo.repository';
+import { asignarCorrelativo } from '../../shared/correlativos';
 
 interface ConvenioCuotaRow {
   ID_CUOTA: number;
@@ -190,6 +191,7 @@ export async function registrarPago(
       },
     );
     const idPago = pagoInsert.outBinds!.id[0];
+    if (!referenciaPago) await asignarCorrelativo(conn, 'pago', idPago);
 
     let restante = roundMoney(montoPagado);
     let totalAplicado = 0;

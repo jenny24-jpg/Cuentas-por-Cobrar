@@ -2,13 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { TextInput, Select } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
-import {
-  hasErrors,
-  validateMaxLength,
-  validateRequired,
-  type ValidationErrors,
-} from '../../../../shared/validation';
-import type { FormaPago } from '@erp/contracts';
+import { hasErrors, type ValidationErrors } from '../../../../shared/validation';
+import { FORMAS_PAGO_ESTANDAR, type FormaPago } from '@erp/contracts';
 
 export function FormaPagoForm({
   item,
@@ -21,20 +16,18 @@ export function FormaPagoForm({
 }) {
   const isEditing = Boolean(item);
   const [nombre, setNombre] = useState(item?.nombre ?? '');
-  const [requiereReferencia, setReq] = useState(item?.requiereReferencia ?? 'N');
   const [estado, setEstado] = useState(item?.estado ?? 'A');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const estandar = FORMAS_PAGO_ESTANDAR.find((f) => f.nombre === nombre);
+  const requiereReferencia = estandar?.requiereReferencia ?? item?.requiereReferencia ?? 'N';
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
-    const requiredErr = validateRequired(nombre, 'El nombre');
-    if (requiredErr) next.nombre = requiredErr;
-    const maxErr = validateMaxLength(nombre, 'El nombre', 80);
-    if (maxErr) next.nombre = maxErr;
+    if (!isEditing && !nombre) next.nombre = 'Selecciona una forma de pago del catálogo estándar.';
     return next;
-  }, [nombre]);
+  }, [nombre, isEditing]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -48,7 +41,8 @@ export function FormaPagoForm({
 
     setErrors({});
     setBusy(true);
-    const payload = { nombre: nombre.trim(), requiereReferencia, estado };
+    // Al editar solo cambia el estado; el nombre identifica la forma estándar.
+    const payload = isEditing ? { estado } : { nombre, estado };
 
     try {
       if (isEditing) await apiClient.patch(`/cxc/formas-pago/${item!.idFormaPago}`, payload);
@@ -70,26 +64,29 @@ export function FormaPagoForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        {isEditing ? (
+          <TextInput
+            label="Forma de pago"
+            value={nombre}
+            isReadOnly
+            helperText="Forma estándar; solo puede activarse o inactivarse."
+          />
+        ) : (
+          <Select
+            label="Forma de pago"
+            required
+            value={nombre}
+            onChange={(e: any) => setNombre(e.target.value)}
+            options={[{ value: '', label: 'Selecciona...' }, ...FORMAS_PAGO_ESTANDAR.map((f) => ({ value: f.nombre, label: f.nombre }))]}
+            helperText="Catálogo estándar; no se escriben nombres libres."
+            error={errors.nombre}
+          />
+        )}
         <TextInput
-          label="Nombre"
-          required
-          restriction="letters"
-          maxLength={80}
-          helperText="Solo letras y espacios; máximo 80."
-          value={nombre}
-          onChange={(e: any) => setNombre(e.target.value)}
-          error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
-        />
-        <Select
           label="Requiere referencia"
-          required
-          value={requiereReferencia}
-          onChange={(e: any) => setReq(e.target.value)}
-          options={[
-            { value: 'S', label: 'Sí' },
-            { value: 'N', label: 'No' },
-          ]}
-          helperText="Si el número de operación o cheque será obligatorio."
+          value={requiereReferencia === 'S' ? 'Sí' : 'No'}
+          isReadOnly
+          helperText="Lo define la forma de pago (efectivo no; bancos, cheque y tarjeta sí)."
         />
         <Select
           label="Estado"

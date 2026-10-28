@@ -2,6 +2,7 @@ import oracledb from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { Pago, CreatePagoInput, UpdatePagoInput, AnularPagoInput } from '@erp/contracts';
 import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
+import { asignarCorrelativo } from '../../shared/correlativos';
 
 interface Row {
   ID_PAGO: number;
@@ -123,9 +124,9 @@ export async function create(i: CreatePagoInput) {
   try {
     const r = await c.execute<{ id: number[] }>(
       `INSERT INTO CXC_PAGOS
-         (ID_CLIENTE,ID_FORMA_PAGO,ID_MONEDA,ID_BANCO,FECHA_PAGO,MONTO,NUMERO_REFERENCIA,ESTADO)
+         (ID_CLIENTE,ID_FORMA_PAGO,ID_MONEDA,ID_BANCO,FECHA_PAGO,MONTO,ESTADO)
        VALUES
-         (:idCliente,:idFormaPago,:idMoneda,:idBanco,TO_DATE(:fechaPago,'YYYY-MM-DD'),:monto,:numeroReferencia,:estado)
+         (:idCliente,:idFormaPago,:idMoneda,:idBanco,TO_DATE(:fechaPago,'YYYY-MM-DD'),:monto,:estado)
        RETURNING ID_PAGO INTO :id`,
       {
         idCliente: i.idCliente,
@@ -134,13 +135,14 @@ export async function create(i: CreatePagoInput) {
         idBanco: i.idBanco ?? null,
         fechaPago: i.fechaPago,
         monto: i.monto,
-        numeroReferencia: i.numeroReferencia ?? null,
         estado: i.estado ?? 'NO_APLICADO',
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
     );
+    const id = r.outBinds!.id[0];
+    await asignarCorrelativo(c, 'pago', id);
     await c.commit();
-    return r.outBinds!.id[0];
+    return id;
   } catch (e) {
     await c.rollback();
     throw e;
@@ -197,7 +199,6 @@ export async function update(id: number, i: UpdatePagoInput) {
   if (i.idBanco !== undefined) { f.push('ID_BANCO=:idBanco'); b.idBanco = i.idBanco; }
   if (i.fechaPago !== undefined) { f.push(`FECHA_PAGO=TO_DATE(:fechaPago,'YYYY-MM-DD')`); b.fechaPago = i.fechaPago; }
   if (i.monto !== undefined) { f.push('MONTO=:monto'); b.monto = i.monto; }
-  if (i.numeroReferencia !== undefined) { f.push('NUMERO_REFERENCIA=:numeroReferencia'); b.numeroReferencia = i.numeroReferencia; }
   if (i.estado !== undefined) { f.push('ESTADO=:estado'); b.estado = i.estado; }
   if (!f.length) return;
 
@@ -253,28 +254,48 @@ export async function remove(id: number) {
   }
 }
 
-export async function listOptions(idCliente?: number) {
+/**
+ * Pagos con monto disponible. Con paraAnticipo solo los que pueden respaldar un anticipo:
+ * sin aplicaciones a documentos y sin otro anticipo vigente (mismas reglas que
+ * anticipo.repository.ts::validarPagoRespaldo).
+ */
+export async function listOptions(idCliente?: number, opciones: { paraAnticipo?: boolean } = {}) {
   const c = await getConnection();
   try {
-    const where = idCliente ? 'WHERE p.ID_CLIENTE = :idCliente' : '';
+    const condiciones = [
+      ...(idCliente ? ['p.ID_CLIENTE = :idCliente'] : []),
+      ...(opciones.paraAnticipo
+        ? [`NOT EXISTS (SELECT 1 FROM CXC_APLICACION_PAGOS x WHERE x.ID_PAGO = p.ID_PAGO AND x.ESTADO = 'CONFIRMADA')`,
+           `NOT EXISTS (SELECT 1 FROM CXC_ANTICIPOS ant WHERE ant.ID_PAGO = p.ID_PAGO AND ant.ESTADO <> 'CANCELADO')`]
+        : []),
+    ];
+    const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
     const r = await c.execute<{
       ID_PAGO: number;
       ID_CLIENTE: number;
+      CLIENTE: string;
       NUMERO_REFERENCIA: string | null;
+      FORMA_PAGO: string | null;
+      FECHA: string;
       MONTO: number;
       DISPONIBLE: number;
       ESTADO: string;
     }>(
       `SELECT p.ID_PAGO,
               p.ID_CLIENTE,
+              'CR-' || LPAD(p.ID_CLIENTE, 5, '0') || ' ' || cl.NOMBRE AS CLIENTE,
               p.NUMERO_REFERENCIA,
+              fp.NOMBRE AS FORMA_PAGO,
+              TO_CHAR(p.FECHA_PAGO, 'DD/MM/YYYY') AS FECHA,
               p.MONTO,
               GREATEST(p.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) DISPONIBLE,
               p.ESTADO
          FROM CXC_PAGOS p
+         JOIN CLIENTE cl ON cl.ID_CLIENTE = p.ID_CLIENTE
+         LEFT JOIN CXC_FORMAS_PAGO fp ON fp.ID_FORMA_PAGO = p.ID_FORMA_PAGO
          LEFT JOIN CXC_APLICACION_PAGOS a ON a.ID_PAGO = p.ID_PAGO AND a.ESTADO = 'CONFIRMADA'
          ${where}
-        GROUP BY p.ID_PAGO,p.ID_CLIENTE,p.NUMERO_REFERENCIA,p.MONTO,p.ESTADO
+        GROUP BY p.ID_PAGO,p.ID_CLIENTE,cl.NOMBRE,p.NUMERO_REFERENCIA,fp.NOMBRE,p.FECHA_PAGO,p.MONTO,p.ESTADO
        HAVING GREATEST(p.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) > 0
           AND UPPER(NVL(p.ESTADO,'NO_APLICADO')) NOT IN ('ANULADO','REVERSADO')
         ORDER BY p.ID_PAGO DESC`,
@@ -283,7 +304,8 @@ export async function listOptions(idCliente?: number) {
     return (r.rows ?? []).map((x) => ({
       id: x.ID_PAGO,
       idCliente: x.ID_CLIENTE,
-      label: `Pago #${x.ID_PAGO}${x.NUMERO_REFERENCIA ? ` · ${x.NUMERO_REFERENCIA}` : ''} · Disponible Q ${Number(x.DISPONIBLE).toFixed(2)}`,
+      label: `${x.NUMERO_REFERENCIA ?? `Pago #${x.ID_PAGO}`} · ${x.FECHA}${x.FORMA_PAGO ? ` · ${x.FORMA_PAGO}` : ''} · disponible Q ${Number(x.DISPONIBLE).toFixed(2)}`,
+      cliente: x.CLIENTE,
       monto: x.MONTO,
       saldo: x.DISPONIBLE,
       estado: x.ESTADO,

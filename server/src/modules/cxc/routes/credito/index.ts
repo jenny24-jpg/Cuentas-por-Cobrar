@@ -54,6 +54,7 @@ router.post(
 
 
 router.post('/mora/recalcular', moraController.recalcular);
+router.get('/mora/cartera', moraController.cartera);
 router.get('/mora', moraController.list);
 router.get('/mora/:id', moraController.getOne);
 router.post('/mora', moraController.create);

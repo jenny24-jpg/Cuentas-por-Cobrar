@@ -35,3 +35,37 @@ export const createMoraSchema = z.object({
 export type CreateMoraInput = z.infer<typeof createMoraSchema>;
 export const updateMoraSchema = createMoraSchema.partial();
 export type UpdateMoraInput = z.infer<typeof updateMoraSchema>;
+
+/**
+ * Cartera en mora calculada en vivo (no se registra a mano): cada documento de cargo con
+ * saldo pendiente, con la condición de crédito del documento o, si no tiene, la del cliente.
+ *
+ *   inicio de mora = fecha de vencimiento + días de gracia
+ *   días de mora   = hoy - inicio de mora
+ *   monto de mora  = saldo * % mora / 100   (misma regla que el recálculo guardado)
+ */
+export const ESTADOS_CARTERA_MORA = ['EN_MORA', 'EN_GRACIA', 'POR_VENCER', 'AL_DIA'] as const;
+export type EstadoCarteraMora = (typeof ESTADOS_CARTERA_MORA)[number];
+
+/** Ventana de "próximos a vencer", en días. */
+export const DIAS_PROXIMOS_A_VENCER = 15;
+
+export interface CarteraMoraDocumento {
+  idDocumento: number;
+  idCliente: number;
+  codigoCliente: string;
+  cliente: string;
+  documento: string;
+  moneda: string;
+  fechaDocumento: string;
+  fechaVencimiento: string;
+  fechaInicioMora: string;
+  diasGracia: number;
+  /** Positivo: días desde el vencimiento. Negativo: días que faltan para vencer. */
+  diasVencido: number;
+  diasMora: number;
+  saldo: number;
+  porcentajeMora: number;
+  montoMora: number;
+  estado: EstadoCarteraMora;
+}

@@ -78,11 +78,16 @@ describe('mapeo de filas', () => {
 });
 
 describe('pago.create / pago.listOptions', () => {
-  it('create: valores por defecto y rollback si Oracle falla', async () => {
+  it('create: valores por defecto, referencia automática y rollback si Oracle falla', async () => {
     let r = crearConexion([{ sql: /INSERT INTO CXC_PAGOS/, outId: 12 }]);
     db.getConnection.mockResolvedValue(r.conn);
     await expect(pagos.create({ idCliente: 1, idFormaPago: 1, idMoneda: 1, fechaPago: '2026-10-27', monto: 50 } as never)).resolves.toBe(12);
-    expect(r.ejecuciones[0].binds).toMatchObject({ idBanco: null, numeroReferencia: null, estado: 'NO_APLICADO' });
+    expect(r.ejecuciones[0].binds).toMatchObject({ idBanco: null, estado: 'NO_APLICADO' });
+    // La referencia la asigna el sistema (PAG-AAAA-000012) dentro de la misma transacción.
+    const correlativo = r.ejecuto(/UPDATE CXC_PAGOS\s+SET NUMERO_REFERENCIA = 'PAG-'/);
+    expect(correlativo).toHaveLength(1);
+    expect(correlativo[0].binds).toEqual({ id: 12 });
+    expect(r.conn.commit).toHaveBeenCalledOnce();
 
     r = crearConexion([]);
     r.conn.execute.mockRejectedValueOnce(new Error('ORA-02291'));
@@ -91,17 +96,25 @@ describe('pago.create / pago.listOptions', () => {
     expect(r.conn.rollback).toHaveBeenCalledOnce();
     expect(r.conn.close).toHaveBeenCalledOnce();
   });
-  it('listOptions filtra por cliente solo si se indica y arma la etiqueta', async () => {
-    let r = crearConexion([{ sql: /GROUP BY/, rows: [{ ID_PAGO: 4, ID_CLIENTE: 1, NUMERO_REFERENCIA: 'TRF-9', MONTO: 100, DISPONIBLE: 25.5, ESTADO: 'EN_CUENTA' }] }]);
+  it('listOptions filtra por cliente solo si se indica y arma la etiqueta con cliente, fecha y forma', async () => {
+    let r = crearConexion([{ sql: /GROUP BY/, rows: [{ ID_PAGO: 4, ID_CLIENTE: 1, CLIENTE: 'CR-00001 Ana', NUMERO_REFERENCIA: 'PAG-2026-000004', FORMA_PAGO: 'Efectivo', FECHA: '27/10/2026', MONTO: 100, DISPONIBLE: 25.5, ESTADO: 'EN_CUENTA' }] }]);
     db.getConnection.mockResolvedValue(r.conn);
     const [op] = await pagos.listOptions(1);
-    expect(op).toMatchObject({ id: 4, saldo: 25.5, label: 'Pago #4 · TRF-9 · Disponible Q 25.50' });
+    expect(op).toMatchObject({ id: 4, idCliente: 1, cliente: 'CR-00001 Ana', saldo: 25.5, label: 'PAG-2026-000004 · 27/10/2026 · Efectivo · disponible Q 25.50' });
     expect(r.ejecuciones[0].binds).toEqual({ idCliente: 1 });
+    expect(r.ejecuciones[0].sql).not.toContain('NOT EXISTS');
 
-    r = crearConexion([{ sql: /GROUP BY/, rows: [{ ID_PAGO: 5, NUMERO_REFERENCIA: null, MONTO: 1, DISPONIBLE: 1 }] }]);
+    r = crearConexion([{ sql: /GROUP BY/, rows: [{ ID_PAGO: 5, NUMERO_REFERENCIA: null, FORMA_PAGO: null, FECHA: '01/10/2026', MONTO: 1, DISPONIBLE: 1 }] }]);
     db.getConnection.mockResolvedValue(r.conn);
-    expect((await pagos.listOptions())[0].label).toBe('Pago #5 · Disponible Q 1.00');
-    expect(r.ejecuciones[0].sql).not.toContain('WHERE p.ID_CLIENTE');
+    expect((await pagos.listOptions())[0].label).toBe('Pago #5 · 01/10/2026 · disponible Q 1.00');
+    expect(r.ejecuciones[0].sql).not.toContain('p.ID_CLIENTE = :idCliente');
+  });
+  it('listOptions paraAnticipo excluye pagos aplicados o que ya respaldan un anticipo', async () => {
+    const r = crearConexion([{ sql: /GROUP BY/, rows: [] }]);
+    db.getConnection.mockResolvedValue(r.conn);
+    await pagos.listOptions(1, { paraAnticipo: true });
+    expect(r.ejecuciones[0].sql).toMatch(/NOT EXISTS \(SELECT 1 FROM CXC_APLICACION_PAGOS/);
+    expect(r.ejecuciones[0].sql).toMatch(/NOT EXISTS \(SELECT 1 FROM CXC_ANTICIPOS/);
   });
 });
 
@@ -132,8 +145,9 @@ describe('anticipo.remove / anticipo.anular', () => {
 
     r = crearConexion([bloqueo(), { sql: /FROM CXC_APLICACION_ANTICIPO/, rows: [{ TOTAL: 0 }] }]);
     db.getConnection.mockResolvedValue(r.conn);
-    await expect(anticipos.update(1, { montoOriginal: 20 })).rejects.toThrow(/igual al monto original/);
     await expect(anticipos.update(1, { fecha: '2026-10-28' })).rejects.toThrow(/futura/);
+    // Sin pago que lo respalde ya no se acepta: el monto sale del pago.
+    await expect(anticipos.update(1, { fecha: '2026-10-21' })).rejects.toThrow(/pago que respalda/);
   });
   it('anular: ya cancelado, aplicaciones vigentes, fechas y éxito', async () => {
     const datos = { idEmpleadoAnulacion: 5, motivoAnulacion: 'Cliente solicitó devolución' };

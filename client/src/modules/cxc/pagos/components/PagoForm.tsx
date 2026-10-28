@@ -5,9 +5,7 @@ import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
   todayIso,
-  validateIdentifier,
   validateMoney,
-  validateRequired,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
@@ -47,7 +45,7 @@ export function PagoForm({
   const [idBanco, setIdBanco] = useState(pago?.idBanco?.toString() ?? '');
   const [fechaPago, setFechaPago] = useState(pago?.fechaPago?.slice(0, 10) ?? todayIso());
   const [monto, setMonto] = useState(pago?.monto?.toString() ?? '');
-  const [numeroReferencia, setNumeroReferencia] = useState(pago?.numeroReferencia ?? '');
+  const numeroReferencia = pago?.numeroReferencia ?? '';
   const [estado, setEstado] = useState(pago?.estado ?? 'NO_APLICADO');
 
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -75,7 +73,6 @@ export function PagoForm({
       });
   }, []);
 
-  const formaSeleccionada = formas.find((f) => String(f.id) === idFormaPago);
   const stateOptions = useMemo(() => {
     if (!estado || REGISTRATION_STATES.some((option) => option.value === estado)) return REGISTRATION_STATES;
     return [...REGISTRATION_STATES, { value: estado, label: estado.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) }];
@@ -99,21 +96,12 @@ export function PagoForm({
     const montoErr = validateMoney(monto, 'El monto', { required: true, positive: true });
     if (montoErr) next.monto = montoErr;
 
-    if (formaSeleccionada?.requiereReferencia) {
-      const refRequired = validateRequired(numeroReferencia, 'La referencia');
-      if (refRequired) next.numeroReferencia = refRequired;
-    }
-    if (numeroReferencia) {
-      const refErr = validateIdentifier(numeroReferencia, 'La referencia');
-      if (refErr) next.numeroReferencia = refErr;
-    }
-
     if (!['NO_IDENTIFICADO', 'NO_APLICADO', 'EN_CUENTA'].includes(estado) && !isLocked) {
       next.estado = 'Selecciona un estado válido para registrar el pago.';
     }
 
     return next;
-  }, [idCliente, idFormaPago, idMoneda, fechaPago, monto, numeroReferencia, estado, formaSeleccionada, isLocked]);
+  }, [idCliente, idFormaPago, idMoneda, fechaPago, monto, estado, isLocked]);
 
   const isFormValid = !hasErrors(validationErrors) && !isLocked;
   const errorFor = (field: string, touchedValue = '') =>
@@ -142,7 +130,6 @@ export function PagoForm({
       idBanco: idBanco ? Number(idBanco) : undefined,
       fechaPago,
       monto: Number(monto),
-      numeroReferencia: numeroReferencia.trim() || undefined,
       estado,
     };
 
@@ -204,7 +191,7 @@ export function PagoForm({
           value={idFormaPago}
           onChange={(e: any) => setIdFormaPago(e.target.value)}
           options={formas.map((x) => ({ value: x.id, label: x.label }))}
-          helperText="La referencia es obligatoria si la forma de pago lo requiere."
+          helperText="Medio con el que se recibió el pago."
           error={errorFor('idFormaPago')}
           isReadOnly={isLocked}
         />
@@ -264,19 +251,9 @@ export function PagoForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
         <TextInput
           label="Número de referencia"
-          restriction="identifier"
-          uppercase
-          maxLength={80}
-          required={Boolean(formaSeleccionada?.requiereReferencia)}
-          helperText={
-            formaSeleccionada?.requiereReferencia
-              ? 'Obligatoria para la forma de pago seleccionada.'
-              : 'Referencia opcional del medio de pago.'
-          }
-          value={numeroReferencia}
-          onChange={(e: any) => setNumeroReferencia(e.target.value)}
-          error={errorFor('numeroReferencia', numeroReferencia)}
-          isReadOnly={isLocked}
+          value={numeroReferencia || 'Se asigna al guardar'}
+          isReadOnly
+          helperText="Correlativo automático del sistema (PAG-AAAA-000001); no se edita."
         />
 
         <Select

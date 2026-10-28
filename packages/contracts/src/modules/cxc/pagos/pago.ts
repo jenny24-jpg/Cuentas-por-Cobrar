@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isoDateSchema, moneySchema, optionalIdentifierSchema } from '../validation';
+import { isoDateSchema, moneySchema } from '../validation';
 
 export const ESTADOS_PAGO = [
   'NO_IDENTIFICADO',
@@ -44,7 +44,7 @@ const pagoBaseSchema = z.object({
   idBanco: z.number().int().positive('El banco debe ser un ID válido').nullable().optional(),
   fechaPago: isoDateSchema('La fecha de pago'),
   monto: moneySchema('El monto', true),
-  numeroReferencia: optionalIdentifierSchema('La referencia', 80),
+  // Sin numeroReferencia: el sistema la asigna (PAG-AAAA-000001) y no se edita.
 });
 
 export const createPagoSchema = pagoBaseSchema.extend({

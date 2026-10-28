@@ -23,7 +23,7 @@ router.get('/catalogos/pagos', async (req, res, next) => {
     if (rawIdCliente && (!Number.isInteger(idCliente) || (idCliente as number) <= 0)) {
       throw new BadRequestError('idCliente debe ser un entero positivo');
     }
-    res.json(await pagoRepo.listOptions(idCliente));
+    res.json(await pagoRepo.listOptions(idCliente, { paraAnticipo: req.query.paraAnticipo === '1' }));
   } catch (e) {
     next(e);
   }

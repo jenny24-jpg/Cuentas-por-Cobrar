@@ -201,18 +201,6 @@ export async function updateAnticipo(
     );
   }
 
-  const finalMontoOriginal =
-    input.montoOriginal ?? current.montoOriginal;
-
-  const finalMontoDisponible =
-    input.montoDisponible ?? current.montoDisponible;
-
-  if (finalMontoDisponible > finalMontoOriginal) {
-    throw new BadRequestError(
-      'El monto disponible no puede superar el monto original',
-    );
-  }
-
   // Verificar el pago relacionado utilizando
   // los valores finales de la actualización.
 

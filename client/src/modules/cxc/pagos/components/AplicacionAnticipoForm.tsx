@@ -206,6 +206,28 @@ export function AplicacionAnticipoForm({
         />
       </div>
 
+      {anticipoSeleccionado && documentoSeleccionado && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="font-semibold">¿De dónde sale el máximo?</p>
+          <ul className="mt-1 space-y-0.5">
+            <li>
+              Anticipo: original Q {Number(anticipoSeleccionado.monto ?? anticipoSeleccionado.saldo).toFixed(2)}
+              {anticipoSeleccionado.monto !== undefined && Number(anticipoSeleccionado.monto) > Number(anticipoSeleccionado.saldo)
+                ? `, ya aplicado Q ${(Number(anticipoSeleccionado.monto) - Number(anticipoSeleccionado.saldo)).toFixed(2)}`
+                : ''}
+              {' '}→ <strong>disponible Q {Number(anticipoSeleccionado.saldo).toFixed(2)}</strong>
+            </li>
+            <li>Saldo pendiente del documento: <strong>Q {Number(documentoSeleccionado.saldo).toFixed(2)}</strong></li>
+            <li>
+              Se puede aplicar como máximo el menor de los dos: <strong>Q {maxAplicable.toFixed(2)}</strong>.
+              {Number(documentoSeleccionado.saldo) > maxAplicable
+                ? ` El documento quedará con saldo Q ${(Number(documentoSeleccionado.saldo) - maxAplicable).toFixed(2)}, que se cobra con otro pago.`
+                : ''}
+            </li>
+          </ul>
+        </div>
+      )}
+
       {!isEditing && <CampoUsuarioActual />}
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">

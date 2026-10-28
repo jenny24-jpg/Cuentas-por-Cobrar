@@ -87,7 +87,8 @@ export async function resumen(idRuta: number): Promise<RutaOperacion> {
 export async function pendientes() {
   const conn = await getConnection();
   try {return (await conn.execute<RutaDocumentoPendiente>(`SELECT d.ID_DOCUMENTO,TRIM(d.SERIE || ' ' || d.NUMERO_DOCUMENTO) DOCUMENTO,
-    d.SALDO,GREATEST(d.SALDO-${reservado},0) DISPONIBLE,d.ID_MONEDA,m.CODIGO MONEDA,c.NOMBRE CLIENTE
+    d.SALDO,GREATEST(d.SALDO-${reservado},0) DISPONIBLE,d.ID_MONEDA,m.CODIGO MONEDA,c.NOMBRE CLIENTE,
+    c.DIRECCION DIRECCION_CLIENTE,'CR-' || LPAD(c.ID_CLIENTE,5,'0') CODIGO_COBRO
     FROM CXC_DOCUMENTOS d JOIN CLIENTE c ON c.ID_CLIENTE=d.ID_CLIENTE JOIN MONEDA m ON m.ID_MONEDA=d.ID_MONEDA
     WHERE d.SALDO>0 AND TRIM(d.ESTADO) NOT IN ('ANULADO','ANULADA','PAGADO','PAGADA') ORDER BY d.FECHA_VENCIMIENTO`)).rows ?? [];
   } finally {await conn.close();}

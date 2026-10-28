@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  isoDateSchema,
-  moneySchema,
-  optionalIdentifierSchema,
-  identifierSchema,
-} from '../validation';
+import { isoDateSchema, moneySchema } from '../validation';
 
 /**
  * Estados persistidos actuales. VENCIDO se conserva por compatibilidad con
@@ -56,8 +51,8 @@ const documentoEditableBaseSchema = z.object({
   idTipoDocumento: z.number().int().positive('Selecciona un tipo de documento'),
   idMoneda: z.number().int().positive('Selecciona una moneda'),
   idCondicionCredito: z.number().int().positive().nullable().optional(),
-  serie: optionalIdentifierSchema('La serie', 30),
-  numeroDocumento: identifierSchema('El número de documento', 50),
+  // Sin serie/numeroDocumento: los asigna el sistema al crear (serie = código del tipo,
+  // número = siguiente correlativo de esa serie) y no se editan.
   fechaDocumento: isoDateSchema('La fecha del documento'),
   fechaVencimiento: isoDateSchema('La fecha de vencimiento'),
   total: moneySchema('El total', true),

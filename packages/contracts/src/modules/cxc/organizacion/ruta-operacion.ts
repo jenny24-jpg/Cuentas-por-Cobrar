@@ -49,5 +49,7 @@ export interface RutaPlanificacion { ID_RUTA: number; ID_EMPLEADO: number; RESPO
   /** Primera parada con ubicación: punto de referencia del radio. */ ANCLA: { ID_ASIGNACION: number; LATITUD: number; LONGITUD: number; CLIENTE: string } | null }
 export interface RutaBitacora { ID_BITACORA: number; ID_ASIGNACION: number; TIPO: string; MONTO: number | null; OBSERVACIONES: string; REFERENCIA: string | null; FECHA: string; COBRADOR: string; DOCUMENTO: string; ESTADO: string | null; MONEDA: string | null; REGISTRADO_POR: string | null }
 export interface RutaOperacion { ruta: RutaPlanificacion; asignaciones: RutaAsignacion[]; bitacora: RutaBitacora[]; cobradores: CobradorPerfil[] }
-export interface RutaDocumentoPendiente { ID_DOCUMENTO: number; DOCUMENTO: string; SALDO: number; DISPONIBLE: number; CLIENTE: string; ID_MONEDA: number; MONEDA: string }
+export interface RutaDocumentoPendiente { ID_DOCUMENTO: number; DOCUMENTO: string; SALDO: number; DISPONIBLE: number; CLIENTE: string; ID_MONEDA: number; MONEDA: string;
+  /** Dirección registrada del cliente; se propone como dirección de la visita. */ DIRECCION_CLIENTE: string | null;
+  /** Código de cobro del cliente (CR-00012). */ CODIGO_COBRO: string }
 export interface RutaPagoDisponible { ID_PAGO: number; ID_CLIENTE: number; ID_MONEDA: number; REFERENCIA: string; DISPONIBLE: number; CLIENTE: string; MONEDA: string }

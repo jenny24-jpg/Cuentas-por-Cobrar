@@ -11,7 +11,9 @@ import {
   validateSoloLetras,
   type ValidationErrors,
 } from '../../../../shared/validation';
-import type { Empresa } from '@erp/contracts';
+import { TIPOS_COMERCIO, type Empresa } from '@erp/contracts';
+
+const OPCIONES_TIPO_COMERCIO = TIPOS_COMERCIO.map((t) => ({ value: t, label: t }));
 
 const ESTADOS_EMPRESA = [
   { value: 'A', label: 'Activa' },
@@ -28,6 +30,11 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
   const isEditing = Boolean(empresa);
   const [nombre, setNombre] = useState(empresa?.nombre ?? '');
   const [nit, setNit] = useState(empresa?.nit ?? '');
+  const [direccion, setDireccion] = useState(empresa?.direccion ?? '');
+  // Un giro heredado que no está en el catálogo obliga a elegir uno válido.
+  const [giroComercial, setGiroComercial] = useState(
+    (TIPOS_COMERCIO as readonly string[]).includes(empresa?.giroComercial ?? '') ? empresa!.giroComercial! : '',
+  );
   const [estado, setEstado] = useState(empresa?.estado ?? 'A');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,8 +52,11 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
       const nitErr = validateGuatemalaNit(nit, 'El NIT');
       if (nitErr) next.nit = nitErr;
     }
+    if (!giroComercial) next.giroComercial = 'Selecciona el tipo de comercio';
+    const direccionMax = validateMaxLength(direccion, 'La dirección', 250);
+    if (direccionMax) next.direccion = direccionMax;
     return next;
-  }, [nombre, nit]);
+  }, [nombre, nit, giroComercial, direccion]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -63,6 +73,8 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
     const payload = {
       nombre: nombre.trim(),
       nit: nit.trim().toUpperCase() || undefined,
+      direccion: direccion.trim() || null,
+      giroComercial,
       estado,
     };
 
@@ -109,6 +121,26 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
           helperText="NIT guatemalteco con dígito verificador válido, por ejemplo 1234567-9; también admite CF."
           placeholder="Ej. 1234567-9"
         />
+        <Select
+          label="Tipo de comercio"
+          required
+          value={giroComercial}
+          onChange={(e: any) => setGiroComercial(e.target.value)}
+          options={[{ value: '', label: 'Selecciona...' }, ...OPCIONES_TIPO_COMERCIO]}
+          error={errors.giroComercial}
+          helperText="Giro del negocio: abarrotes, ferretería, librería, etc."
+        />
+        <div className="sm:col-span-2">
+          <TextInput
+            label="Dirección"
+            maxLength={250}
+            value={direccion}
+            onChange={(e: any) => setDireccion(e.target.value)}
+            error={errors.direccion ?? (direccion ? validationErrors.direccion : undefined)}
+            helperText="Dirección fiscal o comercial; máximo 250 caracteres."
+            placeholder="Ej. 5a. avenida 10-20, zona 1, Guatemala"
+          />
+        </div>
         <Select
           label="Estado"
           required

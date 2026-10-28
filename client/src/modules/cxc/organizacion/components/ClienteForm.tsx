@@ -30,6 +30,7 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
   const isEditing = Boolean(cliente);
   const [nombre, setNombre] = useState(cliente?.nombre ?? '');
   const [nit, setNit] = useState(cliente?.nit ?? '');
+  const [direccion, setDireccion] = useState(cliente?.direccion ?? '');
   const [idCondicion, setIdCondicion] = useState(cliente?.idCondicion ? String(cliente.idCondicion) : '');
   const [estado, setEstado] = useState(cliente?.estado === 'I' ? 'I' : 'A');
   const [condiciones, setCondiciones] = useState<DocumentoCatalogoOption[]>([]);
@@ -70,14 +71,19 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
       if (nitErr) next.nit = nitErr;
     }
 
+    const d = direccion.trim();
+    if (d.length < 5) next.direccion = 'La dirección es obligatoria (mínimo 5 caracteres).';
+    else if (d.length > 250) next.direccion = 'La dirección no puede superar 250 caracteres.';
+
     const condErr = validateRequiredSelect(idCondicion, 'una condición de pago');
     if (condErr) next.idCondicion = condErr;
     return next;
-  }, [nombre, nit, nitCambio, idCondicion]);
+  }, [nombre, nit, nitCambio, direccion, idCondicion]);
 
   const huboCambios = !isEditing ||
     nombre.trim() !== cliente!.nombre ||
     nitCambio ||
+    direccion.trim() !== (cliente!.direccion ?? '') ||
     idCondicion !== String(cliente!.idCondicion ?? '') ||
     estado !== (cliente!.estado === 'I' ? 'I' : 'A');
 
@@ -88,7 +94,7 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     setErrors({});
     setIsSubmitting(true);
     try {
-      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), idCondicion: Number(idCondicion), estado };
+      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), direccion: direccion.trim(), idCondicion: Number(idCondicion), estado };
       if (isEditing) await apiClient.patch(`/cxc/clientes/${cliente!.idCliente}`, payload);
       else await apiClient.post('/cxc/clientes', payload);
       onSuccess();
@@ -109,13 +115,25 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {isEditing && (
-        <TextInput
-          label="ID Cliente"
-          value={`#${cliente!.idCliente}`}
-          isReadOnly
-          helperText="Identificador asignado por el sistema; no se modifica."
-        />
+      {isEditing ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <TextInput
+            label="ID Cliente"
+            value={`#${cliente!.idCliente}`}
+            isReadOnly
+            helperText="Identificador asignado por el sistema; no se modifica."
+          />
+          <TextInput
+            label="Código de cobro"
+            value={cliente!.codigoCobro}
+            isReadOnly
+            helperText="Código para asignar el cliente a rutas de cobro."
+          />
+        </div>
+      ) : (
+        <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          El sistema asigna automáticamente el <strong>código de cobro</strong> (CR-00001, CR-00002…) al guardar el cliente.
+        </p>
       )}
 
       <TextInput
@@ -155,6 +173,17 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
           helperText={isEditing ? 'Un cliente inactivo conserva su historial y saldos.' : 'Un cliente nuevo normalmente inicia Activo.'}
         />
       </div>
+
+      <TextInput
+        label="Dirección"
+        required
+        maxLength={250}
+        value={direccion}
+        onChange={(e: any) => setDireccion(e.target.value)}
+        error={errorFor('direccion', direccion)}
+        helperText="Dirección de cobro; se propone al asignar el cliente a una ruta."
+        placeholder="Ej. 6a. avenida 12-34, zona 1, Guatemala"
+      />
 
       {nitHeredadoInvalido && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">

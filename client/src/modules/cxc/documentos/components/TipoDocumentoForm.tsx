@@ -4,12 +4,11 @@ import { FormActionButtons } from '../../../../shared/components/FormActionButto
 import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
-  validateIdentifier,
   validateMaxLength,
   validateRequired,
   type ValidationErrors,
 } from '../../../../shared/validation';
-import type { TipoDocumento } from '@erp/contracts';
+import { CODIGO_TIPO_DOCUMENTO_MENSAJE, CODIGO_TIPO_DOCUMENTO_REGEX, type TipoDocumento } from '@erp/contracts';
 
 interface Props {
   tipo?: TipoDocumento | null;
@@ -31,21 +30,22 @@ export const TipoDocumentoForm = ({ tipo, onSuccess, onCancel }: Props) => {
     const next: ValidationErrors = {};
     const codigoReq = validateRequired(codigo, 'El código');
     if (codigoReq) next.codigo = codigoReq;
-    else {
-      const codigoErr = validateIdentifier(codigo, 'El código');
-      if (codigoErr) next.codigo = codigoErr;
+    else if (codigo.trim() !== tipo?.codigo.trim() && !CODIGO_TIPO_DOCUMENTO_REGEX.test(codigo.trim().toUpperCase())) {
+      next.codigo = `${CODIGO_TIPO_DOCUMENTO_MENSAJE}.`;
     }
 
     const nombreReq = validateRequired(nombre, 'El nombre');
     if (nombreReq) next.nombre = nombreReq;
+    else if (nombre.trim().length < 3) next.nombre = 'El nombre debe tener al menos 3 caracteres.';
+    else if (!/^[\p{L}][\p{L}\s]*$/u.test(nombre.trim())) next.nombre = 'El nombre solo admite letras y espacios.';
     const nombreMax = validateMaxLength(nombre, 'El nombre', 80);
     if (nombreMax) next.nombre = nombreMax;
 
-    if (naturaleza && !['CARGO', 'CREDITO'].includes(naturaleza)) {
-      next.naturaleza = 'Selecciona CARGO o CREDITO.';
+    if (!['CARGO', 'CREDITO'].includes(naturaleza)) {
+      next.naturaleza = 'Selecciona la naturaleza: CARGO o CREDITO.';
     }
     return next;
-  }, [codigo, nombre, naturaleza]);
+  }, [codigo, nombre, naturaleza, tipo]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -59,10 +59,12 @@ export const TipoDocumentoForm = ({ tipo, onSuccess, onCancel }: Props) => {
 
     setErrors({});
     setIsSubmitting(true);
+    // Al editar, el código solo se envía si cambió: hay códigos heredados con otro formato.
+    const codigoFinal = codigo.trim().toUpperCase();
     const payload = {
-      codigo: codigo.trim().toUpperCase(),
+      ...(!isEditing || codigoFinal !== tipo!.codigo.trim() ? { codigo: codigoFinal } : {}),
       nombre: nombre.trim(),
-      naturaleza: naturaleza || undefined,
+      naturaleza,
       estado,
     };
 
@@ -91,12 +93,12 @@ export const TipoDocumentoForm = ({ tipo, onSuccess, onCancel }: Props) => {
         <TextInput
           label="Código"
           required
-          restriction="identifier"
+          restriction="letters"
           uppercase
-          maxLength={20}
-          helperText="Código corto y único; admite letras, números, -, _ y /."
+          maxLength={6}
+          helperText="2 a 6 letras, único (ej. FACT). Es la serie de los documentos de este tipo."
           value={codigo}
-          onChange={(e: any) => setCodigo(e.target.value)}
+          onChange={(e: any) => setCodigo(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase())}
           error={errors.codigo ?? (codigo ? validationErrors.codigo : undefined)}
         />
         <Select
@@ -117,7 +119,7 @@ export const TipoDocumentoForm = ({ tipo, onSuccess, onCancel }: Props) => {
           label="Nombre"
           required
           maxLength={80}
-          helperText="Nombre descriptivo que verá el usuario; máximo 80 caracteres."
+          helperText="Solo letras y espacios, sin repetir otro tipo; máximo 80 caracteres."
           value={nombre}
           onChange={(e: any) => setNombre(e.target.value)}
           error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
@@ -125,9 +127,10 @@ export const TipoDocumentoForm = ({ tipo, onSuccess, onCancel }: Props) => {
 
         <Select
           label="Naturaleza"
+          required
           value={naturaleza}
           onChange={(e: any) => setNaturaleza(e.target.value)}
-          placeholder="Seleccionar (opcional)"
+          placeholder="Seleccionar..."
           options={[
             { value: 'CARGO', label: 'Cargo' },
             { value: 'CREDITO', label: 'Crédito' },
