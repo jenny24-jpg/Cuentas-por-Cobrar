@@ -154,16 +154,16 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
           error={errors.fecha ?? (fecha ? validationErrors.fecha : undefined)}
           helperText="Fecha planificada de la ruta."
         />
+        <Select
+          label="Estado"
+          required
+          value={estado}
+          onChange={(e: any) => setEstado(e.target.value)}
+          options={ESTADO_OPTIONS}
+          helperText="Estado del ciclo de la ruta."
+        />
       </div>
 
-      <Select
-        label="Estado"
-        required
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        options={ESTADO_OPTIONS}
-        helperText="Selecciona un estado válido del ciclo de la ruta."
-      />
 
       <TextArea
         label="Observaciones"

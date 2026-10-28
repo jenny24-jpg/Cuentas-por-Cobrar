@@ -478,58 +478,78 @@ export function ReciboForm({
         </p>
       )}
 
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) =>
-          handleClienteChange(e.target.value)
-        }
-        options={clientes.map((x) => ({
-          value: x.id,
-          label: x.label,
-        }))}
-        isReadOnly={isReciboEmitido}
-        helperText="Selecciona el cliente al que pertenece el recibo."
-        error={errorFor('idCliente')}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) =>
+            handleClienteChange(e.target.value)
+          }
+          options={clientes.map((x) => ({
+            value: x.id,
+            label: x.label,
+          }))}
+          isReadOnly={isReciboEmitido}
+          helperText="Selecciona el cliente al que pertenece el recibo."
+          error={errorFor('idCliente')}
+        />
 
-      <Select
-        label="Pago"
-        required
-        value={idPago}
-        onChange={(e: any) =>
-          handlePagoChange(e.target.value)
-        }
-        options={pagos.map((x) => ({
-          value: x.id,
-          label: x.label,
-        }))}
-        isReadOnly={!idCliente || isReciboEmitido}
-        placeholder={
-          idCliente
-            ? 'Seleccionar pago'
-            : 'Selecciona un cliente primero'
-        }
-        helperText="Solo se muestran pagos del cliente seleccionado."
-        error={errorFor('idPago')}
-      />
+        <Select
+          label="Pago"
+          required
+          value={idPago}
+          onChange={(e: any) =>
+            handlePagoChange(e.target.value)
+          }
+          options={pagos.map((x) => ({
+            value: x.id,
+            label: x.label,
+          }))}
+          isReadOnly={!idCliente || isReciboEmitido}
+          placeholder={
+            idCliente
+              ? 'Seleccionar pago'
+              : 'Selecciona un cliente primero'
+          }
+          helperText="Solo se muestran pagos del cliente seleccionado."
+          error={errorFor('idPago')}
+        />
 
-      <TextInput
-        label="Número de recibo"
-        restriction="identifier"
-        uppercase
-        maxLength={30}
-        value={numeroRecibo}
-        onChange={(e: any) =>
-          setNumero(e.target.value)
-        }
-        isReadOnly={isReciboEmitido}
-        helperText="Correlativo del recibo; admite letras, números, -, _ y /."
-        error={errorFor('numeroRecibo', numeroRecibo)}
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <TextInput
+          label="Número de recibo"
+          restriction="identifier"
+          uppercase
+          maxLength={30}
+          value={numeroRecibo}
+          onChange={(e: any) =>
+            setNumero(e.target.value)
+          }
+          isReadOnly={isReciboEmitido}
+          helperText="Correlativo del recibo; admite letras, números, -, _ y /."
+          error={errorFor('numeroRecibo', numeroRecibo)}
+        />
+        <Select
+          label="Estado"
+          required
+          value={estado}
+          onChange={(e: any) =>
+            setEstado(e.target.value as Recibo['estado'])
+          }
+          options={ESTADOS_RECIBO.map((value) => ({
+            value,
+            label:
+              value.charAt(0) +
+              value.slice(1).toLowerCase(),
+          }))}
+          isReadOnly={!isEditing || isReciboEmitido}
+          helperText={
+            isEditing
+              ? 'El estado del recibo está sujeto a las reglas del servidor.'
+              : 'Los recibos nuevos se registran como emitidos.'
+          }
+          error={errorFor('estado', estado)}
+        />
         <TextInput
           label="Fecha"
           type="date"
@@ -575,28 +595,6 @@ export function ReciboForm({
           error={errorFor('monto', monto)}
         />
       </div>
-
-      <Select
-        label="Estado"
-        required
-        value={estado}
-        onChange={(e: any) =>
-          setEstado(e.target.value as Recibo['estado'])
-        }
-        options={ESTADOS_RECIBO.map((value) => ({
-          value,
-          label:
-            value.charAt(0) +
-            value.slice(1).toLowerCase(),
-        }))}
-        isReadOnly={!isEditing || isReciboEmitido}
-        helperText={
-          isEditing
-            ? 'El estado del recibo está sujeto a las reglas del servidor.'
-            : 'Los recibos nuevos se registran como emitidos.'
-        }
-        error={errorFor('estado', estado)}
-      />
 
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">

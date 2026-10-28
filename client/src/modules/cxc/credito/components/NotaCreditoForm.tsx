@@ -384,42 +384,44 @@ export const NotaCreditoForm = ({
         </div>
       )}
 
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) =>
-          handleClienteChange(e.target.value)
-        }
-        options={clientes.map((cliente) => ({
-          value: cliente.id,
-          label: cliente.label,
-        }))}
-        error={errors.idCliente}
-        placeholder="Seleccionar cliente"
-        helperText="Cliente al que pertenece la nota de crédito."
-        isReadOnly={isLocked}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) =>
+            handleClienteChange(e.target.value)
+          }
+          options={clientes.map((cliente) => ({
+            value: cliente.id,
+            label: cliente.label,
+          }))}
+          error={errors.idCliente}
+          placeholder="Seleccionar cliente"
+          helperText="Cliente al que pertenece la nota de crédito."
+          isReadOnly={isLocked}
+        />
 
-      <Select
-        label="Documento de referencia"
-        value={idDocumentoReferencia}
-        onChange={(e: any) =>
-          setIdDocumentoReferencia(e.target.value)
-        }
-        options={documentos.map((documento) => ({
-          value: documento.id,
-          label: documento.label,
-        }))}
-        placeholder={
-          idCliente
-            ? 'Seleccionar documento (opcional)'
-            : 'Selecciona un cliente primero'
-        }
-        isReadOnly={!idCliente || isLocked}
-        error={errors.idDocumentoReferencia}
-        helperText="Opcional; solo se muestran documentos con saldo pendiente del cliente."
-      />
+        <Select
+          label="Documento de referencia"
+          value={idDocumentoReferencia}
+          onChange={(e: any) =>
+            setIdDocumentoReferencia(e.target.value)
+          }
+          options={documentos.map((documento) => ({
+            value: documento.id,
+            label: documento.label,
+          }))}
+          placeholder={
+            idCliente
+              ? 'Seleccionar documento (opcional)'
+              : 'Selecciona un cliente primero'
+          }
+          isReadOnly={!idCliente || isLocked}
+          error={errors.idDocumentoReferencia}
+          helperText="Opcional; solo se muestran documentos con saldo pendiente del cliente."
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput

@@ -393,7 +393,7 @@ export function RutaOperacionPanel({ idRuta, estado }: { idRuta: number; estado:
 
     {tab === 'bitacora' && <div className={card}><h3 className="font-bold">Historial de la ruta</h3>{data?.bitacora.length === 0 && <p className="text-slate-500">Sin actividades registradas.</p>}{data?.bitacora.map((b) => <article key={`${b.TIPO}-${b.ID_BITACORA}`} className={`border-l-4 ${b.ESTADO === 'REVERSADA' ? 'border-amber-400' : 'border-blue-400'} pl-3 space-y-1`}><p className="font-semibold">{b.TIPO} · {b.FECHA}{b.ESTADO ? ` · ${b.ESTADO}` : ''}</p><p className="text-sm">{b.DOCUMENTO} · Cobrador: {b.COBRADOR}{b.MONTO != null ? ` · ${b.MONEDA} ${money(b.MONTO)}` : ''}</p><p className="text-sm">{b.OBSERVACIONES}</p>{b.TIPO === 'COBRO' && <p className="text-xs text-slate-500">Aplicación #{b.ID_BITACORA} · Registró: {b.REGISTRADO_POR || '—'} · Referencia: {b.REFERENCIA || '—'}</p>}</article>)}</div>}
 
-    {modal === 'asignar' && <Modal isOpen onClose={closeModal} title="Asignar documento pendiente" description="Asigna un documento con saldo a esta ruta, con su cobrador y ubicación." size="lg" closeOnBackdrop={false}>
+    {modal === 'asignar' && <Modal isOpen onClose={closeModal} title="Asignar documento pendiente" description="Asigna un documento con saldo a esta ruta, con su cobrador y ubicación." closeOnBackdrop={false}>
       <AsignacionForm data={data} docs={docs} empleados={empleados} onClose={closeModal}
         onSubmit={(payload) => perform(() => apiClient.post(`/cxc/rutas/${idRuta}/asignaciones`, payload).then(() => undefined))} />
     </Modal>}

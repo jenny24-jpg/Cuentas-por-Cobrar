@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/validation';
 import type { Ajuste, DocumentoCatalogoOption } from '@erp/contracts';
 import { SearchableSelect } from '../../../../shared/components/SearchableSelect';
+import { useAuth } from '../../../../shared/auth/AuthContext';
 
 const TIPO_OPTIONS = [
   { value: 'DEBITO', label: 'Débito — aumenta el saldo' },
@@ -27,6 +28,9 @@ interface Props {
 export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
   const isEditing = Boolean(ajuste);
   const isLocked = isEditing && ajuste!.estado !== 'PENDIENTE';
+  const { usuario } = useAuth();
+  // El solicitante es siempre el usuario con sesión; el servidor lo registra automáticamente.
+  const solicitanteNombre = (isEditing ? ajuste?.nombreEmpleado : null) ?? usuario?.nombre ?? '';
   const [clientes, setClientes] = useState<DocumentoCatalogoOption[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoCatalogoOption[]>([]);
 
@@ -224,6 +228,13 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
           helperText="Fecha del ajuste; no puede ser futura."
           error={errorFor('fecha', fecha)}
           isReadOnly={isLocked}
+        />
+        <Select
+          label="Solicitante"
+          value="solicitante"
+          onChange={() => undefined}
+          options={[{ value: 'solicitante', label: solicitanteNombre || 'Usuario con sesión' }]}
+          helperText="Se registra automáticamente con tu usuario."
         />
       </div>
 

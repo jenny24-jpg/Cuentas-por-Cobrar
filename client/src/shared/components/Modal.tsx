@@ -13,7 +13,8 @@ interface ModalProps {
 
 const sizeStyles = {
   sm: 'max-w-md',
-  md: 'max-w-xl',
+  // Tamaño estándar de todos los formularios: mismo ancho y misma altura (se acota al 90% de la pantalla y el contenido se desplaza por dentro).
+  md: 'max-w-2xl h-[640px]',
   lg: 'max-w-3xl',
 };
 
@@ -126,7 +127,7 @@ export const Modal = ({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className="px-6 py-5 overflow-y-auto">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
