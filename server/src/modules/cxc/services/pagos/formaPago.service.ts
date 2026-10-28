@@ -5,9 +5,13 @@ export async function listFormasPago(q:{page?:string;limit?:string;search?:strin
 export async function getFormaPago(id:number):Promise<FormaPago>{const item=await repository.findById(id);if(!item)throw new NotFoundError('FormaPago '+id+' no encontrado');return item;}
 export async function createFormaPago(raw:unknown):Promise<FormaPago>{
   const input=createFormaPagoSchema.parse(raw);
-  // Cada forma estándar existe una sola vez; si estaba inactiva se reactiva en vez de duplicarla.
+  // Cada forma existe una sola vez en CXC_FORMAS_PAGO; si estaba inactiva se reactiva en vez de duplicarla.
   if(await repository.existeNombre(input.nombre))throw new ConflictError(`La forma de pago "${input.nombre}" ya está registrada. Edítala para activarla o inactivarla.`);
   const id=await repository.create(input);return getFormaPago(id);
 }
-export async function updateFormaPago(id:number,raw:unknown):Promise<FormaPago>{const input=updateFormaPagoSchema.parse(raw);await getFormaPago(id);await repository.update(id,input);return getFormaPago(id);}
+export async function updateFormaPago(id:number,raw:unknown):Promise<FormaPago>{
+  const input=updateFormaPagoSchema.parse(raw);await getFormaPago(id);
+  if(input.nombre!==undefined&&await repository.existeNombre(input.nombre,id))throw new ConflictError(`Ya existe otra forma de pago llamada "${input.nombre}".`);
+  await repository.update(id,input);return getFormaPago(id);
+}
 export async function deleteFormaPago(id:number):Promise<void>{await getFormaPago(id);await repository.remove(id);}

@@ -140,6 +140,22 @@ export async function remove(id: number): Promise<void> {
   }
 }
 
+/** Tipos de comercio registrados en la base (valores distintos de CXC_EMPRESAS.GIRO_COMERCIAL). */
+export async function findTiposComercio(): Promise<string[]> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ GIRO: string }>(
+      `SELECT DISTINCT TRIM(GIRO_COMERCIAL) AS GIRO
+         FROM CXC_EMPRESAS
+        WHERE TRIM(GIRO_COMERCIAL) IS NOT NULL
+        ORDER BY GIRO`,
+    );
+    return (result.rows ?? []).map((r) => r.GIRO);
+  } finally {
+    await conn.close();
+  }
+}
+
 /** Catálogo simple para el <Select> de Empresa en el formulario de Sucursales. */
 export async function findAllOptions(): Promise<{ id: number; label: string }[]> {
   const conn = await getConnection();

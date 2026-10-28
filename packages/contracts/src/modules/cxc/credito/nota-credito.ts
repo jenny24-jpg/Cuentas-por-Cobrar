@@ -30,7 +30,8 @@ export const notaCreditoSchema = z.object({
 export type NotaCredito = z.infer<typeof notaCreditoSchema>;
 
 /**
- * Serie y número los asigna el sistema (NC-000001): no forman parte de la entrada.
+ * Serie y número los asigna el sistema (serie = código del tipo de documento CREDITO,
+ * número = correlativo): no forman parte de la entrada.
  * Documento de referencia y descripción son obligatorios: una nota de crédito siempre
  * rebaja un documento concreto y debe explicar por qué.
  */

@@ -404,7 +404,7 @@ export const NotaCreditoForm = ({
 
       <TextInput
         label="Serie y número"
-        value={serie && numero ? `${serie}-${numero}` : 'Se asigna al guardar (NC-000001, NC-000002…)'}
+        value={serie && numero ? `${serie}-${numero}` : 'Se asigna al guardar'}
         isReadOnly
         helperText="Correlativo automático del sistema; no se edita."
       />

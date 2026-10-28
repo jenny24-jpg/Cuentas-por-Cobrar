@@ -1,5 +1,5 @@
 import type { Connection } from 'oracledb';
-import { ConflictError } from '../../../shared/errors/AppError';
+import { BadRequestError, ConflictError } from '../../../shared/errors/AppError';
 
 /**
  * Numeración interna del ERP (no es FEL/SAT). El correlativo sale del ID identity de la
@@ -24,13 +24,24 @@ export async function asignarCorrelativo(conn: Connection, tipo: keyof typeof CO
   );
 }
 
-/** Serie fija de las notas de crédito; el número es el ID con ceros: NC-000006. */
-export const SERIE_NOTA_CREDITO = 'NC';
-
+/**
+ * La serie de las notas de crédito es el código del tipo de documento activo con
+ * naturaleza CREDITO (CXC_TIPOS_DOCUMENTO); el número es el ID con ceros (NC-000006).
+ * Si la base no tiene ese tipo, el equipo DBA debe registrarlo.
+ */
 export async function asignarNumeroNotaCredito(conn: Connection, id: number): Promise<void> {
+  const tipo = await conn.execute<{ CODIGO: string }>(
+    `SELECT TRIM(CODIGO) AS CODIGO FROM CXC_TIPOS_DOCUMENTO
+      WHERE NATURALEZA = 'CREDITO' AND TRIM(ESTADO) = 'A'
+      ORDER BY ID_TIPO_DOCUMENTO FETCH FIRST 1 ROWS ONLY`,
+  );
+  const serie = tipo.rows?.[0]?.CODIGO;
+  if (!serie) {
+    throw new BadRequestError('No hay un tipo de documento activo con naturaleza CREDITO para numerar la nota de crédito. Solicita al equipo DBA que lo registre.');
+  }
   await conn.execute(
     `UPDATE CXC_NOTAS_CREDITO SET SERIE = :serie, NUMERO = LPAD(TO_CHAR(:id), 6, '0') WHERE ID_NOTA_CREDITO = :id`,
-    { serie: SERIE_NOTA_CREDITO, id },
+    { serie, id },
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TextInput, Select } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
@@ -11,9 +11,7 @@ import {
   validateSoloLetras,
   type ValidationErrors,
 } from '../../../../shared/validation';
-import { TIPOS_COMERCIO, type Empresa } from '@erp/contracts';
-
-const OPCIONES_TIPO_COMERCIO = TIPOS_COMERCIO.map((t) => ({ value: t, label: t }));
+import type { Empresa } from '@erp/contracts';
 
 const ESTADOS_EMPRESA = [
   { value: 'A', label: 'Activa' },
@@ -31,14 +29,20 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
   const [nombre, setNombre] = useState(empresa?.nombre ?? '');
   const [nit, setNit] = useState(empresa?.nit ?? '');
   const [direccion, setDireccion] = useState(empresa?.direccion ?? '');
-  // Un giro heredado que no está en el catálogo obliga a elegir uno válido.
-  const [giroComercial, setGiroComercial] = useState(
-    (TIPOS_COMERCIO as readonly string[]).includes(empresa?.giroComercial ?? '') ? empresa!.giroComercial! : '',
-  );
+  const [giroComercial, setGiroComercial] = useState(empresa?.giroComercial?.trim() ?? '');
   const [estado, setEstado] = useState(empresa?.estado ?? 'A');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Tipos de comercio registrados en la base; si no hay, el DBA debe cargarlos.
+  const [tiposComercio, setTiposComercio] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    apiClient.get<string[]>('/cxc/empresas/tipos-comercio')
+      .then(setTiposComercio)
+      .catch(() => { setTiposComercio([]); setFormError('No se pudieron cargar los tipos de comercio.'); });
+  }, []);
+  const sinTiposComercio = tiposComercio !== null && tiposComercio.length === 0;
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
@@ -52,11 +56,12 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
       const nitErr = validateGuatemalaNit(nit, 'El NIT');
       if (nitErr) next.nit = nitErr;
     }
-    if (!giroComercial) next.giroComercial = 'Selecciona el tipo de comercio';
+    if (sinTiposComercio) next.giroComercial = 'No hay tipos de comercio en la base de datos; solicita al equipo DBA que los cargue.';
+    else if (!giroComercial) next.giroComercial = 'Selecciona el tipo de comercio';
     const direccionMax = validateMaxLength(direccion, 'La dirección', 250);
     if (direccionMax) next.direccion = direccionMax;
     return next;
-  }, [nombre, nit, giroComercial, direccion]);
+  }, [nombre, nit, giroComercial, direccion, sinTiposComercio]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -126,9 +131,9 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
           required
           value={giroComercial}
           onChange={(e: any) => setGiroComercial(e.target.value)}
-          options={[{ value: '', label: 'Selecciona...' }, ...OPCIONES_TIPO_COMERCIO]}
-          error={errors.giroComercial}
-          helperText="Giro del negocio: abarrotes, ferretería, librería, etc."
+          options={[{ value: '', label: tiposComercio === null ? 'Cargando...' : 'Selecciona...' }, ...(tiposComercio ?? []).map((t) => ({ value: t, label: t }))]}
+          error={errors.giroComercial ?? (sinTiposComercio ? validationErrors.giroComercial : undefined)}
+          helperText="Tipos registrados en la base de datos; uno nuevo lo agrega el equipo DBA."
         />
         <div className="sm:col-span-2">
           <TextInput
