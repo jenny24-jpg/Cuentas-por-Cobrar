@@ -9,8 +9,9 @@ import { apiClient, ApiError } from '../../shared/api';
 import { useAuth } from '../../shared/auth/AuthContext';
 import { UsuarioForm } from './components/UsuarioForm';
 import { ClaveTemporalModal } from './components/ClaveTemporalModal';
+import { EmpleadosTabla } from './components/EmpleadosTabla';
 
-type Pestana = 'usuarios' | 'bitacora';
+type Pestana = 'usuarios' | 'empleados' | 'bitacora';
 type Accion = { tipo: 'restablecer' | 'sesiones' | 'desbloquear'; usuario: UsuarioAdmin };
 
 const ROL_ESTILO: Record<string, string> = {
@@ -127,6 +128,12 @@ function TablaUsuarios() {
           },
           { header: 'Rol', cell: ({ row }: { row: UsuarioAdmin }) => <Chip className={ROL_ESTILO[row.rol]}>{ROL_LABEL[row.rol]}</Chip> },
           {
+            header: 'Empleado',
+            cell: ({ row }: { row: UsuarioAdmin }) => row.nombreEmpleado
+              ? <span className="text-sm text-slate-700">{row.nombreEmpleado}</span>
+              : <Chip className="bg-amber-50 text-amber-800 ring-amber-200">Sin empleado</Chip>,
+          },
+          {
             header: 'Estado',
             cell: ({ row }: { row: UsuarioAdmin }) => (
               <div className="flex flex-wrap gap-1">
@@ -228,6 +235,7 @@ export const UsuariosPage = () => {
   const [pestana, setPestana] = useState<Pestana>('usuarios');
   const tabs: Array<{ id: Pestana; label: string }> = [
     { id: 'usuarios', label: 'Usuarios' },
+    { id: 'empleados', label: 'Empleados' },
     { id: 'bitacora', label: 'Bitácora de accesos' },
   ];
 
@@ -237,7 +245,7 @@ export const UsuariosPage = () => {
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-700" aria-hidden="true"><ShieldCheck size={22} /></span>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Usuarios y accesos</h1>
-          <p className="text-sm text-slate-500">Crea cuentas, asigna roles, restablece contraseñas y revisa la actividad de seguridad.</p>
+          <p className="text-sm text-slate-500">Crea cuentas, asigna roles y empleados, restablece contraseñas y revisa la actividad de seguridad.</p>
         </div>
       </div>
 
@@ -254,7 +262,7 @@ export const UsuariosPage = () => {
       </div>
 
       <div role="tabpanel" id={`panel-${pestana}`} aria-labelledby={`tab-${pestana}`} className="space-y-4">
-        {pestana === 'usuarios' ? <TablaUsuarios /> : <TablaBitacora />}
+        {pestana === 'usuarios' ? <TablaUsuarios /> : pestana === 'empleados' ? <EmpleadosTabla /> : <TablaBitacora />}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import {
-  buildPaginationMeta, crearUsuarioSchema, editarUsuarioSchema,
-  type BitacoraAcceso, type PaginatedResponse, type UsuarioAdmin, type UsuarioCreado,
+  buildPaginationMeta, crearUsuarioSchema, editarUsuarioSchema, empleadoSchema,
+  type BitacoraAcceso, type EmpleadoAdmin, type EmpleadoVinculable, type PaginatedResponse, type UsuarioAdmin, type UsuarioCreado,
 } from '@erp/contracts';
 import type { ZodError } from 'zod';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/errors/AppError';
@@ -17,6 +17,8 @@ const aUsuario = (r: repo.UsuarioAdminRow): UsuarioAdmin => ({
   email: r.EMAIL,
   rol: r.ROL,
   estado: r.ESTADO,
+  idEmpleado: r.ID_EMPLEADO,
+  nombreEmpleado: r.NOMBRE_EMPLEADO,
   debeCambiarClave: r.DEBE_CAMBIAR_CLAVE === 'S',
   minutosBloqueo: r.MIN_BLOQUEO,
   intentosFallidos: r.INTENTOS_FALLIDOS,
@@ -55,6 +57,21 @@ async function existente(id: number): Promise<repo.UsuarioAdminRow> {
   return u;
 }
 
+/** Un empleado debe existir, estar activo y no estar vinculado a otro usuario: así "quién lo hizo" nunca es ambiguo. */
+async function validarEmpleado(idEmpleado: number | null | undefined, idUsuario: number): Promise<void> {
+  if (!idEmpleado) return;
+  const e = await repo.obtenerEmpleadoParaVinculo(idEmpleado, idUsuario);
+  if (!e) throw campoInvalido('idEmpleado', 'El empleado seleccionado no existe.');
+  if (!e.activo) throw campoInvalido('idEmpleado', 'El empleado seleccionado está inactivo.');
+  if (e.asignadoA) throw campoInvalido('idEmpleado', `Ese empleado ya está vinculado al usuario "${e.asignadoA}". Cada empleado solo puede tener un usuario.`);
+}
+
+export async function empleadosVinculables(): Promise<EmpleadoVinculable[]> {
+  return (await repo.listarEmpleadosVinculables()).map((r) => ({
+    idEmpleado: r.ID_EMPLEADO, nombre: r.NOMBRE_COMPLETO, codigo: r.CODIGO_EMPLEADO, puesto: r.PUESTO, asignadoA: r.ASIGNADO_A,
+  }));
+}
+
 export async function listar(q: { page?: unknown; limit?: unknown; search?: unknown }): Promise<PaginatedResponse<UsuarioAdmin>> {
   const { page, limit, offset } = paginar(q.page, q.limit);
   const { rows, total } = await repo.listarUsuarios({ search: String(q.search ?? '').trim().slice(0, 60), offset, limit });
@@ -66,14 +83,16 @@ export async function crear(body: unknown, actor: AccessClaims, ctx: ClientConte
   if (!parsed.success) throw validacion(parsed.error);
   const { username, nombre, rol } = parsed.data;
   const email = parsed.data.email?.trim() || null;
+  const idEmpleado = parsed.data.idEmpleado ?? null;
 
   if (await authRepo.findUsuarioByUsername(username)) {
     throw campoInvalido('username', `Ya existe un usuario "${username}". Elige otro nombre de usuario.`);
   }
+  await validarEmpleado(idEmpleado, 0);
 
   const claveTemporal = generarClaveTemporal();
-  const id = await authRepo.crearUsuario({ username, nombre, email, rol, passwordHash: await hashPassword(claveTemporal) });
-  auditar(actor, 'USUARIO_CREADO', { id, username }, ctx, `rol ${rol}`);
+  const id = await authRepo.crearUsuario({ username, nombre, email, rol, idEmpleado, passwordHash: await hashPassword(claveTemporal) });
+  auditar(actor, 'USUARIO_CREADO', { id, username }, ctx, `rol ${rol}${idEmpleado ? `, empleado #${idEmpleado}` : ''}`);
   return { usuario: aUsuario(await existente(id)), claveTemporal };
 }
 
@@ -83,6 +102,9 @@ export async function editar(id: number, body: unknown, actor: AccessClaims, ctx
   const actual = await existente(id);
   const { nombre, rol, estado } = parsed.data;
   const email = parsed.data.email?.trim() || null;
+  // Si no viene idEmpleado se conserva el actual; null lo desvincula.
+  const idEmpleado = parsed.data.idEmpleado === undefined ? actual.ID_EMPLEADO : parsed.data.idEmpleado;
+  if (idEmpleado !== actual.ID_EMPLEADO) await validarEmpleado(idEmpleado, id);
 
   const pierdeAdmin = actual.ROL === 'ADMIN' && actual.ESTADO === 'ACTIVO' && (rol !== 'ADMIN' || estado !== 'ACTIVO');
   if (pierdeAdmin) {
@@ -95,7 +117,7 @@ export async function editar(id: number, body: unknown, actor: AccessClaims, ctx
     }
   }
 
-  await repo.actualizarUsuario(id, { nombre, email, rol, estado });
+  await repo.actualizarUsuario(id, { nombre, email, rol, estado, idEmpleado });
 
   // Cambiar el rol o desactivar la cuenta cierra sus sesiones: el cambio rige de inmediato.
   if (rol !== actual.ROL || estado !== actual.ESTADO) {
@@ -104,6 +126,7 @@ export async function editar(id: number, body: unknown, actor: AccessClaims, ctx
   const cambios = [
     rol !== actual.ROL ? `rol ${actual.ROL} a ${rol}` : '',
     estado !== actual.ESTADO ? `estado ${actual.ESTADO} a ${estado}` : '',
+    idEmpleado !== actual.ID_EMPLEADO ? `empleado ${actual.ID_EMPLEADO ?? 'ninguno'} a ${idEmpleado ?? 'ninguno'}` : '',
   ].filter(Boolean).join(', ');
   auditar(actor, 'USUARIO_MODIFICADO', { id, username: actual.USERNAME }, ctx, cambios || 'datos generales');
   return aUsuario(await existente(id));
@@ -149,4 +172,69 @@ export async function bitacora(q: { page?: unknown; limit?: unknown; search?: un
     })),
     meta: buildPaginationMeta(total, page, limit),
   };
+}
+
+// --- Gestión de empleados -----------------------------------------------------------
+
+const aEmpleado = (r: repo.EmpleadoAdminRow): EmpleadoAdmin => ({
+  idEmpleado: r.ID_EMPLEADO, codigo: r.CODIGO_EMPLEADO, nombre: r.NOMBRE, apellido: r.APELLIDO, nombreCompleto: r.NOMBRE_COMPLETO,
+  puesto: r.PUESTO, email: r.EMAIL, telefono: r.TELEFONO, estado: r.ESTADO, usuarioVinculado: r.USUARIO_VINCULADO,
+});
+
+/** Siguiente código libre con el formato CXC-EMP-###. */
+function siguienteCodigo(codigos: string[]): string {
+  const max = codigos.reduce((m, c) => { const n = /^CXC-EMP-(\d+)$/.exec(c); return n ? Math.max(m, Number(n[1])) : m; }, 0);
+  return `CXC-EMP-${String(max + 1).padStart(3, '0')}`;
+}
+
+export async function listarEmpleados(q: { page?: unknown; limit?: unknown; search?: unknown }): Promise<PaginatedResponse<EmpleadoAdmin>> {
+  const { page, limit, offset } = paginar(q.page, q.limit);
+  const { rows, total } = await repo.listarEmpleados({ search: String(q.search ?? '').trim().slice(0, 60), offset, limit });
+  return { data: rows.map(aEmpleado), meta: buildPaginationMeta(total, page, limit) };
+}
+
+async function validarEmpleadoDatos(body: unknown, idActual: number): Promise<repo.EmpleadoDatos> {
+  const parsed = empleadoSchema.safeParse(body);
+  if (!parsed.success) throw validacion(parsed.error);
+  const d = parsed.data;
+  const apellido = d.apellido?.trim() || null;
+
+  // El sistema enlaza usuarios por nombre: dos empleados con el mismo nombre lo volverían ambiguo.
+  if (await repo.existeEmpleadoConNombre(d.nombre, apellido ?? '', idActual)) {
+    throw campoInvalido('nombre', 'Ya existe un empleado con ese nombre completo. Agrega el segundo apellido u otro dato para distinguirlos.');
+  }
+
+  const codigos = await repo.codigosEmpleado();
+  let codigo = d.codigo?.trim() || '';
+  if (codigo) {
+    const actual = idActual ? (await repo.obtenerEmpleado(idActual))?.CODIGO_EMPLEADO : null;
+    if (codigo.toUpperCase() !== (actual ?? '').toUpperCase() && codigos.some((c) => c.toUpperCase() === codigo.toUpperCase())) {
+      throw campoInvalido('codigo', `El código "${codigo}" ya lo tiene otro empleado.`);
+    }
+  } else {
+    codigo = idActual ? ((await repo.obtenerEmpleado(idActual))?.CODIGO_EMPLEADO ?? siguienteCodigo(codigos)) : siguienteCodigo(codigos);
+  }
+
+  return {
+    codigo, nombre: d.nombre, apellido, puesto: d.puesto?.trim() || null,
+    email: d.email?.trim() || null, telefono: d.telefono?.trim() || null, estado: d.estado ?? 'A',
+  };
+}
+
+export async function crearEmpleado(body: unknown): Promise<EmpleadoAdmin> {
+  const datos = await validarEmpleadoDatos(body, 0);
+  const id = await repo.crearEmpleado(datos);
+  return aEmpleado((await repo.obtenerEmpleado(id))!);
+}
+
+export async function editarEmpleado(id: number, body: unknown): Promise<EmpleadoAdmin> {
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('Identificador de empleado no válido.');
+  const actual = await repo.obtenerEmpleado(id);
+  if (!actual) throw new NotFoundError('El empleado no existe.');
+  const datos = await validarEmpleadoDatos(body, id);
+  if (datos.estado === 'I' && actual.ESTADO === 'A' && actual.USUARIO_VINCULADO) {
+    throw campoInvalido('estado', `No se puede inactivar: está vinculado al usuario "${actual.USUARIO_VINCULADO}". Desvincúlalo primero desde Usuarios.`);
+  }
+  await repo.actualizarEmpleado(id, datos);
+  return aEmpleado((await repo.obtenerEmpleado(id))!);
 }

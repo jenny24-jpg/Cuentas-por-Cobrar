@@ -43,7 +43,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', noStore, authRoutes);
 
 // Todo CxC exige sesión válida, clave ya cambiada y rol con permiso para la operación.
-app.use('/api/admin/usuarios', noStore, requireAuth, blockIfPasswordChangeRequired, usuariosRoutes);
+app.use('/api/admin/usuarios', noStore, requireAuth, blockIfPasswordChangeRequired, registrarAcciones, usuariosRoutes);
 app.use('/api/cxc', noStore, requireAuth, blockIfPasswordChangeRequired, enforceReadOnlyRole, blindarActor, registrarAcciones, cxcRoutes);
 
 app.use(errorHandler);

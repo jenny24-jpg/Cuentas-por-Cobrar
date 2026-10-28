@@ -18,6 +18,10 @@ const router = Router();
 router.use(requireRole('ADMIN'));
 
 router.get('/', handle(async (req, res) => { res.json(await service.listar(req.query)); }));
+router.get('/empleados', handle(async (_req, res) => { res.json(await service.empleadosVinculables()); }));
+router.get('/empleados/lista', handle(async (req, res) => { res.json(await service.listarEmpleados(req.query)); }));
+router.post('/empleados', handle(async (req, res) => { res.status(201).json(await service.crearEmpleado(req.body)); }));
+router.patch('/empleados/:id', handle(async (req, res) => { res.json(await service.editarEmpleado(Number(req.params.id), req.body)); }));
 router.get('/bitacora', handle(async (req, res) => { res.json(await service.bitacora(req.query)); }));
 router.post('/', handle(async (req, res) => { res.status(201).json(await service.crear(req.body, req.auth!, ctx(req))); }));
 router.patch('/:id', handle(async (req, res) => { res.json(await service.editar(Number(req.params.id), req.body, req.auth!, ctx(req))); }));

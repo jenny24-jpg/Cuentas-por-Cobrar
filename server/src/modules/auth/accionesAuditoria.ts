@@ -39,13 +39,28 @@ export function blindarActor(req: Request, _res: Response, next: NextFunction) {
 
 let avisoTablaFaltante = false;
 
-/** idRegistro/acción a partir de la URL: /pagos/12/anular → entidad pagos, id 12, acción anular. */
-function describirRuta(path: string): { entidad: string | null; idRegistro: number | null; accion: string | null } {
-  const partes = path.split('?')[0].split('/').filter(Boolean);
-  const entidad = partes[0] ?? null;
+/**
+ * Entidad, registro y acción a partir de la URL completa:
+ *   /api/cxc/pagos/12/anular              → entidad "pagos", id 12, acción "anular"
+ *   /api/admin/usuarios/empleados/3       → entidad "admin/usuarios", id 3, acción "empleados"
+ */
+function describirRuta(url: string): { entidad: string | null; idRegistro: number | null; accion: string | null } {
+  const segmentos = url.split('?')[0].split('/').filter(Boolean);
+  if (segmentos[0] === 'api') segmentos.shift();
+
+  let entidad: string | null;
+  let resto: string[];
+  if (segmentos[0] === 'cxc') {
+    entidad = segmentos[1] ?? null;
+    resto = segmentos.slice(2);
+  } else {
+    entidad = segmentos.length ? segmentos.slice(0, 2).join('/') : null;
+    resto = segmentos.slice(2);
+  }
+
   let idRegistro: number | null = null;
   const acciones: string[] = [];
-  for (const parte of partes.slice(1)) {
+  for (const parte of resto) {
     if (/^\d+$/.test(parte)) idRegistro = Number(parte);
     else acciones.push(parte);
   }
@@ -55,7 +70,7 @@ function describirRuta(path: string): { entidad: string | null; idRegistro: numb
 async function guardar(req: Request, status: number, idCreado: number | null) {
   const auth = req.auth;
   if (!auth) return;
-  const d = describirRuta(req.path);
+  const d = describirRuta(req.originalUrl);
   const conn = await getConnection();
   try {
     await conn.execute(
