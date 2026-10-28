@@ -2,8 +2,10 @@
 // Detalle). Sigue el mismo patrón que ../cobranza: cada área vive en su
 // propia carpeta para evitar conflictos de merge.
 export * from './empresa';
+export * from './cliente';
 export * from './sucursal';
 export * from './ruta';
+export * from './ruta-reglas';
 export * from './ruta-detalle';
 
 export * from './ruta-operacion';

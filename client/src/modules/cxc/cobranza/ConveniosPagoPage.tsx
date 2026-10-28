@@ -63,7 +63,7 @@ export const ConveniosPagoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Convenios de Pago</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Convenios de Pago</h1>
           <p className="text-sm text-slate-500">Planes de pago a cuotas acordados con clientes en mora. Pagar una cuota reduce el saldo real de los documentos que cubre el convenio.</p>
         </div>
         <div className="flex gap-2">
@@ -82,11 +82,11 @@ export const ConveniosPagoPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
-          icon={Search}
+          icon={Search} maxLength={100}
           placeholder="Buscar por cliente o estado..."
           value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }}
-          className="max-w-sm"
+          className="max-w-md"
         />
       </div>
 
@@ -139,7 +139,7 @@ export const ConveniosPagoPage = () => {
         }}
       />
 
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nuevo Convenio de Pago" size="lg">
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nuevo Convenio de Pago">
         <ConvenioPagoForm
           onCancel={() => setIsCreateOpen(false)}
           onSuccess={() => { setIsCreateOpen(false); refetch(); }}

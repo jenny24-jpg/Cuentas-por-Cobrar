@@ -69,38 +69,40 @@ export function FormaPagoForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <TextInput
-        label="Nombre"
-        required
-        restriction="letters"
-        maxLength={80}
-        helperText="Nombre visible de la forma de pago; solo letras y espacios, máximo 80."
-        value={nombre}
-        onChange={(e: any) => setNombre(e.target.value)}
-        error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
-      />
-      <Select
-        label="Requiere referencia"
-        required
-        value={requiereReferencia}
-        onChange={(e: any) => setReq(e.target.value)}
-        options={[
-          { value: 'S', label: 'Sí' },
-          { value: 'N', label: 'No' },
-        ]}
-        helperText="Indica si el número de operación, cheque o transferencia será obligatorio."
-      />
-      <Select
-        label="Estado"
-        required
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        options={[
-          { value: 'A', label: 'Activo' },
-          { value: 'I', label: 'Inactivo' },
-        ]}
-        helperText="Solo las formas activas deben aparecer en formularios operativos."
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <TextInput
+          label="Nombre"
+          required
+          restriction="letters"
+          maxLength={80}
+          helperText="Solo letras y espacios; máximo 80."
+          value={nombre}
+          onChange={(e: any) => setNombre(e.target.value)}
+          error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
+        />
+        <Select
+          label="Requiere referencia"
+          required
+          value={requiereReferencia}
+          onChange={(e: any) => setReq(e.target.value)}
+          options={[
+            { value: 'S', label: 'Sí' },
+            { value: 'N', label: 'No' },
+          ]}
+          helperText="Si el número de operación o cheque será obligatorio."
+        />
+        <Select
+          label="Estado"
+          required
+          value={estado}
+          onChange={(e: any) => setEstado(e.target.value)}
+          options={[
+            { value: 'A', label: 'Activo' },
+            { value: 'I', label: 'Inactivo' },
+          ]}
+          helperText="Solo las activas aparecen en los formularios."
+        />
+      </div>
 
       {formError && <p className="text-sm text-red-600 font-medium">{formError}</p>}
 

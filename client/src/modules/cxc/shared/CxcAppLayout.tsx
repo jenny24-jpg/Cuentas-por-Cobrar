@@ -1,9 +1,11 @@
+import logoCxcClaro from '../../../assets/brand/logo-cxc-light.png';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronRight,
   BarChart3,
+  LineChart,
   Coins,
   CreditCard,
   FileSpreadsheet,
@@ -12,8 +14,10 @@ import {
   HelpCircle,
   Landmark,
   LayoutDashboard,
+  KeyRound,
   LogOut,
   Package,
+  ShieldCheck,
   ReceiptText,
   ShoppingCart,
   UsersRound,
@@ -28,6 +32,8 @@ import {
   TUTORIALS,
   type Tutorial,
 } from '../tutoriales';
+import { useAuth } from '../../../shared/auth/AuthContext';
+import { ROL_LABEL } from '@erp/contracts';
 
 type CxcMenuItem = {
   id: string;
@@ -53,6 +59,18 @@ type CxcMenuGroup = {
  * catálogo independiente.
  */
 const CXC_GROUPS: CxcMenuGroup[] = [
+  {
+    id: 'analisis',
+    label: 'Análisis',
+    icon: LineChart,
+    matchPrefix: '/cxc/analisis',
+    items: [
+      { id: 'cobradores', label: 'Ranking de Cobradores', path: '/cxc/analisis/cobradores' },
+      { id: 'dias-cobro', label: 'Mejores Días de Cobro', path: '/cxc/analisis/dias-cobro' },
+      { id: 'rutas-analisis', label: 'Rutas Recurrentes', path: '/cxc/analisis/rutas' },
+      { id: 'clientes-riesgo', label: 'Clientes Problemáticos', path: '/cxc/analisis/clientes-riesgo' },
+    ],
+  },
   {
     id: 'facturacion',
     label: 'Facturación',
@@ -130,6 +148,7 @@ const CXC_GROUPS: CxcMenuGroup[] = [
     matchPrefix: '/cxc/organizacion',
     items: [
       { id: 'empresas', label: 'Empresas', path: '/cxc/organizacion/empresas' },
+      { id: 'clientes', label: 'Clientes', path: '/cxc/organizacion/clientes' },
       { id: 'sucursales', label: 'Sucursales', path: '/cxc/organizacion/sucursales' },
       { id: 'rutas', label: 'Rutas', path: '/cxc/organizacion/rutas' },
     ],
@@ -138,15 +157,19 @@ const CXC_GROUPS: CxcMenuGroup[] = [
 
 const CXC_DASHBOARD_PATH = '/cxc/dashboard';
 const CXC_TUTORIALS_PATH = '/cxc/tutoriales';
+const ADMIN_USUARIOS_PATH = '/admin/usuarios';
 
+// `enConstruccion`: módulos sin desarrollar; su ruta muestra la pantalla "Módulo en construcción".
 const MAIN_MODULES = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'compras', label: 'Compras', icon: ShoppingCart },
-  { id: 'inventario', label: 'Inventario', icon: Package },
-  { id: 'cuentas_pagar', label: 'Cuentas por Pagar', icon: FileSpreadsheet },
-  { id: 'cuentas_cobrar', label: 'Cuentas por Cobrar', icon: Coins },
-  { id: 'bancos', label: 'Bancos', icon: Landmark },
+  { id: 'compras', label: 'Compras', icon: ShoppingCart, path: '/compras', enConstruccion: true },
+  { id: 'inventario', label: 'Inventario', icon: Package, path: '/inventario', enConstruccion: true },
+  { id: 'cuentas_pagar', label: 'Cuentas por Pagar', icon: FileSpreadsheet, path: '/cuentas-por-pagar', enConstruccion: true },
+  { id: 'cuentas_cobrar', label: 'Cuentas por Cobrar', icon: Coins, path: CXC_DASHBOARD_PATH, enConstruccion: false },
+  { id: 'bancos', label: 'Bancos', icon: Landmark, path: '/bancos', enConstruccion: true },
 ] as const;
+
+const moduloEnConstruccionActivo = (pathname: string) =>
+  MAIN_MODULES.find((m) => m.enConstruccion && pathname.startsWith(m.path));
 
 interface CxcAppLayoutProps {
   children: ReactNode;
@@ -155,16 +178,20 @@ interface CxcAppLayoutProps {
 export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { usuario, logout } = useAuth();
+  const iniciales = (usuario?.nombre ?? 'U').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || 'U';
 
   const isDashboardActive = location.pathname === CXC_DASHBOARD_PATH;
   const isTutorialsActive = location.pathname === CXC_TUTORIALS_PATH;
+  const isAdminActive = location.pathname.startsWith('/admin');
+  const moduloObra = moduloEnConstruccionActivo(location.pathname);
 
   const activeGroup = useMemo(
     () =>
-      isDashboardActive || isTutorialsActive
+      isDashboardActive || isTutorialsActive || isAdminActive || moduloObra
         ? undefined
         : CXC_GROUPS.find((group) => location.pathname.startsWith(group.matchPrefix)) ?? CXC_GROUPS[0],
-    [location.pathname, isDashboardActive, isTutorialsActive],
+    [location.pathname, isDashboardActive, isTutorialsActive, isAdminActive, moduloObra],
   );
 
   const pageTutorial = useMemo(() => getTutorialForPath(location.pathname), [location.pathname]);
@@ -225,11 +252,8 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
         className="w-72 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800 select-none"
         aria-label="Navegación principal del ERP"
       >
-        <div className="h-16 px-5 flex items-center gap-3 border-b border-slate-800/80">
-          <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-md shadow-blue-600/30 text-lg" aria-hidden="true">
-            E
-          </div>
-          <span className="font-bold text-white text-lg tracking-tight">System</span>
+        <div className="h-20 px-5 flex items-center border-b border-slate-800/80">
+          <img src={logoCxcClaro} alt="Cuentas por Cobrar CxC · ERP System" width={480} height={194} draggable={false} className="block h-14 w-auto select-none" />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Módulos del sistema">
@@ -238,16 +262,23 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
             const isCxc = item.id === 'cuentas_cobrar';
 
             if (!isCxc) {
+              const activo = moduloObra?.id === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => navigate('/')}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 group"
-                  aria-label={`Ir a ${item.label}`}
+                  onClick={() => navigate(item.path)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all duration-150 group ${activo ? 'bg-slate-800 text-white shadow-sm border border-slate-700/50' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'}`}
+                  aria-label={item.enConstruccion ? `Ir a ${item.label} (en construcción)` : `Ir a ${item.label}`}
+                  aria-current={activo ? 'page' : undefined}
                 >
-                  <Icon size={18} className="text-slate-400 group-hover:text-slate-200" aria-hidden="true" />
+                  <Icon size={18} className={activo ? 'text-amber-300' : 'text-slate-400 group-hover:text-slate-200'} aria-hidden="true" />
                   <span className="truncate flex-1 text-left">{item.label}</span>
+                  {item.enConstruccion && (
+                    <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300" aria-hidden="true">
+                      Pronto
+                    </span>
+                  )}
                 </button>
               );
             }
@@ -350,18 +381,42 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
               </div>
             );
           })}
+
+          {usuario?.rol === 'ADMIN' && (
+            <div className="pt-3 mt-3 border-t border-slate-800/80">
+              <p className="px-3.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Administración</p>
+              <button
+                type="button"
+                onClick={() => navigate(ADMIN_USUARIOS_PATH)}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  isAdminActive ? 'bg-slate-800 text-white border border-slate-700/50' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                }`}
+                aria-current={isAdminActive ? 'page' : undefined}
+              >
+                <ShieldCheck size={18} className={isAdminActive ? 'text-violet-400' : 'text-slate-400'} aria-hidden="true" />
+                <span className="truncate flex-1 text-left">Usuarios y accesos</span>
+              </button>
+            </div>
+          )}
         </nav>
 
         <div className="mt-auto p-4 border-t border-slate-800 bg-slate-900/90">
           <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/50">
-            <div className="w-9 h-9 rounded-full bg-slate-700 text-slate-200 font-semibold flex items-center justify-center text-xs border border-slate-600 shrink-0" aria-hidden="true">
-              ER
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold flex items-center justify-center text-xs shrink-0" aria-hidden="true">
+              {iniciales}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate leading-tight">Eduardo Ruiz</p>
-              <p className="text-[11px] text-slate-400 truncate leading-tight mt-0.5">Director de Compras</p>
+              <p className="text-xs font-semibold text-white truncate leading-tight">{usuario?.nombre ?? 'Usuario'}</p>
+              <p className="text-[11px] text-slate-400 truncate leading-tight mt-0.5">{usuario ? ROL_LABEL[usuario.rol] : ''}</p>
             </div>
-            <LogOut size={16} className="text-slate-500" aria-hidden="true" />
+            <button type="button" onClick={() => navigate('/cambiar-clave')} title="Cambiar contraseña" aria-label="Cambiar contraseña"
+              className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              <KeyRound size={16} aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => logout()} title="Cerrar sesión" aria-label="Cerrar sesión"
+              className="p-1.5 rounded-md text-slate-400 hover:text-red-300 hover:bg-slate-700/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              <LogOut size={16} aria-hidden="true" />
+            </button>
           </div>
         </div>
       </aside>
@@ -369,9 +424,9 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 shrink-0 bg-white border-b border-slate-200 px-6 flex items-center justify-between gap-4" aria-label="Contexto de navegación">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">Cuentas por Cobrar</p>
-            <h2 className="text-sm font-semibold text-slate-800 truncate">
-              {isDashboardActive ? 'Dashboard' : isTutorialsActive ? 'Tutoriales' : activeGroup?.label}
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">{isAdminActive ? 'Sistema' : moduloObra ? 'Módulo en construcción' : 'Cuentas por Cobrar'}</p>
+            <h2 className="text-slate-800 truncate text-sm font-bold">
+              {isAdminActive ? 'Administración' : moduloObra ? moduloObra.label : isDashboardActive ? 'Dashboard' : isTutorialsActive ? 'Tutoriales' : activeGroup?.label}
             </h2>
           </div>
           {pageTutorial && (

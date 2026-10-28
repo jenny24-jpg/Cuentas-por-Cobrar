@@ -28,7 +28,8 @@ const sanitizeRestrictedValue = (
       break;
     case 'integer': {
       const sign = allowNegative && value.trimStart().startsWith('-') ? '-' : '';
-      value = sign + value.replace(/\D/g, '');
+      // Sin ceros a la izquierda: "007" -> "7"; un "0" solo se conserva para que la validación lo marque.
+      value = sign + value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
       break;
     }
     case 'decimal': {
@@ -36,7 +37,8 @@ const sanitizeRestrictedValue = (
       const sign = allowNegative && normalized.trimStart().startsWith('-') ? '-' : '';
       const clean = normalized.replace(/[^0-9.]/g, '');
       const firstDot = clean.indexOf('.');
-      const whole = firstDot >= 0 ? clean.slice(0, firstDot) : clean;
+      // Sin ceros a la izquierda en la parte entera: "00.5" -> "0.5", "012" -> "12".
+      const whole = (firstDot >= 0 ? clean.slice(0, firstDot) : clean).replace(/^0+(?=\d)/, '');
       let decimals = firstDot >= 0 ? clean.slice(firstDot + 1).replace(/\./g, '') : '';
       if (decimalPlaces !== undefined) decimals = decimals.slice(0, decimalPlaces);
       value = sign + whole + (firstDot >= 0 ? `.${decimals}` : '');
@@ -51,6 +53,12 @@ const sanitizeRestrictedValue = (
     case 'nit':
       value = value.toUpperCase().replace(/[^0-9KCF-]/g, '');
       break;
+    case 'phone': {
+      // Dígitos, espacios, guiones y paréntesis; el "+" solo al inicio.
+      const plus = value.trimStart().startsWith('+') ? '+' : '';
+      value = plus + value.replace(/[^\d\s()-]/g, '');
+      break;
+    }
     default:
       break;
   }
@@ -68,7 +76,8 @@ const defaultHint = ({ label, type, restriction, required, maxLength, decimalPla
     return `Solo números${decimalPlaces ? `, máximo ${decimalPlaces} decimales` : ''}${required ? '; campo obligatorio' : ''}.`;
   }
   if (restriction === 'identifier') return 'Letras y números; admite -, _ y /.';
-  if (restriction === 'nit') return 'Formato NIT, por ejemplo 1234567-8.';
+  if (restriction === 'nit') return 'Formato NIT, por ejemplo 1234567-9.';
+  if (restriction === 'phone') return 'Solo números, espacios, guiones y paréntesis; entre 7 y 15 dígitos.';
   if (restriction === 'alphanumeric') return `Admite letras y números para ${name}.`;
   if (type === 'date') return `Selecciona una fecha válida entre ${DEFAULT_DATE_MIN} y ${DEFAULT_DATE_MAX}${required ? '; campo obligatorio' : ''}.`;
   if (type === 'time') return `Selecciona una hora válida${required ? '; campo obligatorio' : ''}.`;
@@ -244,7 +253,7 @@ export const TextInput = ({
   return (
     <div className={`w-full flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label htmlFor={inputId} className="text-xs font-semibold text-slate-700 flex items-center">
+        <label htmlFor={inputId} className="form-label text-sm font-bold text-slate-700 flex items-center">
           {label}
           {required && <span className="text-red-500 ml-0.5" title="Campo requerido" aria-hidden="true">*</span>}
         </label>
@@ -331,7 +340,7 @@ export const Select = ({
   return (
     <div className={`w-full flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label htmlFor={selectId} className="text-xs font-semibold text-slate-700 flex items-center">
+        <label htmlFor={selectId} className="form-label text-sm font-bold text-slate-700 flex items-center">
           {label}
           {required && <span className="text-red-500 ml-0.5" title="Campo requerido" aria-hidden="true">*</span>}
         </label>
@@ -418,7 +427,7 @@ export const TextArea = ({
   return (
     <div className={`w-full flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label htmlFor={areaId} className="text-xs font-semibold text-slate-700 flex items-center">
+        <label htmlFor={areaId} className="form-label text-sm font-bold text-slate-700 flex items-center">
           {label}
           {required && <span className="text-red-500 ml-0.5" title="Campo requerido" aria-hidden="true">*</span>}
         </label>

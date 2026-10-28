@@ -1,3 +1,4 @@
+import { esNitValido, esSoloCeros, NIT_EJEMPLO } from '@erp/contracts';
 // Validaciones reutilizables para todos los formularios CxC.
 // Mantener estas reglas centralizadas evita que cada CRUD interprete de
 // manera distinta conceptos como "fecha válida", "monto" o "campo requerido".
@@ -234,6 +235,29 @@ export function validateSoloLetras(
   return undefined;
 }
 
+
+/** Valida comentarios/textos que, por requisito, solo admiten letras y espacios. */
+export function validateTextOnly(
+  value: string | undefined | null,
+  fieldLabel: string,
+  opts: { required?: boolean; minLength?: number; maxLength?: number } = {},
+): string | undefined {
+  if (isBlank(value)) {
+    return opts.required ? `${fieldLabel} es obligatorio.` : undefined;
+  }
+  const normalized = (value as string).trim();
+  if (!/^[\p{L}\s]+$/u.test(normalized)) {
+    return `${fieldLabel} solo admite letras y espacios, sin números ni caracteres especiales.`;
+  }
+  if (opts.minLength !== undefined && normalized.length < opts.minLength) {
+    return `${fieldLabel} debe contener al menos ${opts.minLength} caracteres.`;
+  }
+  if (opts.maxLength !== undefined && normalized.length > opts.maxLength) {
+    return `${fieldLabel} no puede superar los ${opts.maxLength} caracteres.`;
+  }
+  return undefined;
+}
+
 export function validateAlphanumericCode(
   value: string | undefined | null,
   fieldLabel: string,
@@ -255,6 +279,7 @@ export function validateIdentifier(
   if (!/^[A-Za-z0-9][A-Za-z0-9\-_/]*$/.test(normalized)) {
     return `${fieldLabel} solo admite letras, números, guion, guion bajo o diagonal.`;
   }
+  if (esSoloCeros(normalized)) return `${fieldLabel} no puede estar formado solo por ceros.`;
   return undefined;
 }
 
@@ -265,8 +290,11 @@ export function validateGuatemalaNit(
   if (isBlank(value)) return undefined;
   const normalized = (value as string).trim().toUpperCase().replace(/\s+/g, '');
   if (normalized === 'CF') return undefined;
-  if (!/^\d{4,12}-?[0-9K]$/.test(normalized)) {
-    return `${fieldLabel} debe tener un formato válido, por ejemplo 1234567-8.`;
+  if (!/^\d{2,12}-?[0-9K]$/.test(normalized)) {
+    return `${fieldLabel} debe tener un formato válido, por ejemplo ${NIT_EJEMPLO}, o CF.`;
+  }
+  if (!esNitValido(normalized)) {
+    return `${fieldLabel} no es válido: revisa el número y su dígito verificador.`;
   }
   return undefined;
 }
@@ -274,13 +302,14 @@ export function validateGuatemalaNit(
 export function validatePercentage(
   value: string,
   fieldLabel: string,
-  opts: { required?: boolean; decimalPlaces?: number } = {},
+  opts: { required?: boolean; decimalPlaces?: number; positive?: boolean } = {},
 ): string | undefined {
   if (opts.required) {
     const requiredError = validateRequired(value, fieldLabel);
     if (requiredError) return requiredError;
   }
   return validateNumber(value, fieldLabel, {
+    positive: opts.positive,
     min: 0,
     max: 100,
     decimalPlaces: opts.decimalPlaces ?? 4,

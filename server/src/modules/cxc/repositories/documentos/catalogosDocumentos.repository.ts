@@ -24,6 +24,7 @@ export async function listClientes(search?: string): Promise<DocumentoCatalogoOp
       id: r.ID_CLIENTE,
       label: r.NIT ? `${r.NOMBRE} — NIT ${r.NIT}` : r.NOMBRE,
       nit: r.NIT,
+      nombre: r.NOMBRE,
     }));
   } finally {
     await conn.close();

@@ -4,8 +4,8 @@ import { FormActionButtons } from '../../../../shared/components/FormActionButto
 import { apiClient, ApiError } from '../../../../shared/api';
 import {
   BUSINESS_DATE_MAX,
-  BUSINESS_DATE_MIN,
   hasErrors,
+  todayIso,
   sanitizeSoloLetras,
   validateIdentifier,
   validateMaxLength,
@@ -13,12 +13,15 @@ import {
   validateRequiredDate,
   validateRequiredSelect,
   validateSoloLetras,
+  validateTextOnly,
   type ValidationErrors,
 } from '../../../../shared/validation';
-import type { CatalogoOption, Ruta } from '@erp/contracts';
+import { TriangleAlert } from 'lucide-react';
+import { REGLAS_RUTA, TRANSICIONES_RUTA, JORNADA_COBRADOR, esDiaDeVisita, mensajeDiaDescanso, type CatalogoOption, type PaginatedResponse, type Ruta } from '@erp/contracts';
 
-const ESTADOS_RUTA = ['PLANIFICADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA'] as const;
-const ESTADO_OPTIONS = ESTADOS_RUTA.map((e) => ({ value: e, label: e.replace('_', ' ') }));
+const ETIQUETA_ESTADO: Record<string, string> = {
+  PLANIFICADA: 'Planificada', EN_PROCESO: 'En proceso', COMPLETADA: 'Completada', CANCELADA: 'Cancelada',
+};
 
 interface RutaFormProps {
   ruta?: Ruta | null;
@@ -32,7 +35,10 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
   const [codigoRuta, setCodigoRuta] = useState(ruta?.codigoRuta ?? '');
   const [nombre, setNombre] = useState(ruta?.nombre ?? '');
   const [idEmpleado, setIdEmpleado] = useState(ruta?.idEmpleado?.toString() ?? '');
-  const [fecha, setFecha] = useState(ruta?.fecha?.slice(0, 10) ?? '');
+  const fechaOriginal = ruta?.fecha?.slice(0, 10) ?? '';
+  const [fecha, setFecha] = useState(fechaOriginal);
+  const [radioKm, setRadioKm] = useState(String(ruta?.radioKm ?? REGLAS_RUTA.radioKmDefecto));
+  const [otrasRutas, setOtrasRutas] = useState<Ruta[]>([]);
   const [estado, setEstado] = useState(ruta?.estado ?? 'PLANIFICADA');
   const [observaciones, setObservaciones] = useState(ruta?.observaciones ?? '');
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -42,6 +48,22 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
   useEffect(() => {
     apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados').then(setEmpleados).catch(() => setEmpleados([]));
   }, []);
+
+  // Aviso (no bloquea): el cobrador ya tiene otra ruta ese mismo día.
+  useEffect(() => {
+    setOtrasRutas([]);
+    if (!idEmpleado || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+    const controller = new AbortController();
+    const q = new URLSearchParams({ idEmpleado, fecha, limit: '20', ...(ruta ? { excluirId: String(ruta.idRuta) } : {}) });
+    apiClient.get<PaginatedResponse<Ruta>>(`/cxc/rutas?${q}`, { signal: controller.signal })
+      .then((r) => setOtrasRutas(r.data.filter((x) => x.estado !== 'CANCELADA')))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [idEmpleado, fecha, ruta]);
+
+  // Estados a los que puede pasar la ruta desde el actual (una ruta nueva siempre es Planificada).
+  const estadoOptions = (isEditing ? TRANSICIONES_RUTA[ruta!.estado] ?? [ruta!.estado] : ['PLANIFICADA'])
+    .map((e) => ({ value: e, label: ETIQUETA_ESTADO[e] ?? e }));
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
@@ -57,16 +79,21 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
     if (nameLetras) next.nombre = nameLetras;
     const empErr = validateRequiredSelect(idEmpleado, 'un empleado responsable');
     if (empErr) next.idEmpleado = empErr;
-    if (fecha) {
-      const dateErr = validateRequiredDate(fecha, 'La fecha', {
-        minDate: BUSINESS_DATE_MIN,
-        maxDate: BUSINESS_DATE_MAX,
-      });
-      if (dateErr) next.fecha = dateErr;
+    const dateErr = validateRequiredDate(fecha, 'La fecha planificada', { maxDate: BUSINESS_DATE_MAX });
+    if (dateErr) next.fecha = dateErr;
+    // Solo se valida contra hoy si la fecha es nueva o cambió: una ruta en curso conserva la suya.
+    else if (fecha !== fechaOriginal) {
+      if (fecha < todayIso()) next.fecha = 'La fecha planificada no puede ser anterior a hoy.';
+      else if (!esDiaDeVisita(fecha)) next.fecha = mensajeDiaDescanso(fecha);
     }
-    if (observaciones.length > 500) next.observaciones = 'Las observaciones no pueden superar 500 caracteres.';
+    const radio = Number(radioKm);
+    if (!radioKm || !Number.isFinite(radio) || radio < REGLAS_RUTA.radioKmMinimo || radio > REGLAS_RUTA.radioKmMaximo) {
+      next.radioKm = `El radio debe estar entre ${REGLAS_RUTA.radioKmMinimo} y ${REGLAS_RUTA.radioKmMaximo} km.`;
+    }
+    const observacionesErr = validateTextOnly(observaciones, 'Las observaciones', { required: true, minLength: 1, maxLength: 500 });
+    if (observacionesErr) next.observaciones = observacionesErr;
     return next;
-  }, [codigoRuta, nombre, idEmpleado, fecha, observaciones]);
+  }, [codigoRuta, nombre, idEmpleado, fecha, fechaOriginal, radioKm, observaciones]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -85,7 +112,8 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
       nombre: nombre.trim(),
       idEmpleado: Number(idEmpleado),
       fecha: fecha || undefined,
-      estado,
+      ...(isEditing && estado === ruta!.estado ? {} : { estado }),
+      radioKm: Number(radioKm),
       observaciones: observaciones.trim() || undefined,
     };
 
@@ -145,30 +173,58 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
           error={errors.idEmpleado}
         />
         <TextInput
-          label="Fecha"
+          label="Fecha planificada"
           type="date"
-          min={BUSINESS_DATE_MIN}
+          required
+          min={fecha && fecha === fechaOriginal && fechaOriginal < todayIso() ? fechaOriginal : todayIso()}
           max={BUSINESS_DATE_MAX}
           value={fecha}
           onChange={(e: any) => setFecha(e.target.value)}
           error={errors.fecha ?? (fecha ? validationErrors.fecha : undefined)}
-          helperText="Fecha planificada de la ruta."
+          helperText={`De hoy en adelante, en la jornada del cobrador: ${JORNADA_COBRADOR}. Sábado y domingo son de descanso.`}
         />
       </div>
 
-      <Select
-        label="Estado"
-        required
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        options={ESTADO_OPTIONS}
-        helperText="Selecciona un estado válido del ciclo de la ruta."
-      />
+      {otrasRutas.length > 0 && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <TriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>Este cobrador ya tiene {otrasRutas.length === 1 ? 'otra ruta' : `${otrasRutas.length} rutas`} ese día: {otrasRutas.map((r) => r.codigoRuta ?? r.nombre).join(', ')}. Verifica que pueda cubrirlas.</span>
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Estado"
+          required
+          value={estado}
+          onChange={(e: any) => setEstado(e.target.value)}
+          options={estadoOptions}
+          isReadOnly={!isEditing}
+          helperText={isEditing
+            ? 'Completada exige que ninguna parada quede pendiente. La primera visita o cobro la pone En proceso.'
+            : 'Toda ruta nueva inicia Planificada.'}
+        />
+        <TextInput
+          label="Área de la ruta (km)"
+          type="number"
+          restriction="decimal"
+          decimalPlaces={1}
+          step="0.5"
+          min={String(REGLAS_RUTA.radioKmMinimo)}
+          max={String(REGLAS_RUTA.radioKmMaximo)}
+          required
+          value={radioKm}
+          onChange={(e: any) => setRadioKm(e.target.value)}
+          error={errors.radioKm ?? validationErrors.radioKm}
+          helperText={`Distancia máxima de cada parada a la primera. Recomendado ${REGLAS_RUTA.radioKmDefecto} km en ciudad.`}
+        />
+      </div>
 
       <TextArea
         label="Observaciones"
+        required
         maxLength={500}
-        helperText="Indicaciones generales de la ruta; máximo 500 caracteres."
+        helperText="Obligatorias: solo letras y espacios; máximo 500 caracteres."
         value={observaciones}
         onChange={(e: any) => setObservaciones(e.target.value)}
         rows={3}

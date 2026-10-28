@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import { validateRequiredSelect, validateMoney, validateIdentifier, hasErrors, type ValidationErrors } from '../../../shared/validation';
-import type { ConvenioPago, ConvenioCuota, ConvenioDocumento, FormaPagoOption, CatalogoOption } from '@erp/contracts';
+import type { ConvenioPago, ConvenioCuota, ConvenioDocumento, FormaPagoOption } from '@erp/contracts';
 
 export const ConvenioDetallePage = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,7 +17,6 @@ export const ConvenioDetallePage = () => {
   const [cuotas, setCuotas] = useState<ConvenioCuota[]>([]);
   const [documentos, setDocumentos] = useState<ConvenioDocumento[]>([]);
   const [formasPago, setFormasPago] = useState<FormaPagoOption[]>([]);
-  const [empleados, setEmpleados] = useState<CatalogoOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +24,6 @@ export const ConvenioDetallePage = () => {
   const [montoPagado, setMontoPagado] = useState('');
   const [idFormaPago, setIdFormaPago] = useState('');
   const [referenciaPago, setReferenciaPago] = useState('');
-  const [idEmpleado, setIdEmpleado] = useState('');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isPaying, setIsPaying] = useState(false);
   const [confirmPagoOpen, setConfirmPagoOpen] = useState(false);
@@ -55,7 +53,6 @@ export const ConvenioDetallePage = () => {
 
   useEffect(() => {
     apiClient.get<FormaPagoOption[]>('/cxc/catalogos/formas-pago').then(setFormasPago).catch(() => setFormasPago([]));
-    apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados').then(setEmpleados).catch(() => setEmpleados([]));
   }, []);
 
   const formaPagoSeleccionada = formasPago.find((f) => f.id === Number(idFormaPago));
@@ -65,7 +62,6 @@ export const ConvenioDetallePage = () => {
     setMontoPagado(String(cuota.saldo));
     setIdFormaPago('');
     setReferenciaPago('');
-    setIdEmpleado('');
     setErrors({});
     setPayError(null);
   };
@@ -87,8 +83,6 @@ export const ConvenioDetallePage = () => {
     const formaPagoErr = validateRequiredSelect(idFormaPago, 'una forma de pago');
     if (formaPagoErr) next.idFormaPago = formaPagoErr;
 
-    const empleadoErr = validateRequiredSelect(idEmpleado, 'el empleado que registra el pago');
-    if (empleadoErr) next.idEmpleado = empleadoErr;
 
     // La referencia es obligatoria SOLO si la forma de pago elegida lo exige
     // (cheque, transferencia, depósito...) — efectivo, por ejemplo, no.
@@ -106,7 +100,6 @@ export const ConvenioDetallePage = () => {
     montoPagado,
     idFormaPago,
     referenciaPago,
-    idEmpleado,
     cuotaAPagar,
     formaPagoSeleccionada,
   ]);
@@ -130,7 +123,6 @@ export const ConvenioDetallePage = () => {
         montoPagado: Number(montoPagado),
         idFormaPago: Number(idFormaPago),
         referenciaPago: referenciaPago || undefined,
-        idEmpleado: Number(idEmpleado),
       });
       setCuotaAPagar(null);
       cargar();
@@ -161,7 +153,7 @@ export const ConvenioDetallePage = () => {
       <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{convenio.nombreCliente}</h1>
+            <h1 className="text-slate-900 text-sm font-bold">{convenio.nombreCliente}</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               Convenio del {formatDateGT(convenio.fechaConvenio)} · {convenio.numeroCuotas} cuotas
             </p>
@@ -232,7 +224,7 @@ export const ConvenioDetallePage = () => {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Documentos que cubre el convenio</h2>
+          <h2 className="text-slate-900 text-sm font-bold">Documentos que cubre el convenio</h2>
           <p className="text-sm text-slate-500">Al pagar una cuota, el monto se distribuye entre estos documentos (el más antiguo primero) y les reduce el saldo real.</p>
         </div>
         <DataTable
@@ -277,16 +269,6 @@ export const ConvenioDetallePage = () => {
             options={formasPago.map((f) => ({ value: f.id, label: f.label }))}
             error={errors.idFormaPago}
             helperText="Cómo se recibió el pago de esta cuota."
-          />
-
-          <Select
-            label="Empleado"
-            required
-            value={idEmpleado}
-            onChange={(e: any) => setIdEmpleado(e.target.value)}
-            options={empleados.map((e) => ({ value: e.id, label: e.label }))}
-            error={errors.idEmpleado}
-            helperText="Empleado responsable de registrar el pago."
           />
 
           {formaPagoSeleccionada && (

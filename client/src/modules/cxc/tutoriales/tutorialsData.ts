@@ -40,12 +40,12 @@ export const TUTORIALS: Tutorial[] = [
   {
     id: 'dashboard',
     title: 'Dashboard de Cuentas por Cobrar',
-    summary: 'Lee el resumen en vivo de cobranza, crédito, documentos y pagos.',
+    summary: 'Lee los indicadores de cobranza, aplica filtros y entra al detalle de cada dato.',
     group: 'dashboard',
     path: '/cxc/dashboard',
     steps: [
       { title: 'Bienvenido al Dashboard', body: 'Es la vista de entrada del módulo: un resumen en vivo del estado de la cartera. No se edita nada aquí, sirve para decidir a dónde ir.', target: 'header' },
-      { title: 'Indicadores y gráficas', body: 'Las tarjetas de arriba resumen saldos, vencimientos y cobranza. Si un indicador de mora o vencido crece, entra a Reportes → Antigüedad de Saldos para ver qué clientes lo causan.' },
+      { title: 'Indicadores y gráficas', body: 'Las tarjetas de arriba comparan el período con el anterior. Usa la barra de filtros (período, cobrador y ruta) y haz clic en cualquier fila o gráfico para abrir su detalle. En «Qué atender» están las alertas del día.' },
       { title: 'Siguiente paso', body: 'Desde el menú lateral entras a cada grupo (Documentos, Pagos, Crédito, Cobranza…). En cada pantalla encontrarás un botón «Tutorial» para repetir esta guía.' },
     ],
   },
@@ -339,7 +339,7 @@ export const TUTORIALS: Tutorial[] = [
     path: '/cxc/organizacion/empresas',
     steps: [
       { title: 'Catálogo de empresas', body: 'Las empresas son el nivel más alto de la organización. Las sucursales cuelgan de ellas.', target: 'header' },
-      { title: 'Nueva empresa', body: 'Registra nombre (razón social) y NIT (formato 1234567-8, o CF). Créala antes de sus sucursales.', target: 'action' },
+      { title: 'Nueva empresa', body: 'Registra nombre (razón social) y NIT (formato 1234567-9, con dígito verificador válido, o CF). Créala antes de sus sucursales.', target: 'action' },
       buscar('empresas por nombre o NIT'),
       tabla('Revisa el estado de cada empresa; las inactivas no deben usarse en otros catálogos.'),
       acciones('Edita con el lápiz. Evita eliminar una empresa que ya tiene sucursales o movimientos.'),

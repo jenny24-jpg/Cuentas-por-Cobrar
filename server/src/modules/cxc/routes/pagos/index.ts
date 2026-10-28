@@ -8,7 +8,9 @@ import * as forma from '../../controllers/pagos/formaPago.controller';
 import * as formaRepo from '../../repositories/pagos/formaPago.repository';
 import * as pagoRepo from '../../repositories/pagos/pago.repository';
 import * as catalogosRepository from '../../repositories/catalogos.repository';
-const router=Router();
+import { validarIdsDeRuta } from '../../../../shared/idParams';
+import { BadRequestError } from '../../../../shared/errors/AppError';
+const router = validarIdsDeRuta(Router());
 for (const [path,c] of [['/pagos',pago],['/aplicaciones-pago',aplicacion],['/anticipos',anticipo],['/aplicaciones-anticipo',aplicacionAnticipo],['/recibos',recibo],['/formas-pago',forma]] as const){router.get(path,c.list);router.get(`${path}/:id`,c.getOne);router.post(path,c.create);router.patch(`${path}/:id`,c.update);router.delete(`${path}/:id`,c.remove);}
 router.post('/pagos/:id/anular', pago.anular);
 router.post('/anticipos/:id/anular', anticipo.anular);
@@ -19,7 +21,7 @@ router.get('/catalogos/pagos', async (req, res, next) => {
     const rawIdCliente = req.query.idCliente;
     const idCliente = rawIdCliente ? Number(rawIdCliente) : undefined;
     if (rawIdCliente && (!Number.isInteger(idCliente) || (idCliente as number) <= 0)) {
-      return res.status(400).json({ message: 'idCliente debe ser un entero positivo' });
+      throw new BadRequestError('idCliente debe ser un entero positivo');
     }
     res.json(await pagoRepo.listOptions(idCliente));
   } catch (e) {

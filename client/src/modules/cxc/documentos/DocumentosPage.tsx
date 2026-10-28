@@ -44,7 +44,7 @@ export const DocumentosPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Documentos CxC</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Documentos CxC</h1>
           <p className="text-sm text-slate-500">Cabecera de documentos que generan o afectan la deuda del cliente.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>
@@ -54,7 +54,7 @@ export const DocumentosPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
-          icon={Search}
+          icon={Search} maxLength={100}
           placeholder="Buscar cliente, NIT, serie, número o estado..."
           value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }}
@@ -137,7 +137,6 @@ export const DocumentosPage = () => {
         isOpen={!!modalState}
         onClose={() => setModalState(null)}
         title={modalState?.mode === 'edit' ? 'Editar Documento' : 'Nuevo Documento'}
-        size="lg"
       >
         <DocumentoForm
           documento={modalState?.documento}
@@ -162,8 +161,6 @@ export const DocumentosPage = () => {
           description="El saldo pendiente del documento se llevará a cero. No se revierten los pagos/notas/anticipos ya aplicados a él."
           endpoint={`/cxc/documentos/${aAnular.idDocumento}/anular`}
           actionLabel="Anular"
-          empleadoLabel="Empleado que anula"
-          empleadoFieldName="idEmpleadoAnulacion"
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}

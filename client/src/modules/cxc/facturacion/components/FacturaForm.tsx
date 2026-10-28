@@ -6,16 +6,17 @@ import { apiClient, ApiError } from '../../../../shared/api';
 import { moneyGT } from '../../../../shared/csv';
 import {
   hasErrors,
-  todayIso,
+  validateGuatemalaNit,
   validateMaxLength,
   validateMoney,
   validateRequired,
-  validateRequiredDate,
   validateRequiredNumber,
   validateRequiredSelect,
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { DocumentoCatalogoOption, FacturaFelDetalle, ValidacionSat } from '@erp/contracts';
+import { SearchableSelect } from '../../../../shared/components/SearchableSelect';
+import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioActual';
 
 interface FacturaFormProps {
   onSuccess: (factura: FacturaFelDetalle) => void;
@@ -28,19 +29,32 @@ const nuevaLinea = (): LineaState => ({ descripcion: '', cantidad: '1', precioUn
 const IVA_GT = 0.12;
 const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
+
+const hoyGuatemalaIso = (): string => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Guatemala',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+
+  return `${get('year')}-${get('month')}-${get('day')}`;
+};
+
 export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
   const [clientes, setClientes] = useState<DocumentoCatalogoOption[]>([]);
   const [monedas, setMonedas] = useState<DocumentoCatalogoOption[]>([]);
   const [condiciones, setCondiciones] = useState<DocumentoCatalogoOption[]>([]);
-  const [empleados, setEmpleados] = useState<DocumentoCatalogoOption[]>([]);
 
   const [idCliente, setIdCliente] = useState('');
   const [nitReceptor, setNitReceptor] = useState('');
   const [nombreReceptor, setNombreReceptor] = useState('');
   const [idMoneda, setIdMoneda] = useState('');
   const [idCondicion, setIdCondicion] = useState('');
-  const [fechaEmision, setFechaEmision] = useState(todayIso());
-  const [idEmpleado, setIdEmpleado] = useState('');
+  const [fechaEmision] = useState(hoyGuatemalaIso());
   const [lineas, setLineas] = useState<LineaState[]>([nuevaLinea()]);
 
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -54,9 +68,8 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
       apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/clientes'),
       apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/monedas'),
       apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/condiciones-credito'),
-      apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/empleados'),
-    ]).then(([c, m, cc, e]) => {
-      setClientes(c); setMonedas(m); setCondiciones(cc); setEmpleados(e);
+    ]).then(([c, m, cc]) => {
+      setClientes(c); setMonedas(m); setCondiciones(cc);
       if (m.length === 1) setIdMoneda(String(m[0].id));
     }).catch(() => setFormError('No se pudieron cargar los catálogos. Cierra y vuelve a abrir el formulario.'));
   }, []);
@@ -65,7 +78,7 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
     setIdCliente(value);
     const cliente = clientes.find((c) => String(c.id) === value);
     setNitReceptor(cliente?.nit?.trim() || 'CF');
-    setNombreReceptor(cliente?.label ?? '');
+    setNombreReceptor(cliente?.nombre ?? cliente?.label ?? '');
     setResultadoSat(null);
   };
 
@@ -82,11 +95,15 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
     const next: ValidationErrors = {};
     const set = (key: string, msg: string | undefined) => { if (msg) next[key] = msg; };
     set('idCliente', validateRequiredSelect(idCliente, 'un cliente'));
-    set('nitReceptor', validateRequired(nitReceptor, 'El NIT del receptor') ?? validateMaxLength(nitReceptor, 'El NIT', 20));
+    set('nitReceptor', validateRequired(nitReceptor, 'El NIT del receptor') ?? validateMaxLength(nitReceptor, 'El NIT', 20) ?? validateGuatemalaNit(nitReceptor, 'El NIT del receptor'));
     set('nombreReceptor', validateRequired(nombreReceptor, 'El nombre del receptor') ?? validateMaxLength(nombreReceptor, 'El nombre', 150));
     set('idMoneda', validateRequiredSelect(idMoneda, 'una moneda'));
-    set('fechaEmision', validateRequiredDate(fechaEmision, 'La fecha de emisión', { notFuture: true }));
-    set('idEmpleado', validateRequiredSelect(idEmpleado, 'el empleado que emite'));
+    set(
+  'fechaEmision',
+  fechaEmision === hoyGuatemalaIso()
+    ? undefined
+    : 'La fecha de emisión debe ser la fecha actual de Guatemala.'
+);
     lineas.forEach((l, i) => {
       const n = i + 1;
       set(`linea${i}.descripcion`, validateRequired(l.descripcion, `La descripción de la línea ${n}`) ?? validateMaxLength(l.descripcion, `La descripción de la línea ${n}`, 200));
@@ -94,7 +111,7 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
       set(`linea${i}.precioUnitario`, validateMoney(l.precioUnitario, `El precio de la línea ${n}`, { required: true, positive: true }));
     });
     return next;
-  }, [idCliente, nitReceptor, nombreReceptor, idMoneda, fechaEmision, idEmpleado, lineas]);
+  }, [idCliente, nitReceptor, nombreReceptor, idMoneda, fechaEmision, lineas]);
 
   const isFormValid = !hasErrors(validation);
   const errorFor = (field: string, value: string) => errors[field] ?? (value ? validation[field] : undefined);
@@ -106,7 +123,6 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
     idMoneda: Number(idMoneda),
     idCondicionCredito: idCondicion ? Number(idCondicion) : null,
     fechaEmision,
-    idEmpleado: Number(idEmpleado),
     lineas: lineas.map((l) => ({ descripcion: l.descripcion.trim(), cantidad: Number(l.cantidad), precioUnitario: Number(l.precioUnitario) })),
   });
 
@@ -126,7 +142,17 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
   };
 
   const handleValidar = async () => {
-    if (!isFormValid) { setErrors(validation); return; }
+  if (fechaEmision !== hoyGuatemalaIso()) {
+    setErrors({
+      fechaEmision: 'La fecha cambió. Cierra y vuelve a abrir el formulario.',
+    });
+    return;
+  }
+
+  if (!isFormValid) {
+    setErrors(validation);
+    return;
+  }
     setValidando(true); setFormError(null); setErrors({});
     try {
       setResultadoSat(await apiClient.post<ValidacionSat>('/cxc/facturas/validar', payload(), { successMessage: false }));
@@ -135,8 +161,19 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isFormValid) { setErrors(validation); return; }
+  e.preventDefault();
+
+  if (fechaEmision !== hoyGuatemalaIso()) {
+    setErrors({
+      fechaEmision: 'La fecha cambió. Cierra y vuelve a abrir el formulario.',
+    });
+    return;
+  }
+
+  if (!isFormValid) {
+    setErrors(validation);
+    return;
+  }
     setIsSubmitting(true); setFormError(null); setErrors({});
     try {
       const factura = await apiClient.post<FacturaFelDetalle>('/cxc/facturas', payload(), { successMessage: 'Factura certificada correctamente.' });
@@ -152,13 +189,10 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Select label="Cliente" required value={idCliente} onChange={(e: any) => handleCliente(e.target.value)}
+      <div className="grid grid-cols-1 gap-4">
+        <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => handleCliente(e.target.value)}
           options={clientes.map((c) => ({ value: String(c.id), label: c.nit ? `${c.label} — NIT ${c.nit}` : c.label }))}
           error={errors.idCliente} helperText="Receptor de la factura; su NIT y nombre se cargan solos." />
-        <Select label="Empleado que emite" required value={idEmpleado} onChange={(e: any) => setIdEmpleado(e.target.value)}
-          options={empleados.map((x) => ({ value: String(x.id), label: x.label }))} error={errors.idEmpleado}
-          helperText="Queda registrado como emisor de la factura." />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -177,14 +211,22 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
         <Select label="Condición de crédito" value={idCondicion} onChange={(e: any) => { setIdCondicion(e.target.value); setResultadoSat(null); }}
           options={[{ value: '', label: 'Contado (vence el mismo día)' }, ...condiciones.map((c) => ({ value: String(c.id), label: c.label }))]}
           placeholder="" helperText="Define la fecha de vencimiento de la cuenta por cobrar." />
-        <TextInput label="Fecha de emisión" type="date" required max={todayIso()} value={fechaEmision}
-          onChange={(e: any) => { setFechaEmision(e.target.value); setResultadoSat(null); }}
-          error={errorFor('fechaEmision', fechaEmision)} helperText="No puede ser una fecha futura." />
+        <TextInput
+  label="Fecha de emisión"
+  type="date"
+  required
+  min={hoyGuatemalaIso()}
+  max={hoyGuatemalaIso()}
+  value={fechaEmision}
+  isReadOnly
+  error={errorFor('fechaEmision', fechaEmision)}
+  helperText="Fecha de emisión: hoy (automática, no editable)."
+/>
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900">Detalle de la factura</h3>
+          <h3 className="text-slate-900 text-sm font-bold">Detalle de la factura</h3>
           <Button type="button" variant="secondary" icon={Plus} onClick={() => setLineas((p) => [...p, nuevaLinea()])}>Agregar línea</Button>
         </div>
         {errors.lineas && <p role="alert" className="text-xs text-red-600 font-medium">{errors.lineas}</p>}
@@ -208,7 +250,7 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
                   error={errors[`linea${i}.precioUnitario`] ?? (l.precioUnitario ? validation[`linea${i}.precioUnitario`] : undefined)} helperText="Mayor a 0; IVA incluido." />
               </div>
               <div className="sm:col-span-2 flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-slate-700">Total línea</span>
+                <span className="form-label text-xs font-semibold text-slate-700">Total línea</span>
                 <div className="h-10 flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-slate-900">{moneyGT(totalLinea)}</span>
                   <button type="button" disabled={lineas.length === 1} onClick={() => setLineas((p) => p.filter((_, idx) => idx !== i))}
@@ -256,6 +298,7 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
         )}
       </div>
 
+      <CampoUsuarioActual />
       {formError && <p role="alert" className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
 
       <FormActionButtons onCancel={onCancel} isSubmitting={isSubmitting} isFormValid={isFormValid} blockers={validation}

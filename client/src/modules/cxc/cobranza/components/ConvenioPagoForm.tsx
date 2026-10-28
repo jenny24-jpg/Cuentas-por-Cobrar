@@ -2,17 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { TextInput, Select, TextArea, Checkbox } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
-import { todayIso, validateRequiredSelect, validateRequiredDate, validateMoney, validateRequiredNumber, validateMaxLength, hasErrors, type ValidationErrors } from '../../../../shared/validation';
+import { todayIso, validateRequiredSelect, validateRequiredDate, validateMoney, validateRequiredNumber, validateTextOnly, hasErrors, type ValidationErrors } from '../../../../shared/validation';
 import type { CatalogoOption, ConvenioPago } from '@erp/contracts';
+import { SearchableSelect } from '../../../../shared/components/SearchableSelect';
+import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioActual';
 
 interface ConvenioPagoFormProps { convenio?: ConvenioPago | null; onSuccess: () => void; onCancel: () => void; }
 const ESTADOS_CONVENIO_PAGO = ['ACTIVO', 'CUMPLIDO', 'INCUMPLIDO', 'CANCELADO'] as const;
 const ESTADO_OPTIONS = ESTADOS_CONVENIO_PAGO.map((e) => ({ value: e, label: e }));
 const ESTADO_NUEVO_OPTIONS = [{ value: 'ACTIVO', label: 'ACTIVO' }];
 const MAX_CUOTAS = 18;
-// Observaciones: solo texto (letras, espacios y . , ; : ' -). Sin números ni símbolos como $ % # " ( /
-const OBSERVACIONES_INVALIDOS = /[^\p{L}\s.,;:'’-]/gu;
-const OBSERVACIONES_VALIDAS = /^[\p{L}\s.,;:'’-]*$/u;
+// Observaciones: únicamente letras y espacios, según el requisito de validación.
+const OBSERVACIONES_INVALIDOS = /[^\p{L}\s]/gu;
 const soloTexto = (valor: string) => valor.replace(OBSERVACIONES_INVALIDOS, '');
 
 const round2 = (valor: number) => Math.round(valor * 100) / 100;
@@ -127,8 +128,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
     if (!isEditing) { const fechaErr = validateRequiredDate(fechaConvenio, 'La fecha del convenio', { minDate: todayIso() }); if (fechaErr) next.fechaConvenio = fechaErr; }
     const cuotasErr = validateRequiredNumber(numeroCuotas, 'El número de cuotas', { integer: true, min: 1, max: MAX_CUOTAS }); if (cuotasErr) next.numeroCuotas = cuotasErr;
     if (observacionesCambiaron) {
-      const obsErr = validateMaxLength(observaciones, 'Observaciones', 500); if (obsErr) next.observaciones = obsErr;
-      else if (!OBSERVACIONES_VALIDAS.test(observaciones)) next.observaciones = 'Las observaciones solo admiten texto: letras, espacios y . , ; : - (sin números ni símbolos).';
+      const obsErr = validateTextOnly(observaciones, 'Observaciones', { required: true, minLength: 1, maxLength: 500 }); if (obsErr) next.observaciones = obsErr;
     }
     if (!isEditing) {
       if (docsSeleccionados.length === 0) next.documentos = 'Selecciona al menos un documento que cubra el convenio.';
@@ -173,8 +173,8 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-      <Select label="Cliente" required value={idCliente} onChange={(e: any) => setIdCliente(e.target.value)} options={clientes.map((c) => ({ value: c.id, label: c.label }))} error={errors.idCliente} isReadOnly={isEditing} helperText={isEditing ? 'El cliente queda fijo porque el convenio ya tiene plan de cuotas.' : 'Cliente con quien se formaliza el convenio.'} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => setIdCliente(e.target.value)} options={clientes.map((c) => ({ value: c.id, label: c.label }))} error={errors.idCliente} isReadOnly={isEditing} helperText={isEditing ? 'El cliente queda fijo porque el convenio ya tiene plan de cuotas.' : 'Cliente con quien se formaliza el convenio.'} />
         <TextInput label="Fecha del convenio" type="date" required min={todayIso()} value={fechaConvenio} onChange={(e: any) => setFechaConvenio(e.target.value)} error={vivo('fechaConvenio', !!fechaConvenio)} isReadOnly={isEditing} helperText={isEditing ? 'La fecha original no cambia al editar.' : 'Fecha del acuerdo; no puede ser anterior a hoy. Las cuotas vencen mes a mes desde esta fecha.'} />
         <TextInput
           label="Monto de la deuda"
@@ -192,8 +192,6 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
           placeholder="0.00"
           helperText={isEditing ? 'El monto queda fijo porque ya generó las cuotas.' : (totalSeleccionado > 0 ? `Puedes bajarlo para negociar una parte. Máximo: ${formatQ(totalSeleccionado)} (lo que se debe en los documentos seleccionados).` : 'Primero selecciona los documentos que cubre el convenio.')}
         />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput label="Número de cuotas" type="number" restriction="integer" min="1" max={String(MAX_CUOTAS)} step="1" required value={numeroCuotas} onChange={(e: any) => setNumeroCuotas(e.target.value)} error={vivo('numeroCuotas', !!numeroCuotas)} isReadOnly={isEditing} helperText={isEditing ? 'No se modifica porque el plan de cuotas ya existe.' : (resumenCuotas ? `Estimado: ${resumenCuotas}.` : `Solo enteros entre 1 y ${MAX_CUOTAS}; las cuotas se generan automáticamente.`)} />
         <Select label="Estado" required value={isEditing ? estado : 'ACTIVO'} onChange={(e: any) => setEstado(e.target.value)} options={isEditing ? ESTADO_OPTIONS : ESTADO_NUEVO_OPTIONS} isReadOnly={!isEditing} helperText={isEditing ? 'El sistema también lo cambia solo: CUMPLIDO al pagar todas las cuotas, INCUMPLIDO al recalcular con cuotas vencidas.' : 'Un convenio nuevo siempre inicia ACTIVO.'} />
       </div>
@@ -201,7 +199,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
       {!isEditing && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-700">
+            <label className="form-label text-xs font-semibold text-slate-700">
               Documentos que cubre el convenio <span className="text-red-500">*</span>
             </label>
             {documentosPendientes.length > 1 && (
@@ -243,7 +241,8 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
         </div>
       )}
 
-      <TextArea label="Observaciones" value={observaciones} onChange={(e: any) => setObservaciones(soloTexto(e.target.value))} rows={3} maxLength={500} error={errors.observaciones} helperText="Solo texto: letras, espacios y . , ; : - (sin números ni símbolos como $ % # &quot; ( /). Máximo 500 caracteres." />
+      <TextArea label="Observaciones" required value={observaciones} onChange={(e: any) => setObservaciones(soloTexto(e.target.value))} rows={3} maxLength={500} error={errors.observaciones} helperText="Obligatorias: solo letras y espacios, sin números ni caracteres especiales. Máximo 500 caracteres." />
+      {!isEditing && <CampoUsuarioActual />}
       {formError && <p role="alert" className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>}
       <FormActionButtons onCancel={onCancel} isSubmitting={isSubmitting} isEditing={isEditing} createLabel="Crear convenio" isFormValid={isFormValid} blockers={validationErrors} />
     </form>

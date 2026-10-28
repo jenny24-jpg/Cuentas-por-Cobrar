@@ -30,7 +30,7 @@ export const AplicacionesPagoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Aplicaciones de Pago</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Pago</h1>
           <p className="text-sm text-slate-500">
             Aplicar un pago reduce el saldo del documento dentro de una transacción segura.
           </p>
@@ -46,7 +46,7 @@ export const AplicacionesPagoPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200">
         <TextInput
-          icon={Search}
+          icon={Search} maxLength={100}
           placeholder="Buscar por pago, documento, empleado o ID..."
           value={search}
           onChange={(e: any) => {
@@ -145,8 +145,6 @@ export const AplicacionesPagoPage = () => {
           description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y al disponible del pago.`}
           endpoint={`/cxc/aplicaciones-pago/${aReversar.idAplicacion}/reversar`}
           actionLabel="Reversar"
-          empleadoLabel="Empleado que reversa"
-          empleadoFieldName="idEmpleadoReversa"
           motivoLabel="Motivo de la reversa"
           motivoFieldName="motivoReversa"
           onClose={() => setAReversar(null)}

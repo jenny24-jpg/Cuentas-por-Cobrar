@@ -64,7 +64,7 @@ export const CondicionesCreditoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-slate-900 text-sm font-bold">
             Condiciones de Crédito
           </h1>
 
@@ -88,14 +88,14 @@ export const CondicionesCreditoPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
-          icon={Search}
-          placeholder="Buscar condición..."
+          icon={Search} maxLength={100}
+          placeholder="Buscar días de crédito, días de gracia, % mora o estado..."
           value={search}
           onChange={(e: any) => {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="max-w-sm"
+          className="max-w-md"
         />
       </div>
 

@@ -50,7 +50,7 @@ export const FacturasPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Facturas (FEL)</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Facturas (FEL)</h1>
           <p className="text-sm text-slate-500">
             Factura electrónica con certificación simulada de la SAT. Cada factura certificada crea su cuenta por cobrar.
           </p>
@@ -59,7 +59,7 @@ export const FacturasPage = () => {
       </div>
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-        <TextInput icon={Search} placeholder="Buscar cliente, NIT, serie, número, UUID o estado..." value={search}
+        <TextInput icon={Search} maxLength={100} placeholder="Buscar cliente, NIT, serie, número, UUID o estado..." value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }} className="max-w-md" />
       </div>
 
@@ -112,7 +112,7 @@ export const FacturasPage = () => {
         }}
       />
 
-      <Modal isOpen={emitirOpen} onClose={() => setEmitirOpen(false)} title="Emitir factura" description="Se valida contra las reglas de la SAT (simulada) y se certifica al guardar." size="lg" closeOnBackdrop={false}>
+      <Modal isOpen={emitirOpen} onClose={() => setEmitirOpen(false)} title="Emitir factura" description="Se valida contra las reglas de la SAT (simulada) y se certifica al guardar."  closeOnBackdrop={false}>
         {emitirOpen && (
           <FacturaForm onCancel={() => setEmitirOpen(false)} onSuccess={(factura) => { setEmitirOpen(false); setDetalle(factura); refetch(); }} />
         )}
@@ -165,8 +165,6 @@ export const FacturasPage = () => {
           description="Se anula el DTE ante la SAT simulada, el documento por cobrar queda anulado y el saldo en cero."
           endpoint={`/cxc/facturas/${aAnular.idFacturaFel}/anular`}
           actionLabel="Anular factura"
-          empleadoLabel="Empleado que anula"
-          empleadoFieldName="idEmpleadoAnulacion"
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}

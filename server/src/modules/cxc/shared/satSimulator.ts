@@ -4,6 +4,10 @@ import {
   LIMITE_CONSUMIDOR_FINAL,
   type ErrorSat,
   type LineaFactura,
+  normalizarNit,
+  digitoVerificadorNit,
+  esNitValido,
+  formatearNit,
 } from '@erp/contracts';
 import { businessTodayIso } from '../../../shared/date';
 
@@ -19,34 +23,8 @@ import { businessTodayIso } from '../../../shared/date';
 
 export const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
-/** 'cf', 'C/F', 'c.f.' → 'CF'. El resto: mayúsculas sin espacios ni guion. */
-export function normalizarNit(raw: string | null | undefined): string {
-  const compact = String(raw ?? '').toUpperCase().replace(/[\s.\-/]/g, '');
-  return compact === 'CF' ? 'CF' : compact;
-}
-
-/** Dígito verificador del NIT guatemalteco (módulo 11; resultado 10 = 'K'). */
-export function digitoVerificadorNit(cuerpo: string): string {
-  const n = cuerpo.length;
-  let suma = 0;
-  for (let i = 0; i < n; i += 1) suma += Number(cuerpo[i]) * (n + 1 - i);
-  const resto = (11 - (suma % 11)) % 11;
-  return resto === 10 ? 'K' : String(resto);
-}
-
-export function esNitValido(nit: string): boolean {
-  const normalizado = normalizarNit(nit);
-  if (normalizado === 'CF') return true;
-  if (!/^\d{2,11}[0-9K]$/.test(normalizado)) return false;
-  const cuerpo = normalizado.slice(0, -1);
-  return digitoVerificadorNit(cuerpo) === normalizado.slice(-1);
-}
-
-/** Formato visible del NIT: 1234567-8. */
-export function formatearNit(nit: string): string {
-  const n = normalizarNit(nit);
-  return n === 'CF' || n.length < 2 ? n : `${n.slice(0, -1)}-${n.slice(-1)}`;
-}
+// Reglas de NIT compartidas con el cliente (ver @erp/contracts/modules/cxc/nit.ts).
+export { normalizarNit, digitoVerificadorNit, esNitValido, formatearNit };
 
 export interface TotalesFactura {
   lineas: Array<LineaFactura & { total: number }>;

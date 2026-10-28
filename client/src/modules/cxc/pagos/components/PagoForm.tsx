@@ -13,6 +13,8 @@ import {
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { CatalogoOption, FormaPagoOption, Pago } from '@erp/contracts';
+import { SearchableSelect } from '../../../../shared/components/SearchableSelect';
+import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioActual';
 
 const REGISTRATION_STATES = [
   { value: 'NO_IDENTIFICADO', label: 'No identificado' },
@@ -168,7 +170,7 @@ export function PagoForm({
       {isEditing && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-700">Estado:</span>
+            <span className="form-label font-semibold text-slate-700">Estado:</span>
             <StatusBadge status={pago?.estado} />
             <span className="ml-auto text-slate-600">
               Aplicado: <strong>Q {Number(pago?.montoAplicado ?? 0).toFixed(2)}</strong> · Disponible:{' '}
@@ -184,27 +186,29 @@ export function PagoForm({
         </div>
       )}
 
-      <Select
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) => setIdCliente(e.target.value)}
-        options={clientes.map((x) => ({ value: x.id, label: x.label }))}
-        helperText="Selecciona el cliente al que pertenece el pago."
-        error={errorFor('idCliente')}
-        isReadOnly={isLocked}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) => setIdCliente(e.target.value)}
+          options={clientes.map((x) => ({ value: x.id, label: x.label }))}
+          helperText="Cliente al que pertenece el pago."
+          error={errorFor('idCliente')}
+          isReadOnly={isLocked}
+        />
 
-      <Select
-        label="Forma de pago"
-        required
-        value={idFormaPago}
-        onChange={(e: any) => setIdFormaPago(e.target.value)}
-        options={formas.map((x) => ({ value: x.id, label: x.label }))}
-        helperText="La referencia será obligatoria si la forma de pago así lo requiere."
-        error={errorFor('idFormaPago')}
-        isReadOnly={isLocked}
-      />
+        <Select
+          label="Forma de pago"
+          required
+          value={idFormaPago}
+          onChange={(e: any) => setIdFormaPago(e.target.value)}
+          options={formas.map((x) => ({ value: x.id, label: x.label }))}
+          helperText="La referencia es obligatoria si la forma de pago lo requiere."
+          error={errorFor('idFormaPago')}
+          isReadOnly={isLocked}
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
@@ -257,34 +261,37 @@ export function PagoForm({
         />
       </div>
 
-      <TextInput
-        label="Número de referencia"
-        restriction="identifier"
-        uppercase
-        maxLength={80}
-        required={Boolean(formaSeleccionada?.requiereReferencia)}
-        helperText={
-          formaSeleccionada?.requiereReferencia
-            ? 'Obligatoria para la forma de pago seleccionada.'
-            : 'Referencia opcional del medio de pago.'
-        }
-        value={numeroReferencia}
-        onChange={(e: any) => setNumeroReferencia(e.target.value)}
-        error={errorFor('numeroReferencia', numeroReferencia)}
-        isReadOnly={isLocked}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <TextInput
+          label="Número de referencia"
+          restriction="identifier"
+          uppercase
+          maxLength={80}
+          required={Boolean(formaSeleccionada?.requiereReferencia)}
+          helperText={
+            formaSeleccionada?.requiereReferencia
+              ? 'Obligatoria para la forma de pago seleccionada.'
+              : 'Referencia opcional del medio de pago.'
+          }
+          value={numeroReferencia}
+          onChange={(e: any) => setNumeroReferencia(e.target.value)}
+          error={errorFor('numeroReferencia', numeroReferencia)}
+          isReadOnly={isLocked}
+        />
 
-      <Select
-        label="Estado al registrar"
-        required
-        value={estado}
-        onChange={(e: any) => setEstado(e.target.value)}
-        options={stateOptions}
-        helperText="Después de aplicar el pago, el estado lo administra automáticamente el motor financiero."
-        error={errorFor('estado', estado)}
-        isReadOnly={isLocked}
-      />
+        <Select
+          label="Estado al registrar"
+          required
+          value={estado}
+          onChange={(e: any) => setEstado(e.target.value)}
+          options={stateOptions}
+          helperText="Tras aplicar el pago, el estado lo administra el motor financiero."
+          error={errorFor('estado', estado)}
+          isReadOnly={isLocked}
+        />
+      </div>
 
+      {!isEditing && <CampoUsuarioActual />}
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           {formError}

@@ -40,7 +40,7 @@ export const PagosPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Pagos</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Pagos</h1>
           <p className="text-sm text-slate-500">Registro de pagos recibidos. El saldo de una factura cambia únicamente al aplicar el pago.</p>
         </div>
         <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo Pago</Button>
@@ -52,7 +52,7 @@ export const PagosPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200">
         <TextInput
-          icon={Search}
+          icon={Search} maxLength={100}
           placeholder="Buscar cliente, referencia, estado o ID..."
           value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }}
@@ -139,8 +139,6 @@ export const PagosPage = () => {
           description="El pago quedará marcado como anulado de forma permanente. Solo se puede anular un pago sin aplicaciones vigentes."
           endpoint={`/cxc/pagos/${aAnular.idPago}/anular`}
           actionLabel="Anular"
-          empleadoLabel="Empleado que anula"
-          empleadoFieldName="idEmpleadoAnulacion"
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}

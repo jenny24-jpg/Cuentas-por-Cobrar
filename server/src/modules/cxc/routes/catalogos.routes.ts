@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as catalogosRepository from '../repositories/catalogos.repository';
+import { validarIdsDeRuta } from '../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 router.get('/clientes', async (req: Request, res: Response, next: NextFunction) => {
   try {

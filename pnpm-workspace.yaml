@@ -3,5 +3,6 @@ packages:
   - 'server'
   - 'packages/contracts'
 allowBuilds:
+  core-js: false
   esbuild: true
   oracledb: true

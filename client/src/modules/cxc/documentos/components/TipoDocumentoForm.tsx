@@ -112,28 +112,30 @@ export const TipoDocumentoForm = ({ tipo, onSuccess, onCancel }: Props) => {
         />
       </div>
 
-      <TextInput
-        label="Nombre"
-        required
-        maxLength={80}
-        helperText="Nombre descriptivo que verá el usuario; máximo 80 caracteres."
-        value={nombre}
-        onChange={(e: any) => setNombre(e.target.value)}
-        error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <TextInput
+          label="Nombre"
+          required
+          maxLength={80}
+          helperText="Nombre descriptivo que verá el usuario; máximo 80 caracteres."
+          value={nombre}
+          onChange={(e: any) => setNombre(e.target.value)}
+          error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}
+        />
 
-      <Select
-        label="Naturaleza"
-        value={naturaleza}
-        onChange={(e: any) => setNaturaleza(e.target.value)}
-        placeholder="Seleccionar naturaleza (opcional)"
-        options={[
-          { value: 'CARGO', label: 'Cargo' },
-          { value: 'CREDITO', label: 'Crédito' },
-        ]}
-        helperText="Cargo aumenta la deuda; Crédito la disminuye. No se captura texto libre."
-        error={errors.naturaleza}
-      />
+        <Select
+          label="Naturaleza"
+          value={naturaleza}
+          onChange={(e: any) => setNaturaleza(e.target.value)}
+          placeholder="Seleccionar (opcional)"
+          options={[
+            { value: 'CARGO', label: 'Cargo' },
+            { value: 'CREDITO', label: 'Crédito' },
+          ]}
+          helperText="Cargo aumenta la deuda; Crédito la disminuye."
+          error={errors.naturaleza}
+        />
+      </div>
 
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Phone } from 'lucide-react';
+import { Plus, Pencil, Trash2, Phone, Search } from 'lucide-react';
 import { DataTable, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
@@ -43,7 +43,7 @@ export const GestionesCobroPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Gestiones de Cobro</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Gestiones de Cobro</h1>
           <p className="text-sm text-slate-500">Registro de llamadas, visitas y contactos de cobranza.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>
@@ -53,11 +53,11 @@ export const GestionesCobroPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
-          icon={Phone}
+          icon={Search} maxLength={100}
           placeholder="Buscar por cliente, tipo o resultado..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="max-w-sm"
+          className="max-w-md"
         />
       </div>
 

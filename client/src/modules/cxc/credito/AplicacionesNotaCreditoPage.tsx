@@ -25,7 +25,7 @@ export const AplicacionesNotaCreditoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Aplicaciones de Nota de Crédito</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Nota de Crédito</h1>
           <p className="text-sm text-slate-500">La NC reduce el saldo únicamente cuando se aplica al documento.</p>
         </div>
         <Button icon={Plus} onClick={() => setOpen(true)}>Nueva Aplicación</Button>
@@ -37,11 +37,11 @@ export const AplicacionesNotaCreditoPage = () => {
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
-          icon={Search}
-          placeholder="Buscar aplicación..."
+          icon={Search} maxLength={100}
+          placeholder="Buscar cliente, documento, nota de crédito o ID..."
           value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }}
-          className="max-w-sm"
+          className="max-w-md"
         />
       </div>
 
@@ -105,8 +105,6 @@ export const AplicacionesNotaCreditoPage = () => {
           description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y al disponible de la nota de crédito.`}
           endpoint={`/cxc/aplicaciones-nota-credito/${aReversar.idAplicacionNc}/reversar`}
           actionLabel="Reversar"
-          empleadoLabel="Empleado que reversa"
-          empleadoFieldName="idEmpleadoReversa"
           motivoLabel="Motivo de la reversa"
           motivoFieldName="motivoReversa"
           onClose={() => setAReversar(null)}

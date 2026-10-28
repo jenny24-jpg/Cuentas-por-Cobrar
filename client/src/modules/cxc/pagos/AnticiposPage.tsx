@@ -41,14 +41,14 @@ export const AnticiposPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Anticipos</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Anticipos</h1>
           <p className="text-sm text-slate-500">Un anticipo disponible se aplica contra un documento; para corregirlo se reversa la aplicación o se anula con trazabilidad.</p>
         </div>
         <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo</Button>
       </div>
 
       <div className="bg-white p-4 rounded-lg border border-slate-200">
-        <TextInput icon={Search} placeholder="Buscar..." value={search} onChange={(e: any) => { setSearch(e.target.value); setPage(1); }} className="max-w-sm" />
+        <TextInput icon={Search} maxLength={100} placeholder="Buscar cliente, referencia, estado o ID..." value={search} onChange={(e: any) => { setSearch(e.target.value); setPage(1); }} className="max-w-md" />
       </div>
 
       {(error || deleteError) && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error || deleteError}</p>}
@@ -129,8 +129,6 @@ export const AnticiposPage = () => {
           description="El anticipo quedará marcado como anulado de forma permanente y su disponible pasará a Q 0.00. Solo se puede anular un anticipo sin aplicaciones vigentes."
           endpoint={`/cxc/anticipos/${aAnular.idAnticipo}/anular`}
           actionLabel="Anular"
-          empleadoLabel="Empleado que anula"
-          empleadoFieldName="idEmpleadoAnulacion"
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}
