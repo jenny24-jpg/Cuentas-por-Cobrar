@@ -455,47 +455,49 @@ export const AplicacionNotaCreditoForm = ({
       className="flex flex-col gap-4"
       noValidate
     >
-      <Select
-        label="Nota de Crédito"
-        required
-        value={idNotaCredito}
-        onChange={(e: any) =>
-          handleNotaChange(e.target.value)
-        }
-        options={notasCredito.map((nota) => ({
-          value: nota.id,
-          label: nota.label,
-        }))}
-        placeholder="Seleccionar nota de crédito"
-        error={errors.idNotaCredito}
-        helperText="Solo aparecen notas de crédito pendientes con saldo disponible."
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <Select
+          label="Nota de Crédito"
+          required
+          value={idNotaCredito}
+          onChange={(e: any) =>
+            handleNotaChange(e.target.value)
+          }
+          options={notasCredito.map((nota) => ({
+            value: nota.id,
+            label: nota.label,
+          }))}
+          placeholder="Seleccionar nota de crédito"
+          error={errors.idNotaCredito}
+          helperText="Solo aparecen notas de crédito pendientes con saldo disponible."
+        />
 
-      <Select
-        label="Documento"
-        required
-        value={idDocumento}
-        onChange={(e: any) => {
-          setIdDocumento(e.target.value);
-          setErrors({});
-        }}
-        options={documentos.map((documento) => ({
-          value: documento.id,
-          label: documento.label,
-        }))}
-        placeholder={
-          idNotaCredito
-            ? 'Seleccionar documento'
-            : 'Selecciona una nota de crédito primero'
-        }
-        isReadOnly={
-          !idNotaCredito ||
-          !notaVerificada ||
-          !documentosCargados
-        }
-        error={errors.idDocumento}
-        helperText="Solo aparecen documentos pendientes del mismo cliente de la nota."
-      />
+        <Select
+          label="Documento"
+          required
+          value={idDocumento}
+          onChange={(e: any) => {
+            setIdDocumento(e.target.value);
+            setErrors({});
+          }}
+          options={documentos.map((documento) => ({
+            value: documento.id,
+            label: documento.label,
+          }))}
+          placeholder={
+            idNotaCredito
+              ? 'Seleccionar documento'
+              : 'Selecciona una nota de crédito primero'
+          }
+          isReadOnly={
+            !idNotaCredito ||
+            !notaVerificada ||
+            !documentosCargados
+          }
+          error={errors.idDocumento}
+          helperText="Solo aparecen documentos pendientes del mismo cliente de la nota."
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput

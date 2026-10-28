@@ -137,7 +137,6 @@ export const DocumentosPage = () => {
         isOpen={!!modalState}
         onClose={() => setModalState(null)}
         title={modalState?.mode === 'edit' ? 'Editar Documento' : 'Nuevo Documento'}
-        size="lg"
       >
         <DocumentoForm
           documento={modalState?.documento}

@@ -327,30 +327,33 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
         />
       </div>
 
-      <Select
-        label="Condición de crédito"
-        value={idCondicionCredito}
-        onChange={(e: any) => setIdCondicionCredito(e.target.value)}
-        options={condicionesCredito.map((c) => ({ value: c.id, label: c.label }))}
-        placeholder="Sin condición (no genera mora automática)"
-        helperText="Opcional. Si se asigna, el documento entra al recálculo automático de mora al vencerse."
-        isReadOnly={isLocked}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <Select
+          label="Condición de crédito"
+          value={idCondicionCredito}
+          onChange={(e: any) => setIdCondicionCredito(e.target.value)}
+          options={condicionesCredito.map((c) => ({ value: c.id, label: c.label }))}
+          placeholder="Sin condición (no genera mora automática)"
+          helperText="Opcional. Si se asigna, el documento entra al recálculo automático de mora al vencerse."
+          isReadOnly={isLocked}
+        />
 
-      <TextInput
-        label="Total"
-        type="number"
-        restriction="decimal"
-        decimalPlaces={2}
-        min={0.01}
-        step="0.01"
-        required
-        value={total}
-        onChange={(e: any) => setTotal(e.target.value)}
-        helperText={isEditing ? 'Solo puede modificarse mientras el documento no tenga movimientos.' : 'El saldo inicial se genera automáticamente igual al total.'}
-        error={errorFor('total', total)}
-        isReadOnly={isLocked}
-      />
+        <TextInput
+          label="Total"
+          type="number"
+          restriction="decimal"
+          decimalPlaces={2}
+          min={0.01}
+          step="0.01"
+          required
+          value={total}
+          onChange={(e: any) => setTotal(e.target.value)}
+          helperText={isEditing ? 'Solo puede modificarse mientras el documento no tenga movimientos.' : 'El saldo inicial se genera automáticamente igual al total.'}
+          error={errorFor('total', total)}
+          isReadOnly={isLocked}
+        />
+      </div>
+
 
       {!isEditing && <CampoUsuarioActual />}
       {formError && (

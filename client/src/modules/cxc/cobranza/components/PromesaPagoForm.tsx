@@ -375,43 +375,45 @@ export const PromesaPagoForm = ({
       noValidate
       className="flex flex-col gap-4"
     >
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) =>
-          handleClienteChange(e.target.value)
-        }
-        options={clientes.map((cliente) => ({
-          value: cliente.id,
-          label: cliente.label,
-        }))}
-        error={errorFor('idCliente', idCliente)}
-        helperText="Cliente que realizó la promesa; campo obligatorio."
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) =>
+            handleClienteChange(e.target.value)
+          }
+          options={clientes.map((cliente) => ({
+            value: cliente.id,
+            label: cliente.label,
+          }))}
+          error={errorFor('idCliente', idCliente)}
+          helperText="Cliente que realizó la promesa; campo obligatorio."
+        />
 
-      <Select
-        label="Documento relacionado"
-        value={idDocumento}
-        onChange={(e: any) => {
-          setIdDocumento(e.target.value);
-          setErrors({});
-        }}
-        options={documentos.map((documento) => ({
-          value: documento.id,
-          label: documento.label,
-        }))}
-        placeholder={
-          idCliente
-            ? 'Seleccionar documento (opcional)'
-            : 'Selecciona un cliente primero'
-        }
-        isReadOnly={!idCliente}
-        helperText={
-          'Opcional; solo aparecen documentos pendientes del cliente. ' +
-          'Si se selecciona uno, el monto no puede superar su saldo.'
-        }
-      />
+        <Select
+          label="Documento relacionado"
+          value={idDocumento}
+          onChange={(e: any) => {
+            setIdDocumento(e.target.value);
+            setErrors({});
+          }}
+          options={documentos.map((documento) => ({
+            value: documento.id,
+            label: documento.label,
+          }))}
+          placeholder={
+            idCliente
+              ? 'Seleccionar documento (opcional)'
+              : 'Selecciona un cliente primero'
+          }
+          isReadOnly={!idCliente}
+          helperText={
+            'Opcional; solo aparecen documentos pendientes del cliente. ' +
+            'Si se selecciona uno, el monto no puede superar su saldo.'
+          }
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput

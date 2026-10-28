@@ -96,10 +96,10 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4">
-        <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => { setIdCliente(e.target.value); setIdDocumento(''); }} options={clientes.map((c) => ({ value: c.id, label: c.label }))} error={errors.idCliente} helperText="Cliente al que se realizó la gestión; campo obligatorio." />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => { setIdCliente(e.target.value); setIdDocumento(''); }} options={clientes.map((c) => ({ value: c.id, label: c.label }))} error={errors.idCliente} helperText="Cliente al que se realizó la gestión." />
+        <Select label="Documento relacionado" value={idDocumento} onChange={(e: any) => setIdDocumento(e.target.value)} options={documentos.map((d) => ({ value: d.id, label: d.label }))} placeholder={idCliente ? 'Seleccionar (opcional)' : 'Selecciona un cliente primero'} isReadOnly={!idCliente} helperText="Opcional; solo documentos con saldo pendiente del cliente." />
       </div>
-      <Select label="Documento relacionado" value={idDocumento} onChange={(e: any) => setIdDocumento(e.target.value)} options={documentos.map((d) => ({ value: d.id, label: d.label }))} placeholder={idCliente ? 'Seleccionar documento (opcional)' : 'Selecciona un cliente primero'} isReadOnly={!idCliente} helperText="Opcional; solo aparecen documentos con saldo pendiente del cliente seleccionado." />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select label="Tipo de gestión" value={tipoGestion} onChange={(e: any) => setTipoGestion(e.target.value)} options={TIPO_OPTIONS} helperText="Canal utilizado para contactar al cliente." />
         <TextInput label="Resultado" value={resultado} onChange={(e: any) => setResultado(e.target.value)} placeholder="Ej. Cliente confirma pago" maxLength={80} error={errors.resultado} helperText="Resumen breve del resultado; máximo 80 caracteres." />

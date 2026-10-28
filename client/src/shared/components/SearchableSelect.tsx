@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 
 export interface SearchableSelectOption {
   value: string | number;
@@ -26,7 +26,7 @@ const normalize = (text: string) =>
   text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /**
- * Select con barra de búsqueda para listas largas (clientes, documentos...).
+ * Campo con búsqueda (escribes directamente, sin abrir una lista) para listas largas (clientes, documentos...).
  * Mantiene la API de Select del kit (value/onChange con target.value) para
  * poder intercambiarlos sin tocar la lógica de los formularios. Filtra sin
  * distinguir mayúsculas ni acentos y busca en todo el texto de la opción
@@ -114,47 +114,50 @@ export function SearchableSelect({
         </label>
       )}
 
-      <button
-        id={baseId}
-        type="button"
-        disabled={isReadOnly}
-        onClick={() => (open ? close() : setOpen(true))}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-required={required || undefined}
-        aria-invalid={Boolean(resolvedError) || undefined}
-        aria-describedby={resolvedError ? errorId : resolvedHelper ? helpId : undefined}
-        className={`w-full h-10 pl-3 pr-9 text-sm text-left rounded-lg border relative transition-all duration-150 outline-none ${
-          isReadOnly
-            ? 'bg-slate-50 text-slate-600 border-slate-200 cursor-not-allowed font-medium'
-            : 'bg-white border-slate-300 hover:border-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 cursor-pointer'
-        } ${resolvedError ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : ''}`}
-      >
-        <span className={`block truncate ${selected ? 'text-slate-900' : 'text-slate-400'}`}>
-          {selected ? selected.label : placeholder}
-        </span>
-        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-      </button>
+      <div className="relative flex items-center w-full">
+        <Search size={16} className="absolute left-3 text-slate-400 pointer-events-none" aria-hidden="true" />
+        <input
+          ref={searchRef}
+          id={baseId}
+          type="text"
+          role="combobox"
+          autoComplete="off"
+          disabled={isReadOnly}
+          maxLength={100}
+          value={open ? query : (selected?.label ?? '')}
+          placeholder={open && selected ? selected.label : (selected ? '' : searchPlaceholder)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => { if (open) close(); }}
+          onClick={() => setOpen(true)}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={onKeyDown}
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-required={required || undefined}
+          aria-invalid={Boolean(resolvedError) || undefined}
+          aria-describedby={resolvedError ? errorId : resolvedHelper ? helpId : undefined}
+          aria-activedescendant={open && filtered[active] ? `${baseId}-opt-${active}` : undefined}
+          className={`w-full h-10 pl-9 ${selected && !required && !isReadOnly ? 'pr-9' : 'pr-3'} text-sm rounded-lg border transition-all duration-150 outline-none ${
+            isReadOnly
+              ? 'bg-slate-50 text-slate-600 border-slate-200 cursor-not-allowed font-medium'
+              : 'bg-white text-slate-900 border-slate-300 hover:border-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100'
+          } ${resolvedError ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : ''}`}
+        />
+        {selected && !required && !isReadOnly && (
+          <button
+            type="button"
+            aria-label="Quitar selección"
+            onMouseDown={(e) => { e.preventDefault(); onChange?.({ target: { value: '' } }); setQuery(''); }}
+            className="absolute right-2 h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-700"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        )}
+      </div>
 
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-          <div className="relative border-b border-slate-100 p-2">
-            <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-            <input
-              ref={searchRef}
-              type="text"
-              value={query}
-              maxLength={100}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={searchPlaceholder}
-              aria-label={`Buscar ${label ? label.toLowerCase() : 'opción'}`}
-              aria-controls={listId}
-              aria-activedescendant={filtered[active] ? `${baseId}-opt-${active}` : undefined}
-              className="w-full h-9 pl-8 pr-3 text-sm rounded-md border border-slate-300 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
           <ul id={listId} role="listbox" className="max-h-60 overflow-y-auto py-1">
             {filtered.length === 0 && (
               <li className="px-3 py-2 text-sm text-slate-500">Sin resultados para “{query}”.</li>

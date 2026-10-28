@@ -137,46 +137,45 @@ export function AplicacionAnticipoForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <SearchableSelect
-        label="Cliente"
-        required
-        value={idCliente}
-        onChange={(e: any) => {
-          setIdCliente(e.target.value);
-          setIdAnticipo('');
-          setIdDocumento('');
-        }}
-        options={clientes.map((c) => ({ value: c.id, label: c.label }))}
-        placeholder="Seleccionar cliente"
-        helperText="El cliente determina qué anticipos y documentos pendientes pueden elegirse."
-        error={errorFor('idCliente')}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <SearchableSelect
+          label="Cliente"
+          required
+          value={idCliente}
+          onChange={(e: any) => {
+            setIdCliente(e.target.value);
+            setIdAnticipo('');
+            setIdDocumento('');
+          }}
+          options={clientes.map((c) => ({ value: c.id, label: c.label }))}
+          placeholder="Seleccionar cliente"
+          helperText="Determina los anticipos y documentos disponibles."
+          error={errorFor('idCliente')}
+        />
 
-      <Select
-        label="Anticipo"
-        required
-        value={idAnticipo}
-        onChange={(e: any) => setIdAnticipo(e.target.value)}
-        options={anticipos.map((x) => ({ value: x.id, label: x.label }))}
-        isReadOnly={!idCliente}
-        placeholder={idCliente ? 'Seleccionar anticipo disponible' : 'Selecciona un cliente primero'}
-        helperText="Solo se muestran anticipos del cliente con monto disponible."
-        error={errorFor('idAnticipo')}
-      />
+        <Select
+          label="Anticipo"
+          required
+          value={idAnticipo}
+          onChange={(e: any) => setIdAnticipo(e.target.value)}
+          options={anticipos.map((x) => ({ value: x.id, label: x.label }))}
+          isReadOnly={!idCliente}
+          placeholder={idCliente ? 'Seleccionar anticipo' : 'Selecciona un cliente primero'}
+          helperText="Solo anticipos del cliente con monto disponible."
+          error={errorFor('idAnticipo')}
+        />
 
-      <Select
-        label="Documento"
-        required
-        value={idDocumento}
-        onChange={(e: any) => setIdDocumento(e.target.value)}
-        options={documentos.map((x) => ({ value: x.id, label: x.label }))}
-        isReadOnly={!idCliente}
-        placeholder={idCliente ? 'Seleccionar documento pendiente' : 'Selecciona un cliente primero'}
-        helperText="Solo se muestran documentos con saldo pendiente del mismo cliente."
-        error={errorFor('idDocumento')}
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Documento"
+          required
+          value={idDocumento}
+          onChange={(e: any) => setIdDocumento(e.target.value)}
+          options={documentos.map((x) => ({ value: x.id, label: x.label }))}
+          isReadOnly={!idCliente}
+          placeholder={idCliente ? 'Seleccionar documento pendiente' : 'Selecciona un cliente primero'}
+          helperText="Solo documentos con saldo pendiente del cliente."
+          error={errorFor('idDocumento')}
+        />
         <TextInput
           label="Fecha de aplicación"
           type="date"
