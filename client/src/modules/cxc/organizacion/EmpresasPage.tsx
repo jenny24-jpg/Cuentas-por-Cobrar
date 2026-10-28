@@ -42,7 +42,7 @@ export const EmpresasPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Empresas</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Empresas</h1>
           <p className="text-sm text-slate-500">Catálogo de empresas registradas en el sistema.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>

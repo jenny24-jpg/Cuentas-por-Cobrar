@@ -45,7 +45,7 @@ export const NotasCreditoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Notas de Crédito</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Notas de Crédito</h1>
           <p className="text-sm text-slate-500">Las notas se registran como saldo a favor y reducen la deuda únicamente al aplicarse.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>Nueva Nota</Button>

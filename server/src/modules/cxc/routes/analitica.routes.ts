@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import * as c from '../controllers/analitica.controller';
+import { validarIdsDeRuta } from '../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 // Análisis de cobranza (solo lectura). Todos aceptan ?desde=&hasta=&idEmpleado=&idRuta=
 router.get('/analitica/filtros', c.filtros);

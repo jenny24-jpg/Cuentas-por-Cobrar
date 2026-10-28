@@ -170,7 +170,7 @@ export function PagoForm({
       {isEditing && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-700">Estado:</span>
+            <span className="form-label font-semibold text-slate-700">Estado:</span>
             <StatusBadge status={pago?.estado} />
             <span className="ml-auto text-slate-600">
               Aplicado: <strong>Q {Number(pago?.montoAplicado ?? 0).toFixed(2)}</strong> · Disponible:{' '}

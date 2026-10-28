@@ -12,7 +12,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export function usePaginatedList<T>(
   basePath: string,
-  params: { page: number; limit: number; search?: string },
+  /** Además de page/limit/search admite filtros extra (p. ej. estado, idEmpleado) que viajan en la query. */
+  params: { page: number; limit: number; search?: string; [filtro: string]: string | number | undefined },
 ) {
   const [data, setData] = useState<T[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>(DEFAULT_META);
@@ -22,6 +23,10 @@ export function usePaginatedList<T>(
   const [debouncedSearch, setDebouncedSearch] = useState(params.search ?? '');
 
   const refetch = useCallback(() => setRefreshKey((key) => key + 1), []);
+
+  // Filtros extra serializados: cambian la consulta solo cuando cambia su valor, no la referencia del objeto.
+  const { page, limit, search: _search, ...extras } = params;
+  const filtrosKey = JSON.stringify(extras);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(params.search?.trim() ?? ''), SEARCH_DEBOUNCE_MS);
@@ -34,8 +39,9 @@ export function usePaginatedList<T>(
     setError(null);
 
     const query = buildQueryString({
-      page: params.page,
-      limit: params.limit,
+      ...(JSON.parse(filtrosKey) as Record<string, string | number | undefined>),
+      page,
+      limit,
       search: debouncedSearch,
     });
 
@@ -54,7 +60,7 @@ export function usePaginatedList<T>(
       });
 
     return () => controller.abort();
-  }, [basePath, params.page, params.limit, debouncedSearch, refreshKey]);
+  }, [basePath, page, limit, debouncedSearch, filtrosKey, refreshKey]);
 
   return { data, meta, isLoading, error, refetch };
 }

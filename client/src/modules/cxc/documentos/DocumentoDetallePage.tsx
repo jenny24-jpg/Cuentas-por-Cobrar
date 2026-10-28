@@ -92,7 +92,7 @@ export const DocumentoDetallePage = () => {
       <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">
+            <h1 className="text-slate-900 text-sm font-bold">
               {[documento.serie, documento.numeroDocumento].filter(Boolean).join('-')}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
@@ -125,7 +125,7 @@ export const DocumentoDetallePage = () => {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Detalle comercial</h2>
+            <h2 className="text-slate-900 text-sm font-bold">Detalle comercial</h2>
             <p className="text-sm text-slate-500">CXC_DOCUMENTO_DETALLE</p>
           </div>
           <Button icon={Plus} onClick={() => setDetalleModal({ mode: 'create' })}>
@@ -171,7 +171,7 @@ export const DocumentoDetallePage = () => {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Historial del documento</h2>
+            <h2 className="text-slate-900 text-sm font-bold">Historial del documento</h2>
             <p className="text-sm text-slate-500">CXC_DOCUMENTO_HISTORIAL</p>
           </div>
           <Button icon={Plus} onClick={() => setHistorialModal({ mode: 'create' })}>

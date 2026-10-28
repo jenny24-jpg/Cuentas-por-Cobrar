@@ -82,9 +82,9 @@ PROMPT [4/5] CXC_TIPOS_DOCUMENTO con 2 registros base (los que ya existían por 
 -- 5. Condiciones de crédito (Contado + plazos comunes; AJUSTAR % de mora y
 --    días de gracia a la política real de cobranza de la empresa)
 --------------------------------------------------------
-INSERT INTO "PROYECTOANALISIS"."CXC_CONDICIONES_CREDITO" ("DIAS_CREDITO", "PORCENTAJE_MORA", "DIAS_GRACIA", "ESTADO")
-SELECT 0, 0, 0, 'A' FROM DUAL
- WHERE NOT EXISTS (SELECT 1 FROM "PROYECTOANALISIS"."CXC_CONDICIONES_CREDITO" WHERE "DIAS_CREDITO" = 0);
+-- "Contado" no es una condición de crédito: un documento al contado simplemente
+-- no lleva condición (ID_CONDICION_CREDITO NULL). Los días, el % de mora y los días
+-- de gracia de una condición deben ser mayores a 0.
 
 INSERT INTO "PROYECTOANALISIS"."CXC_CONDICIONES_CREDITO" ("DIAS_CREDITO", "PORCENTAJE_MORA", "DIAS_GRACIA", "ESTADO")
 SELECT 15, 2, 5, 'A' FROM DUAL
@@ -98,7 +98,7 @@ INSERT INTO "PROYECTOANALISIS"."CXC_CONDICIONES_CREDITO" ("DIAS_CREDITO", "PORCE
 SELECT 60, 2, 5, 'A' FROM DUAL
  WHERE NOT EXISTS (SELECT 1 FROM "PROYECTOANALISIS"."CXC_CONDICIONES_CREDITO" WHERE "DIAS_CREDITO" = 60);
 
-PROMPT [5/5] CXC_CONDICIONES_CREDITO con 4 registros base (Contado/15/30/60 días).
+PROMPT [5/5] CXC_CONDICIONES_CREDITO con 3 registros base (15/30/60 días).
 
 COMMIT;
 

@@ -50,7 +50,7 @@ export const FacturasPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Facturas (FEL)</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Facturas (FEL)</h1>
           <p className="text-sm text-slate-500">
             Factura electrónica con certificación simulada de la SAT. Cada factura certificada crea su cuenta por cobrar.
           </p>

@@ -7,7 +7,7 @@ import { FormActionButtons } from '../../../shared/components/FormActionButtons'
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
-import { hasErrors, validateMaxLength, type ValidationErrors } from '../../../shared/validation';
+import { hasErrors, validateTextOnly, type ValidationErrors } from '../../../shared/validation';
 import type { Ajuste } from '@erp/contracts';
 import { AjusteForm } from './components/AjusteForm';
 import { CampoUsuarioActual } from '../../../shared/components/CampoUsuarioActual';
@@ -35,11 +35,8 @@ function AprobacionModal({
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
     if (accion === 'rechazar') {
-      if (motivoRechazo.trim().length < 5) next.motivoRechazo = 'Describe el motivo del rechazo (mínimo 5 caracteres).';
-      else {
-        const maxErr = validateMaxLength(motivoRechazo, 'El motivo', 250);
-        if (maxErr) next.motivoRechazo = maxErr;
-      }
+      const motivoErr = validateTextOnly(motivoRechazo, 'El motivo del rechazo', { required: true, minLength: 5, maxLength: 250 });
+      if (motivoErr) next.motivoRechazo = motivoErr;
     }
     return next;
   }, [motivoRechazo, accion]);
@@ -96,7 +93,7 @@ function AprobacionModal({
             value={motivoRechazo}
             onChange={(e: any) => setMotivoRechazo(e.target.value)}
             error={errors.motivoRechazo}
-            helperText="Obligatorio, mínimo 5 caracteres."
+            helperText="Obligatorio: solo letras y espacios, entre 5 y 250 caracteres."
           />
         )}
 
@@ -146,7 +143,7 @@ export const AjustesPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Ajustes de Cartera</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Ajustes de Cartera</h1>
           <p className="text-sm text-slate-500">
             Un ajuste nace pendiente y requiere dos aprobaciones de empleados distintos; solo mueve el saldo del documento tras la segunda.
           </p>

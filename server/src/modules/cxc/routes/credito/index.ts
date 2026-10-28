@@ -3,8 +3,9 @@ import * as condicionCreditoController from '../../controllers/credito/condicion
 import * as notaCreditoController from '../../controllers/credito/notaCredito.controller';
 import * as aplicacionNotaCreditoController from '../../controllers/credito/aplicacionNotaCredito.controller';
 import * as moraController from '../../controllers/credito/mora.controller';
+import { validarIdsDeRuta } from '../../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 // --- Condiciones de crédito ---
 router.get('/condiciones-credito', condicionCreditoController.list);

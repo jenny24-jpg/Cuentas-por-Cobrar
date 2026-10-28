@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
-import { DataTable, StatusBadge, Button } from '../../../shared/ui-kit';
-import { Modal } from '../../../shared/components';
+import { ArrowLeft, Trash2 } from 'lucide-react';
+import { DataTable, StatusBadge } from '../../../shared/ui-kit';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { apiClient, ApiError } from '../../../shared/api';
 import type { Ruta, RutaDetalle } from '@erp/contracts';
 import { RutaOperacionPanel } from './components/RutaOperacionPanel';
-import { RutaDetalleForm } from './components/RutaDetalleForm';
 
 export const RutaDetallePage = () => {
   const { id } = useParams();
@@ -19,7 +17,6 @@ export const RutaDetallePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; parada?: RutaDetalle } | null>(null);
   const [paradaAEliminar, setParadaAEliminar] = useState<RutaDetalle | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -72,16 +69,14 @@ export const RutaDetallePage = () => {
 
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-slate-900 text-sm font-bold">
             {ruta ? `Ruta: ${ruta.nombre}` : 'Ruta'}
           </h1>
           <p className="text-sm text-slate-500">
             {ruta ? `Responsable: ${ruta.nombreEmpleado ?? '—'} · Estado: ${ruta.estado}` : 'Paradas de la ruta.'}
           </p>
         </div>
-        <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>
-          Agregar Parada
-        </Button>
+
       </div>
 
       {error && (
@@ -91,11 +86,15 @@ export const RutaDetallePage = () => {
       )}
 
       {ruta && <RutaOperacionPanel idRuta={idRuta} estado={ruta.estado} />}
-      <h2 className="text-lg font-bold">Paradas generales de la ruta</h2>
+      {paradas.some((p) => !p.idDocumento) && <>
+      <h2 className="text-sm font-bold">Paradas del formato anterior</h2>
+      <p className="text-sm text-slate-500">
+        Estas paradas no tienen documento, hora confirmada ni ubicación. Ya no se pueden crear ni editar: elimínalas y, si corresponde, asígnalas de nuevo con «Asignar documento».
+      </p>
       <DataTable
         isLoading={isLoading}
         data={paradas.filter(p => !p.idDocumento)}
-        emptyText="Esta ruta todavía no tiene paradas registradas"
+        emptyText="Esta ruta no tiene paradas del formato anterior"
         columns={[
           { header: 'Orden', accessorKey: 'ordenVisita', cell: ({ value }: any) => value ?? '—' },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
@@ -116,13 +115,6 @@ export const RutaDetallePage = () => {
             cell: ({ row }: any) => (
               <div className="flex justify-end gap-1">
                 <button
-                  onClick={() => setModalState({ mode: 'edit', parada: row })}
-                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                  title="Editar"
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
                   onClick={() => setParadaAEliminar(row)}
                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                   title="Eliminar"
@@ -134,19 +126,7 @@ export const RutaDetallePage = () => {
           },
         ]}
       />
-
-      <Modal
-        isOpen={!!modalState}
-        onClose={() => setModalState(null)}
-        title={modalState?.mode === 'edit' ? 'Editar Parada' : 'Nueva Parada'}
-      >
-        <RutaDetalleForm
-          idRuta={idRuta}
-          parada={modalState?.parada}
-          onCancel={() => setModalState(null)}
-          onSuccess={() => { setModalState(null); cargar(); }}
-        />
-      </Modal>
+      </>}
 
       <ConfirmDialog
         isOpen={!!paradaAEliminar}

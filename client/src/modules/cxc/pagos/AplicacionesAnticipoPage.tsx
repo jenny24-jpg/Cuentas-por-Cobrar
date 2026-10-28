@@ -30,7 +30,7 @@ export const AplicacionesAnticipoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Aplicaciones de Anticipo</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Anticipo</h1>
           <p className="text-sm text-slate-500">
             Aplicar un anticipo reduce el saldo del documento y su propio disponible dentro de una transacción segura.
           </p>

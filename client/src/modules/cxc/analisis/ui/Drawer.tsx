@@ -55,7 +55,7 @@ export function Drawer({ titulo, subtitulo, onCerrar, onVolver, children, ancho 
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold text-slate-900">{titulo}</h2>
+            <h2 className="truncate text-slate-900 text-sm font-bold">{titulo}</h2>
             {subtitulo && <div className="mt-0.5 text-[12.5px] text-slate-500">{subtitulo}</div>}
           </div>
           <button type="button" onClick={onCerrar} aria-label="Cerrar detalle" className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">

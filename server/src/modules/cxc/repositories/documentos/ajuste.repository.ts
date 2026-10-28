@@ -249,7 +249,7 @@ export async function aprobar(id: number, input: AprobarAjusteInput): Promise<vo
     );
     const ajuste = ajusteResult.rows?.[0];
     if (!ajuste) throw new NotFoundError(`Ajuste ${id} no encontrado`);
-    const estadoActual = String(ajuste.ESTADO).toUpperCase();
+    const estadoActual = String(ajuste.ESTADO).trim().toUpperCase();
     if (!ESTADOS_APROBABLES.includes(estadoActual)) {
       throw new ConflictError('Solo un ajuste pendiente o en segunda aprobación puede aprobarse.');
     }
@@ -350,15 +350,21 @@ export async function rechazar(id: number, input: RechazarAjusteInput): Promise<
     );
     const row = result.rows?.[0];
     if (!row) throw new NotFoundError(`Ajuste ${id} no encontrado`);
-    if (!ESTADOS_APROBABLES.includes(String(row.ESTADO).toUpperCase())) {
+    const estadoActual = String(row.ESTADO).trim().toUpperCase();
+    if (!ESTADOS_APROBABLES.includes(estadoActual)) {
       throw new ConflictError('Solo un ajuste pendiente o en segunda aprobación puede rechazarse.');
     }
 
+    // En segunda instancia el rechazo se registra como segundo aprobador para no
+    // borrar la trazabilidad de quien dio la primera aprobación.
+    const [colEmpleado, colFecha] = estadoActual === 'EN_2DA_APROBACION'
+      ? ['ID_EMPLEADO_APROBADOR_2', 'FECHA_APROBACION_2']
+      : ['ID_EMPLEADO_APROBADOR', 'FECHA_APROBACION'];
     await conn.execute(
       `UPDATE CXC_AJUSTES
           SET ESTADO = 'RECHAZADO',
-              ID_EMPLEADO_APROBADOR = :idEmpleadoAprobador,
-              FECHA_APROBACION = NVL(TO_DATE(:fechaAprobacion, 'YYYY-MM-DD'), SYSDATE),
+              ${colEmpleado} = :idEmpleadoAprobador,
+              ${colFecha} = NVL(TO_DATE(:fechaAprobacion, 'YYYY-MM-DD'), SYSDATE),
               MOTIVO_RECHAZO = :motivoRechazo
         WHERE ID_AJUSTE = :id`,
       {

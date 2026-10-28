@@ -2,8 +2,9 @@ import { Router } from 'express';
 import * as gestionCobroController from '../../controllers/cobranza/gestionCobro.controller';
 import * as promesaPagoController from '../../controllers/cobranza/promesaPago.controller';
 import * as convenioPagoController from '../../controllers/cobranza/convenioPago.controller';
+import { validarIdsDeRuta } from '../../../../shared/idParams';
 
-const router = Router();
+const router = validarIdsDeRuta(Router());
 
 // --- Gestiones de cobro ---
 router.get('/gestiones-cobro', gestionCobroController.list);

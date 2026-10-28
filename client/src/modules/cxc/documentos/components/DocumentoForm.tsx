@@ -212,7 +212,7 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
       {isEditing && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold text-slate-700">Estado financiero:</span>
+            <span className="form-label font-semibold text-slate-700">Estado financiero:</span>
             <StatusBadge status={documento?.estado} />
             {documento?.condicion === 'VENCIDA' && <StatusBadge status="VENCIDA" />}
             <span className="ml-auto text-slate-600">

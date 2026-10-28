@@ -8,6 +8,7 @@ import {
   validateMoney,
   validateDate,
   validateMaxLength,
+  validateTextOnly,
   hasErrors,
   type ValidationErrors,
 } from '../../../../shared/validation';
@@ -53,9 +54,9 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
     const next: ValidationErrors = {};
     const clienteErr = validateRequiredSelect(idCliente, 'un cliente');
     if (clienteErr) next.idCliente = clienteErr;
-    const resultadoErr = validateMaxLength(resultado, 'Resultado', 80);
+    const resultadoErr = validateTextOnly(resultado, 'Resultado', { required: true, minLength: 1, maxLength: 80 });
     if (resultadoErr) next.resultado = resultadoErr;
-    const observacionErr = validateMaxLength(observacion, 'Observación', 500);
+    const observacionErr = validateTextOnly(observacion, 'Observación', { required: true, minLength: 1, maxLength: 500 });
     if (observacionErr) next.observacion = observacionErr;
     const fechaErr = validateDate(fechaCompromiso, 'La fecha de compromiso', { notPast: true });
     if (fechaErr) next.fechaCompromiso = fechaErr;
@@ -102,9 +103,9 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select label="Tipo de gestión" value={tipoGestion} onChange={(e: any) => setTipoGestion(e.target.value)} options={TIPO_OPTIONS} helperText="Canal utilizado para contactar al cliente." />
-        <TextInput label="Resultado" value={resultado} onChange={(e: any) => setResultado(e.target.value)} placeholder="Ej. Cliente confirma pago" maxLength={80} error={errors.resultado} helperText="Resumen breve del resultado; máximo 80 caracteres." />
+        <TextInput label="Resultado" required value={resultado} onChange={(e: any) => setResultado(e.target.value)} placeholder="Ej. Cliente confirma pago" maxLength={80} error={errors.resultado} helperText="Obligatorio: solo letras y espacios; máximo 80 caracteres." />
       </div>
-      <TextArea label="Observación" value={observacion} onChange={(e: any) => setObservacion(e.target.value)} rows={3} maxLength={500} error={errors.observacion} helperText="Detalle adicional de la conversación o visita; máximo 500 caracteres." />
+      <TextArea label="Observación" required value={observacion} onChange={(e: any) => setObservacion(e.target.value)} rows={3} maxLength={500} error={errors.observacion} helperText="Obligatoria: solo letras y espacios; máximo 500 caracteres." />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput label="Fecha compromiso" type="date" min={todayIso()} value={fechaCompromiso} onChange={(e: any) => setFechaCompromiso(e.target.value)} error={errors.fechaCompromiso} helperText="Solo si existe compromiso; no puede ser anterior a hoy." />
         <TextInput label="Monto comprometido" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" value={montoCompromiso} onChange={(e: any) => setMontoCompromiso(e.target.value)} error={errors.montoCompromiso} helperText="Monto prometido, mayor a 0 y con máximo 2 decimales." />

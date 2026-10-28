@@ -41,7 +41,7 @@ export const AnticiposPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Anticipos</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Anticipos</h1>
           <p className="text-sm text-slate-500">Un anticipo disponible se aplica contra un documento; para corregirlo se reversa la aplicación o se anula con trazabilidad.</p>
         </div>
         <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo</Button>

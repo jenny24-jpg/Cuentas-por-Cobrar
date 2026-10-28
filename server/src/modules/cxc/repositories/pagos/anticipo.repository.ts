@@ -8,6 +8,7 @@ import type {
   AnularAnticipoInput,
 } from '@erp/contracts';
 import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
+import { roundMoney } from '../../shared/financialRules';
 
 interface Row {
   ID_ANTICIPO: number;
@@ -26,10 +27,65 @@ interface Row {
 }
 
 interface AnticipoBloqueado {
+  ID_CLIENTE: number;
+  ID_PAGO: number | null;
   ESTADO: string;
   MONTO_ORIGINAL: number;
   MONTO_DISPONIBLE: number;
   FECHA_ISO: string;
+}
+
+/**
+ * Un pago que respalda un anticipo queda reservado completo para él: bloquea el
+ * pago (FOR UPDATE, mismo orden que aplicacionPago.create) y exige que no tenga
+ * aplicaciones a documentos ni otro anticipo vigente, y que cubra el monto.
+ * Sin esto el mismo dinero podía respaldar varios anticipos o un anticipo y un cobro.
+ */
+async function validarPagoRespaldo(
+  conn: oracledb.Connection,
+  idPago: number,
+  idCliente: number,
+  monto: number,
+  excluirAnticipo?: number,
+): Promise<void> {
+  const pagoResult = await conn.execute<{ ID_CLIENTE: number; MONTO: number; ESTADO: string }>(
+    `SELECT ID_CLIENTE, MONTO, ESTADO FROM CXC_PAGOS WHERE ID_PAGO = :idPago FOR UPDATE`,
+    { idPago },
+  );
+  const pago = pagoResult.rows?.[0];
+  if (!pago) throw new BadRequestError('El pago relacionado no existe');
+  if (['ANULADO', 'REVERSADO'].includes(String(pago.ESTADO ?? '').trim().toUpperCase())) {
+    throw new ConflictError('No se puede relacionar un anticipo con un pago anulado o reversado.');
+  }
+  if (pago.ID_CLIENTE !== idCliente) {
+    throw new BadRequestError('El anticipo y el pago relacionado deben pertenecer al mismo cliente');
+  }
+
+  const aplicado = await conn.execute<{ TOTAL: number }>(
+    `SELECT NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
+       FROM CXC_APLICACION_PAGOS
+      WHERE ID_PAGO = :idPago AND ESTADO = 'CONFIRMADA'`,
+    { idPago },
+  );
+  if (Number(aplicado.rows?.[0]?.TOTAL ?? 0) > 0.005) {
+    throw new ConflictError('El pago ya tiene aplicaciones a documentos; no puede respaldar un anticipo.');
+  }
+
+  const otros = await conn.execute<{ TOTAL: number }>(
+    `SELECT COUNT(*) AS TOTAL
+       FROM CXC_ANTICIPOS
+      WHERE ID_PAGO = :idPago
+        AND ESTADO <> 'CANCELADO'
+        AND (:excluir IS NULL OR ID_ANTICIPO <> :excluir)`,
+    { idPago, excluir: excluirAnticipo ?? null },
+  );
+  if (Number(otros.rows?.[0]?.TOTAL ?? 0) > 0) {
+    throw new ConflictError('El pago ya respalda otro anticipo vigente.');
+  }
+
+  if (roundMoney(monto) > roundMoney(Number(pago.MONTO)) + 0.005) {
+    throw new BadRequestError('El monto del anticipo no puede superar el monto del pago relacionado.');
+  }
 }
 
 const map = (r: Row): Anticipo => ({
@@ -128,6 +184,9 @@ export async function create(input: CreateAnticipoInput): Promise<number> {
 
   const conn = await getConnection();
   try {
+    if (input.idPago != null) {
+      await validarPagoRespaldo(conn, input.idPago, input.idCliente, original);
+    }
     const result = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_ANTICIPOS
          (ID_CLIENTE, ID_PAGO, MONTO_ORIGINAL, MONTO_DISPONIBLE, FECHA, ESTADO)
@@ -156,7 +215,7 @@ export async function create(input: CreateAnticipoInput): Promise<number> {
 
 async function bloquearAnticipo(conn: oracledb.Connection, id: number): Promise<AnticipoBloqueado> {
   const result = await conn.execute<AnticipoBloqueado>(
-    `SELECT ESTADO, MONTO_ORIGINAL, MONTO_DISPONIBLE,
+    `SELECT ID_CLIENTE, ID_PAGO, ESTADO, MONTO_ORIGINAL, MONTO_DISPONIBLE,
             TO_CHAR(FECHA, 'YYYY-MM-DD') AS FECHA_ISO
        FROM CXC_ANTICIPOS
       WHERE ID_ANTICIPO = :id
@@ -202,6 +261,10 @@ export async function update(id: number, input: UpdateAnticipoInput): Promise<vo
     }
     if (input.fecha !== undefined && input.fecha > businessTodayIso()) {
       throw new BadRequestError('La fecha del anticipo no puede ser futura.');
+    }
+    const idPagoFinal = input.idPago === undefined ? current.ID_PAGO : input.idPago;
+    if (idPagoFinal != null) {
+      await validarPagoRespaldo(conn, idPagoFinal, input.idCliente ?? current.ID_CLIENTE, original, id);
     }
 
     const columnas = [

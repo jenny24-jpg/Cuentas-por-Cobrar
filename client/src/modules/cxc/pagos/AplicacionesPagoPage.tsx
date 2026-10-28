@@ -30,7 +30,7 @@ export const AplicacionesPagoPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Aplicaciones de Pago</h1>
+          <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Pago</h1>
           <p className="text-sm text-slate-500">
             Aplicar un pago reduce el saldo del documento dentro de una transacción segura.
           </p>
