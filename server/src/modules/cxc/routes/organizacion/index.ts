@@ -19,6 +19,7 @@ router.patch('/cobradores/:idEmpleado/perfil', operacion.perfil);
 // --- Empresas ---
 // /options va ANTES de /:id para que Express no confunda "options" con un id.
 router.get('/empresas/options', empresaController.options);
+router.get('/empresas/tipos-comercio', empresaController.tiposComercio);
 router.get('/empresas', empresaController.list);
 router.get('/empresas/:id', empresaController.getOne);
 router.post('/empresas', empresaController.create);

@@ -351,3 +351,64 @@ export async function remove(id: number): Promise<void> {
     await conn.close();
   }
 }
+
+// =====================================================
+// CIERRE AUTOMÁTICO DE PROMESAS VENCIDAS
+// =====================================================
+
+/**
+ * Cierra las promesas PENDIENTE cuya fecha comprometida ya pasó. Es CUMPLIDA si
+ * el documento prometido ya no tiene saldo o si el cliente pagó al menos lo
+ * comprometido entre la fecha de la promesa y la fecha comprometida (pagos no
+ * anulados ni reversados); si no, INCUMPLIDA. Una sola transacción.
+ */
+export async function cerrarVencidas(
+  hoy: string = businessTodayIso(),
+): Promise<{ cumplidas: number; incumplidas: number }> {
+  const conn = await getConnection();
+
+  try {
+    const vencida = `p.ESTADO = 'PENDIENTE'
+          AND p.FECHA_COMPROMISO IS NOT NULL
+          AND p.FECHA_COMPROMISO < TO_DATE(:hoy, 'YYYY-MM-DD')`;
+
+    const cumplidas = await conn.execute(
+      `
+        UPDATE CXC_PROMESAS_PAGO p
+           SET ESTADO = 'CUMPLIDA'
+         WHERE ${vencida}
+           AND (
+             EXISTS (
+               SELECT 1 FROM CXC_DOCUMENTOS d
+                WHERE d.ID_DOCUMENTO = p.ID_DOCUMENTO
+                  AND d.SALDO <= 0.005
+             )
+             OR (
+               SELECT NVL(SUM(pg.MONTO), 0) FROM CXC_PAGOS pg
+                WHERE pg.ID_CLIENTE = p.ID_CLIENTE
+                  AND UPPER(TRIM(pg.ESTADO)) NOT IN ('ANULADO', 'REVERSADO')
+                  AND pg.FECHA_PAGO BETWEEN TRUNC(p.FECHA_PROMESA) AND TRUNC(p.FECHA_COMPROMISO)
+             ) >= p.MONTO_COMPROMETIDO - 0.005
+           )
+      `,
+      { hoy },
+    );
+
+    const incumplidas = await conn.execute(
+      `UPDATE CXC_PROMESAS_PAGO p SET ESTADO = 'INCUMPLIDA' WHERE ${vencida}`,
+      { hoy },
+    );
+
+    await conn.commit();
+
+    return {
+      cumplidas: cumplidas.rowsAffected ?? 0,
+      incumplidas: incumplidas.rowsAffected ?? 0,
+    };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    await conn.close();
+  }
+}

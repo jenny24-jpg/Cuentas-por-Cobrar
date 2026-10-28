@@ -51,7 +51,7 @@ export const ClientesPage = () => {
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-end">
         <TextInput
           icon={Search}
-          placeholder="Buscar por ID, nombre o NIT..."
+          placeholder="Buscar por ID, código de cobro, nombre, NIT o dirección..."
           value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }}
           className="sm:max-w-sm"
@@ -82,7 +82,15 @@ export const ClientesPage = () => {
         columns={[
           { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Nombre del cliente', accessorKey: 'nombre', cell: ({ value }: any) => <span className="font-medium text-slate-900">{value}</span> },
+          { header: 'Código cobro', accessorKey: 'codigoCobro', cell: ({ value }: any) => <span className="tabular-nums font-medium text-blue-800">{value}</span> },
           { header: 'NIT', accessorKey: 'nit', cell: ({ value }: any) => <span className="tabular-nums">{value || '—'}</span> },
+          {
+            header: 'Dirección',
+            accessorKey: 'direccion',
+            cell: ({ value }: any) => value
+              ? <span className="block max-w-xs truncate" title={value}>{value}</span>
+              : <span className="text-amber-700">Sin dirección</span>,
+          },
           {
             header: 'Condición de pago',
             cell: ({ row }: { row: Cliente }) => {

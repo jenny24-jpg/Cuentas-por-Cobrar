@@ -15,7 +15,6 @@ async function assertCatalogos(
   idCliente: number,
   idFormaPago: number,
   idMoneda: number,
-  numeroReferencia?: string | null,
   idBanco?: number | null,
 ) {
   const [clienteOk, formas, monedas, bancoOk] = await Promise.all([
@@ -29,9 +28,6 @@ async function assertCatalogos(
   if (!forma) throw new BadRequestError('La forma de pago no existe o está inactiva');
   if (!monedas.some((x) => x.id === idMoneda)) throw new BadRequestError('La moneda seleccionada no existe');
   if (idBanco && !bancoOk) throw new BadRequestError('El banco seleccionado no existe o está inactivo');
-  if (forma.requiereReferencia && !numeroReferencia) {
-    throw new BadRequestError(`${forma.label} requiere un número de referencia`);
-  }
 }
 
 export async function listPagos(q: { page?: string; limit?: string; search?: string }): Promise<PaginatedResponse<Pago>> {
@@ -51,7 +47,7 @@ export async function getPago(id: number): Promise<Pago> {
 export async function createPago(raw: unknown): Promise<Pago> {
   const input = createPagoSchema.parse(raw);
   if (input.fechaPago > businessTodayIso()) throw new BadRequestError('La fecha de pago no puede ser futura');
-  await assertCatalogos(input.idCliente, input.idFormaPago, input.idMoneda, input.numeroReferencia, input.idBanco);
+  await assertCatalogos(input.idCliente, input.idFormaPago, input.idMoneda, input.idBanco);
   const id = await repository.create(input);
   return getPago(id);
 }
@@ -64,11 +60,10 @@ export async function updatePago(id: number, raw: unknown): Promise<Pago> {
     idFormaPago: input.idFormaPago ?? current.idFormaPago,
     idMoneda: input.idMoneda ?? current.idMoneda,
     idBanco: input.idBanco === undefined ? current.idBanco : input.idBanco,
-    numeroReferencia: input.numeroReferencia === undefined ? current.numeroReferencia : input.numeroReferencia,
     fechaPago: input.fechaPago ?? current.fechaPago.slice(0, 10),
   };
   if (final.fechaPago > businessTodayIso()) throw new BadRequestError('La fecha de pago no puede ser futura');
-  await assertCatalogos(final.idCliente, final.idFormaPago, final.idMoneda, final.numeroReferencia, final.idBanco);
+  await assertCatalogos(final.idCliente, final.idFormaPago, final.idMoneda, final.idBanco);
   // repository.update() bloquea la fila (FOR UPDATE) y revalida bajo esa
   // misma conexión que el pago sigue sin aplicaciones CONFIRMADA.
   await repository.update(id, input);

@@ -9,7 +9,6 @@ import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioAc
 
 import {
   hasErrors,
-  validateIdentifier,
   validateMoney,
   validateRequiredDate,
   validateRequiredSelect,
@@ -65,9 +64,7 @@ export function ReciboForm({
     item?.idPago?.toString() ?? '',
   );
 
-  const [numeroRecibo, setNumero] = useState(
-    item?.numeroRecibo ?? '',
-  );
+  const numeroRecibo = item?.numeroRecibo ?? '';
 
   const [fecha, setFecha] = useState(
     item?.fecha?.slice(0, 10) ?? hoyGuatemalaIso(),
@@ -229,17 +226,6 @@ export function ReciboForm({
       next.idPago = pagoErr;
     }
 
-    if (numeroRecibo) {
-      const numeroErr = validateIdentifier(
-        numeroRecibo,
-        'El número de recibo',
-      );
-
-      if (numeroErr) {
-        next.numeroRecibo = numeroErr;
-      }
-    }
-
     const fechaErr = validateRequiredDate(
       fecha,
       'La fecha',
@@ -314,7 +300,6 @@ export function ReciboForm({
   }, [
     idCliente,
     idPago,
-    numeroRecibo,
     fecha,
     monto,
     estado,
@@ -415,7 +400,6 @@ export function ReciboForm({
     const payload = {
       idCliente: Number(idCliente),
       idPago: Number(idPago),
-      numeroRecibo: numeroRecibo.trim() || undefined,
       fecha,
       monto: Number(monto),
       estado: isEditing ? estado : 'EMITIDO',
@@ -519,16 +503,9 @@ export function ReciboForm({
 
         <TextInput
           label="Número de recibo"
-          restriction="identifier"
-          uppercase
-          maxLength={30}
-          value={numeroRecibo}
-          onChange={(e: any) =>
-            setNumero(e.target.value)
-          }
-          isReadOnly={isReciboEmitido}
-          helperText="Correlativo del recibo; admite letras, números, -, _ y /."
-          error={errorFor('numeroRecibo', numeroRecibo)}
+          value={numeroRecibo || 'Se asigna al guardar'}
+          isReadOnly
+          helperText="Correlativo automático del sistema (REC-AAAA-000001); no se edita."
         />
         <Select
           label="Estado"

@@ -5,7 +5,7 @@ import {
   type PaginatedResponse,
   type Empresa,
 } from '@erp/contracts';
-import { NotFoundError } from '../../../../shared/errors/AppError';
+import { BadRequestError, NotFoundError } from '../../../../shared/errors/AppError';
 import * as empresaRepository from '../../repositories/organizacion/empresa.repository';
 
 export async function listEmpresas(query: {
@@ -29,14 +29,32 @@ export async function getEmpresa(id: number): Promise<Empresa> {
   return empresa;
 }
 
+export async function listTiposComercio(): Promise<string[]> {
+  return empresaRepository.findTiposComercio();
+}
+
+/** El tipo de comercio debe ser uno de los registrados en la base; uno nuevo lo carga el DBA. */
+async function assertTipoComercio(giroComercial: string | undefined) {
+  if (giroComercial === undefined) return;
+  const tipos = await empresaRepository.findTiposComercio();
+  if (tipos.length === 0) {
+    throw new BadRequestError('No hay tipos de comercio registrados en la base de datos. Solicita al equipo DBA que los cargue.');
+  }
+  if (!tipos.includes(giroComercial)) {
+    throw new BadRequestError('El tipo de comercio no está registrado en la base de datos. Selecciona uno de la lista.');
+  }
+}
+
 export async function createEmpresa(rawInput: unknown): Promise<Empresa> {
   const input = createEmpresaSchema.parse(rawInput);
+  await assertTipoComercio(input.giroComercial);
   const id = await empresaRepository.create(input);
   return getEmpresa(id);
 }
 
 export async function updateEmpresa(id: number, rawInput: unknown): Promise<Empresa> {
   const input = updateEmpresaSchema.parse(rawInput);
+  await assertTipoComercio(input.giroComercial);
   await empresaRepository.update(id, input);
   return getEmpresa(id);
 }

@@ -41,13 +41,13 @@ interface AnticipoBloqueado {
  * aplicaciones a documentos ni otro anticipo vigente, y que cubra el monto.
  * Sin esto el mismo dinero podía respaldar varios anticipos o un anticipo y un cobro.
  */
+/** Valida el pago que respalda el anticipo y devuelve su monto (será el monto original). */
 async function validarPagoRespaldo(
   conn: oracledb.Connection,
   idPago: number,
   idCliente: number,
-  monto: number,
   excluirAnticipo?: number,
-): Promise<void> {
+): Promise<number> {
   const pagoResult = await conn.execute<{ ID_CLIENTE: number; MONTO: number; ESTADO: string }>(
     `SELECT ID_CLIENTE, MONTO, ESTADO FROM CXC_PAGOS WHERE ID_PAGO = :idPago FOR UPDATE`,
     { idPago },
@@ -83,9 +83,7 @@ async function validarPagoRespaldo(
     throw new ConflictError('El pago ya respalda otro anticipo vigente.');
   }
 
-  if (roundMoney(monto) > roundMoney(Number(pago.MONTO)) + 0.005) {
-    throw new BadRequestError('El monto del anticipo no puede superar el monto del pago relacionado.');
-  }
+  return roundMoney(Number(pago.MONTO));
 }
 
 const map = (r: Row): Anticipo => ({
@@ -172,21 +170,14 @@ export async function findById(id: number): Promise<Anticipo | null> {
 // Las aplicaciones y reversas modifican MONTO_DISPONIBLE mediante su propio
 // repositorio. La creación de la cabecera inicia siempre con saldo íntegro.
 export async function create(input: CreateAnticipoInput): Promise<number> {
-  const original = Number(input.montoOriginal);
-  const disponible = Number(input.montoDisponible);
-  if (!Number.isFinite(original) || original <= 0 ||
-      !Number.isFinite(disponible) || Math.abs(original - disponible) > 0.005) {
-    throw new BadRequestError('El anticipo debe iniciar con un monto positivo y disponible igual al original.');
-  }
   if (input.fecha > businessTodayIso()) {
     throw new BadRequestError('La fecha del anticipo no puede ser futura.');
   }
 
   const conn = await getConnection();
   try {
-    if (input.idPago != null) {
-      await validarPagoRespaldo(conn, input.idPago, input.idCliente, original);
-    }
+    // El monto original es el del pago que lo respalda; el disponible inicia igual.
+    const original = await validarPagoRespaldo(conn, input.idPago, input.idCliente);
     const result = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_ANTICIPOS
          (ID_CLIENTE, ID_PAGO, MONTO_ORIGINAL, MONTO_DISPONIBLE, FECHA, ESTADO)
@@ -253,25 +244,21 @@ export async function update(id: number, input: UpdateAnticipoInput): Promise<vo
       throw new ConflictError('Este anticipo ya tiene historial de aplicaciones; no puede editarse directamente.');
     }
 
-    const original = input.montoOriginal ?? Number(current.MONTO_ORIGINAL);
-    const disponible = input.montoDisponible ?? Number(current.MONTO_DISPONIBLE);
-    if (!Number.isFinite(original) || original <= 0 ||
-        !Number.isFinite(disponible) || Math.abs(original - disponible) > 0.005) {
-      throw new BadRequestError('En un anticipo sin aplicaciones, el disponible debe ser igual al monto original y positivo.');
-    }
     if (input.fecha !== undefined && input.fecha > businessTodayIso()) {
       throw new BadRequestError('La fecha del anticipo no puede ser futura.');
     }
     const idPagoFinal = input.idPago === undefined ? current.ID_PAGO : input.idPago;
-    if (idPagoFinal != null) {
-      await validarPagoRespaldo(conn, idPagoFinal, input.idCliente ?? current.ID_CLIENTE, original, id);
+    if (idPagoFinal == null) {
+      throw new BadRequestError('Selecciona el pago que respalda el anticipo.');
     }
+    // Sin aplicaciones, original y disponible se recalculan desde el pago.
+    const original = await validarPagoRespaldo(conn, idPagoFinal, input.idCliente ?? current.ID_CLIENTE, id);
+    fields.push('MONTO_ORIGINAL = :montoOriginal', 'MONTO_DISPONIBLE = :montoOriginal');
+    binds.montoOriginal = original;
 
     const columnas = [
       ['idCliente', 'ID_CLIENTE'],
       ['idPago', 'ID_PAGO'],
-      ['montoOriginal', 'MONTO_ORIGINAL'],
-      ['montoDisponible', 'MONTO_DISPONIBLE'],
     ] as const;
     for (const [key, column] of columnas) {
       const value = input[key];

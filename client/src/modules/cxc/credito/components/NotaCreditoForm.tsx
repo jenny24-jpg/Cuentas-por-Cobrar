@@ -5,7 +5,6 @@ import { FormActionButtons } from '../../../../shared/components/FormActionButto
 import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
-  validateIdentifier,
   validateMaxLength,
   validateMoney,
   validateRequiredDate,
@@ -67,8 +66,8 @@ export const NotaCreditoForm = ({
     nota?.descripcion ?? '',
   );
 
-  const [serie, setSerie] = useState(nota?.serie ?? '');
-  const [numero, setNumero] = useState(nota?.numero ?? '');
+  const serie = nota?.serie ?? '';
+  const numero = nota?.numero ?? '';
 
   // Al crear, utilizar la fecha actual de Guatemala.
   // Al editar, conservar la fecha original de la nota.
@@ -156,20 +155,8 @@ export const NotaCreditoForm = ({
       next.idCliente = clienteErr;
     }
 
-    if (serie) {
-      const serieErr = validateIdentifier(serie, 'La serie');
-
-      if (serieErr) {
-        next.serie = serieErr;
-      }
-    }
-
-    if (numero) {
-      const numeroErr = validateIdentifier(numero, 'El número');
-
-      if (numeroErr) {
-        next.numero = numeroErr;
-      }
+    if (!idDocumentoReferencia) {
+      next.idDocumentoReferencia = 'Selecciona el documento al que aplica la nota.';
     }
 
     // La fecha no puede ser futura.
@@ -209,11 +196,9 @@ export const NotaCreditoForm = ({
         'El monto no puede superar el saldo pendiente del documento seleccionado.';
     }
 
-    const descripcionErr = validateMaxLength(
-      descripcion,
-      'La descripción',
-      250,
-    );
+    const descripcionErr = descripcion.trim().length < 10
+      ? 'Describe el motivo de la nota (mínimo 10 caracteres).'
+      : validateMaxLength(descripcion, 'La descripción', 250);
 
     if (descripcionErr) {
       next.descripcion = descripcionErr;
@@ -222,8 +207,7 @@ export const NotaCreditoForm = ({
     return next;
   }, [
     idCliente,
-    serie,
-    numero,
+    idDocumentoReferencia,
     fecha,
     monto,
     descripcion,
@@ -286,12 +270,8 @@ export const NotaCreditoForm = ({
 
     const payload = {
       idCliente: Number(idCliente),
-      idDocumentoReferencia: idDocumentoReferencia
-        ? Number(idDocumentoReferencia)
-        : null,
-      descripcion: descripcion.trim() || null,
-      serie: serie.trim().toUpperCase() || null,
-      numero: numero.trim().toUpperCase() || null,
+      idDocumentoReferencia: Number(idDocumentoReferencia),
+      descripcion: descripcion.trim(),
       fecha,
       monto: Number(monto),
     };
@@ -402,6 +382,7 @@ export const NotaCreditoForm = ({
 
         <Select
           label="Documento de referencia"
+          required
           value={idDocumentoReferencia}
           onChange={(e: any) =>
             setIdDocumentoReferencia(e.target.value)
@@ -412,46 +393,21 @@ export const NotaCreditoForm = ({
           }))}
           placeholder={
             idCliente
-              ? 'Seleccionar documento (opcional)'
+              ? 'Seleccionar documento'
               : 'Selecciona un cliente primero'
           }
           isReadOnly={!idCliente || isLocked}
           error={errors.idDocumentoReferencia}
-          helperText="Opcional; solo se muestran documentos con saldo pendiente del cliente."
+          helperText="Obligatorio; solo se muestran documentos con saldo pendiente del cliente."
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TextInput
-          label="Serie"
-          restriction="identifier"
-          uppercase
-          maxLength={30}
-          value={serie}
-          onChange={(e: any) =>
-            setSerie(e.target.value)
-          }
-          error={errors.serie}
-          placeholder="Ej. NC"
-          helperText="Código alfanumérico; admite -, _ y /."
-          isReadOnly={isLocked}
-        />
-
-        <TextInput
-          label="Número"
-          restriction="identifier"
-          uppercase
-          maxLength={30}
-          value={numero}
-          onChange={(e: any) =>
-            setNumero(e.target.value)
-          }
-          error={errors.numero}
-          placeholder="Ej. 000001"
-          helperText="Referencia alfanumérica de la nota; máximo 30 caracteres."
-          isReadOnly={isLocked}
-        />
-      </div>
+      <TextInput
+        label="Serie y número"
+        value={serie && numero ? `${serie}-${numero}` : 'Se asigna al guardar'}
+        isReadOnly
+        helperText="Correlativo automático del sistema; no se edita."
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput
@@ -495,8 +451,9 @@ export const NotaCreditoForm = ({
 
       <TextArea
         label="Descripción"
+        required
         maxLength={250}
-        helperText="Motivo o detalle de la nota de crédito (máx. 250 caracteres)."
+        helperText="Motivo de la nota de crédito; entre 10 y 250 caracteres."
         value={descripcion}
         onChange={(e: any) =>
           setDescripcion(e.target.value)

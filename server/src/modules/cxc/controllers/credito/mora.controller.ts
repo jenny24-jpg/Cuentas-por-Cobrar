@@ -30,3 +30,7 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
 export async function recalcular(_req: Request, res: Response, next: NextFunction) {
   try { res.json(await service.recalcular()); } catch (error) { next(error); }
 }
+
+export async function cartera(_req: Request, res: Response, next: NextFunction) {
+  try { res.json(await service.cartera()); } catch (error) { next(error); }
+}

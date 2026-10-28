@@ -4,6 +4,7 @@ import { TextInput, Select } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
 import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioActual';
+import { SearchableSelect } from '../../../../shared/components/SearchableSelect';
 
 import {
   hasErrors,
@@ -71,6 +72,19 @@ export function AplicacionPagoForm({
   const pagoSeleccionado = pagos.find(
     (p) => String(p.id) === idPago,
   );
+
+  // Primero se elige el cliente: solo aparecen clientes con pagos disponibles
+  // y luego únicamente los pagos de ese cliente.
+  const [idClienteFiltro, setIdClienteFiltro] = useState('');
+  const clientesConPago = useMemo(() => {
+    const vistos = new Map<number, string>();
+    pagos.forEach((p) => {
+      if (p.idCliente && !vistos.has(p.idCliente)) vistos.set(p.idCliente, p.cliente ?? `Cliente #${p.idCliente}`);
+    });
+    return [...vistos].map(([id, label]) => ({ value: id, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [pagos]);
+  const idClienteActivo = idClienteFiltro || (pagoSeleccionado?.idCliente ? String(pagoSeleccionado.idCliente) : '');
+  const pagosCliente = pagos.filter((p) => String(p.idCliente) === idClienteActivo);
 
   const idClientePago = pagoSeleccionado?.idCliente;
 
@@ -397,6 +411,20 @@ export function AplicacionPagoForm({
       className="flex flex-col gap-4"
       noValidate
     >
+      <SearchableSelect
+        label="Cliente"
+        required
+        value={idClienteActivo}
+        onChange={(e: any) => {
+          setIdClienteFiltro(e.target.value);
+          handlePagoChange('');
+        }}
+        options={clientesConPago}
+        placeholder="Buscar por código o nombre"
+        helperText={pagos.length === 0 ? 'No hay pagos con monto disponible para aplicar.' : 'Solo aparecen clientes con pagos disponibles.'}
+        isReadOnly={isEditing}
+      />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
         <Select
           label="Pago"
@@ -405,11 +433,13 @@ export function AplicacionPagoForm({
           onChange={(e: any) =>
             handlePagoChange(e.target.value)
           }
-          options={pagos.map((x) => ({
+          options={pagosCliente.map((x) => ({
             value: x.id,
             label: x.label,
           }))}
-          helperText="El pago determina el cliente y limita los documentos que pueden seleccionarse."
+          isReadOnly={!idClienteActivo}
+          placeholder={idClienteActivo ? 'Seleccionar pago' : 'Selecciona un cliente primero'}
+          helperText="Pagos del cliente con monto disponible: referencia, fecha, forma de pago y disponible."
           error={errorFor('idPago')}
         />
 
@@ -430,7 +460,7 @@ export function AplicacionPagoForm({
               ? 'Seleccionar documento pendiente'
               : 'Selecciona un pago primero'
           }
-          helperText="Solo se muestran documentos con saldo pendiente del mismo cliente del pago."
+          helperText="Facturas y otros cargos del mismo cliente con saldo pendiente: tipo, serie-número, vencimiento y saldo."
           error={errorFor('idDocumento')}
         />
       </div>
