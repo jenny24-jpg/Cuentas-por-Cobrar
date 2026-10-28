@@ -230,6 +230,19 @@ export async function remove(id: number) {
     if (!['NO_IDENTIFICADO', 'NO_APLICADO'].includes(estado)) {
       throw new ConflictError('Solo pagos sin aplicar pueden eliminarse físicamente. Los demás deben anularse/reversarse.');
     }
+    // Registros que dependen del pago: borrarlo dejaría huérfanos (y Oracle lo rechaza con ORA-02292).
+    const dep = await c.execute<{ RECIBOS: number; ANTICIPOS: number }>(
+      `SELECT (SELECT COUNT(*) FROM CXC_RECIBOS WHERE ID_PAGO = :id) AS RECIBOS,
+              (SELECT COUNT(*) FROM CXC_ANTICIPOS WHERE ID_PAGO = :id) AS ANTICIPOS
+         FROM DUAL`,
+      { id },
+    );
+    const recibos = Number(dep.rows?.[0]?.RECIBOS ?? 0);
+    const anticipos = Number(dep.rows?.[0]?.ANTICIPOS ?? 0);
+    if (recibos > 0 || anticipos > 0) {
+      const partes = [recibos > 0 ? `${recibos} recibo(s)` : '', anticipos > 0 ? `${anticipos} anticipo(s)` : ''].filter(Boolean).join(' y ');
+      throw new ConflictError(`No se puede eliminar el pago: tiene ${partes} asociado(s). Elimina o anula primero esos registros, o anula el pago para conservar la trazabilidad.`);
+    }
     await c.execute(`DELETE FROM CXC_PAGOS WHERE ID_PAGO=:id`, { id });
     await c.commit();
   } catch (e) {

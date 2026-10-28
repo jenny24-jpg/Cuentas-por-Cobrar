@@ -1,6 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { AppError, TooManyRequestsError } from '../shared/errors/AppError';
+
+/** ORA-02292: se intentó borrar un registro que otros registros todavía usan. */
+const ORA_HIJOS_EXISTENTES = 2292;
 import { logger } from '../shared/logger';
 
 /**
@@ -39,6 +42,15 @@ export function errorHandler(
   // Compatibilidad con módulos que todavía lancen su NotFoundError local.
   if (err instanceof Error && err.name === 'NotFoundError') {
     res.status(404).json({ error: err.message, code: 'NOT_FOUND' });
+    return;
+  }
+
+  if (err instanceof Error && (err as { errorNum?: number }).errorNum === ORA_HIJOS_EXISTENTES) {
+    logger.warn('delete_con_registros_relacionados', { method: req.method, path: req.originalUrl, error: err.message });
+    res.status(409).json({
+      error: 'No se puede eliminar porque otros registros dependen de él. Elimina o anula primero los registros relacionados.',
+      code: 'HAS_RELATED_RECORDS',
+    });
     return;
   }
 
