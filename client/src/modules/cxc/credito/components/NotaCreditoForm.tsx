@@ -69,11 +69,11 @@ export const NotaCreditoForm = ({
   const serie = nota?.serie ?? '';
   const numero = nota?.numero ?? '';
 
-  // Al crear, utilizar la fecha actual de Guatemala.
-  // Al editar, conservar la fecha original de la nota.
-  const [fecha, setFecha] = useState(
-    () => nota?.fecha?.slice(0, 10) ?? hoyGuatemalaIso(),
-  );
+  // Fecha de solo lectura: hoy en Guatemala al crear y original al editar.
+  // No hay setter: el usuario no puede modificarla desde el formulario.
+  const fecha = isEditing
+    ? nota?.fecha?.slice(0, 10) ?? ''
+    : hoyGuatemalaIso();
 
   const [monto, setMonto] = useState(
     nota?.monto?.toString() ?? '',
@@ -252,13 +252,9 @@ export const NotaCreditoForm = ({
       return;
     }
 
-    // Protección adicional al momento de guardar.
-    if (fecha > hoyGuatemalaIso()) {
-      setErrors({
-        fecha: 'La fecha de la nota de crédito no puede ser futura.',
-      });
-      return;
-    }
+    // La fecha de creación se recalcula al guardar, según Guatemala.
+    // No se reemplaza la fecha histórica durante una edición.
+    const fechaActual = hoyGuatemalaIso();
 
     if (hasErrors(validationErrors)) {
       setErrors(validationErrors);
@@ -272,18 +268,21 @@ export const NotaCreditoForm = ({
       idCliente: Number(idCliente),
       idDocumentoReferencia: Number(idDocumentoReferencia),
       descripcion: descripcion.trim(),
-      fecha,
       monto: Number(monto),
     };
 
     try {
       if (isEditing) {
+        // Nunca enviar FECHA en el PATCH: conserva la fecha original.
         await apiClient.patch(
           `/cxc/notas-credito/${nota!.idNotaCredito}`,
           payload,
         );
       } else {
-        await apiClient.post('/cxc/notas-credito', payload);
+        await apiClient.post('/cxc/notas-credito', {
+          ...payload,
+          fecha: fechaActual,
+        });
       }
 
       onSuccess();
@@ -414,14 +413,14 @@ export const NotaCreditoForm = ({
           label="Fecha"
           type="date"
           required
-          max={hoy}
           value={fecha}
-          onChange={(e: any) =>
-            setFecha(e.target.value)
+          error={errors.fecha ?? validationErrors.fecha}
+          helperText={
+            isEditing
+              ? 'Fecha original de emisión. No se puede modificar.'
+              : 'Fecha automática del sistema (Guatemala). No se puede modificar.'
           }
-          error={errors.fecha}
-          helperText="Fecha real de emisión; no puede ser futura."
-          isReadOnly={isLocked}
+          isReadOnly
         />
 
         <TextInput

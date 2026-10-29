@@ -75,11 +75,11 @@ export const AplicacionNotaCreditoForm = ({
     aplicacion?.montoAplicado?.toString() ?? '',
   );
 
-  const [fechaAplicacion, setFechaAplicacion] = useState(
-    () =>
-      aplicacion?.fechaAplicacion?.slice(0, 10) ??
-      hoyGuatemalaIso(),
-  );
+  // La fecha es automática y no editable. Las aplicaciones históricas
+  // conservan exactamente la fecha con la que fueron registradas.
+  const fechaAplicacion = isEditing
+    ? aplicacion?.fechaAplicacion?.slice(0, 10) ?? ''
+    : hoyGuatemalaIso();
 
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -334,6 +334,7 @@ export const AplicacionNotaCreditoForm = ({
   ]);
 
   const isFormValid =
+    !isEditing &&
     !hasErrors(validationErrors) &&
     !isSubmitting &&
     !cargandoNota;
@@ -343,6 +344,7 @@ export const AplicacionNotaCreditoForm = ({
   // =====================================================
 
   const handleNotaChange = (value: string) => {
+    if (isEditing) return;
     setIdNotaCredito(value);
     setIdDocumento('');
     setNotaSeleccionada(null);
@@ -361,16 +363,25 @@ export const AplicacionNotaCreditoForm = ({
     e.preventDefault();
     setFormError(null);
 
+    if (isEditing) {
+      setFormError(
+        'Una aplicación confirmada no se edita. Para corregirla, reversa la aplicación y registra una nueva.',
+      );
+      return;
+    }
+
     if (isSubmitting || cargandoNota) {
       return;
     }
 
     const validacion = validationErrors;
 
-    if (fechaAplicacion > hoyGuatemalaIso()) {
+    const hoyActual = hoyGuatemalaIso();
+
+    if (fechaAplicacion !== hoyActual) {
       setErrors({
         fechaAplicacion:
-          'La fecha de aplicación no puede ser futura.',
+          'La fecha de aplicación debe ser la fecha actual de Guatemala.',
       });
       return;
     }
@@ -398,21 +409,14 @@ export const AplicacionNotaCreditoForm = ({
       idNotaCredito: Number(idNotaCredito),
       idDocumento: Number(idDocumento),
       montoAplicado: Number(montoAplicado),
-      fechaAplicacion,
+      fechaAplicacion: hoyActual,
     };
 
     try {
-      if (isEditing) {
-        await apiClient.patch(
-          `/cxc/aplicaciones-nota-credito/${aplicacion!.idAplicacionNc}`,
-          payload,
-        );
-      } else {
-        await apiClient.post(
-          '/cxc/aplicaciones-nota-credito',
-          payload,
-        );
-      }
+      await apiClient.post(
+        '/cxc/aplicaciones-nota-credito',
+        payload,
+      );
 
       onSuccess();
     } catch (err) {
@@ -455,6 +459,13 @@ export const AplicacionNotaCreditoForm = ({
       className="flex flex-col gap-4"
       noValidate
     >
+      {isEditing && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Esta aplicación es un movimiento financiero y no puede editarse.
+          Si necesitas corregirla, primero utiliza el procedimiento de reversa.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
         <Select
           label="Nota de Crédito"
@@ -468,6 +479,7 @@ export const AplicacionNotaCreditoForm = ({
             label: nota.label,
           }))}
           placeholder="Seleccionar nota de crédito"
+          isReadOnly={isEditing}
           error={errors.idNotaCredito}
           helperText="Solo aparecen notas de crédito pendientes con saldo disponible."
         />
@@ -490,6 +502,7 @@ export const AplicacionNotaCreditoForm = ({
               : 'Selecciona una nota de crédito primero'
           }
           isReadOnly={
+            isEditing ||
             !idNotaCredito ||
             !notaVerificada ||
             !documentosCargados
@@ -517,6 +530,7 @@ export const AplicacionNotaCreditoForm = ({
           onChange={(e: any) =>
             setMontoAplicado(e.target.value)
           }
+          isReadOnly={isEditing}
           error={
             errors.montoAplicado ??
             (montoAplicado
@@ -533,13 +547,12 @@ export const AplicacionNotaCreditoForm = ({
 
         <TextInput
           label="Fecha de aplicación"
-          type="date"
+          type="text"
           required
-          min={fechaNota || undefined}
-          max={hoy}
-          value={fechaAplicacion}
-          onChange={(e: any) =>
-            setFechaAplicacion(e.target.value)
+          value={
+            fechaAplicacion
+              ? `${fechaAplicacion.slice(8, 10)}/${fechaAplicacion.slice(5, 7)}/${fechaAplicacion.slice(0, 4)}`
+              : ''
           }
           error={
             errors.fechaAplicacion ??
@@ -548,14 +561,11 @@ export const AplicacionNotaCreditoForm = ({
               : undefined)
           }
           helperText={
-            fechaNota
-              ? `Fecha igual o posterior a la emisión (${fechaNota}) y no futura.`
-              : 'Fecha real de la aplicación; no puede ser futura.'
+            isEditing
+              ? 'Fecha original de esta aplicación. No se puede modificar.'
+              : 'Fecha automática del día actual de Guatemala; no se puede modificar.'
           }
-          isReadOnly={
-            Boolean(idNotaCredito) &&
-            (!notaVerificada || cargandoNota)
-          }
+          isReadOnly
         />
       </div>
 
@@ -573,6 +583,11 @@ export const AplicacionNotaCreditoForm = ({
         createLabel="Crear aplicación"
         isFormValid={isFormValid}
         blockers={validationErrors}
+        lockedReason={
+          isEditing
+            ? 'Una aplicación financiera registrada no se modifica; debe reversarse.'
+            : undefined
+        }
       />
     </form>
   );

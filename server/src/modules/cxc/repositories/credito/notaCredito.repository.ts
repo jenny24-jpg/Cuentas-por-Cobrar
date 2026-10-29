@@ -258,9 +258,27 @@ export async function findById(
 export async function create(
   input: CreateNotaCreditoInput,
 ): Promise<number> {
+  const hoy = businessTodayIso();
+
+  // La fecha de emisión debe ser la fecha actual de Guatemala.
+  // Revalidamos también aquí por si se llama al repositorio directamente.
+  if (input.fecha !== hoy) {
+    throw new BadRequestError(
+      'La fecha de la nota de crédito debe ser la fecha actual de Guatemala. No se permiten fechas anteriores ni futuras.',
+    );
+  }
+
   const conn = await getConnection();
 
   try {
+    // Verificar que no haya cambiado el día durante la operación.
+    const fechaRegistro = businessTodayIso();
+    if (input.fecha !== fechaRegistro) {
+      throw new BadRequestError(
+        'La fecha de Guatemala cambió durante el registro. Intenta guardar nuevamente.',
+      );
+    }
+
     const result = await conn.execute<{
       id: number[];
     }>(
@@ -288,7 +306,7 @@ export async function create(
         idDocumentoReferencia:
           input.idDocumentoReferencia ?? null,
         descripcion: input.descripcion,
-        fecha: input.fecha,
+        fecha: fechaRegistro,
         monto: input.monto,
         id: {
           dir: oracledb.BIND_OUT,
@@ -382,6 +400,14 @@ export async function update(
   id: number,
   input: UpdateNotaCreditoInput,
 ): Promise<void> {
+  // La fecha de emisión es inmutable después del registro.
+  // El servicio omite este campo al actualizar la nota.
+  if (input.fecha !== undefined) {
+    throw new BadRequestError(
+      'La fecha de una nota de crédito registrada no puede modificarse.',
+    );
+  }
+
   const fields: string[] = [];
 
   const binds: Record<
@@ -405,13 +431,6 @@ export async function update(
   if (input.descripcion !== undefined) {
     fields.push('DESCRIPCION = :descripcion');
     binds.descripcion = input.descripcion ?? null;
-  }
-
-  if (input.fecha !== undefined) {
-    fields.push(
-      "FECHA = TO_DATE(:fecha, 'YYYY-MM-DD')",
-    );
-    binds.fecha = input.fecha;
   }
 
   if (input.monto !== undefined) {

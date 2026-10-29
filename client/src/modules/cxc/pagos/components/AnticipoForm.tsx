@@ -54,9 +54,11 @@ export function AnticipoForm({
     item?.idPago?.toString() ?? '',
   );
 
-  const [fecha, setFecha] = useState(
-    item?.fecha?.slice(0, 10) ?? hoyGuatemalaIso(),
-  );
+  // Fecha fija: al crear es la fecha actual de Guatemala;
+  // al editar se conserva la fecha historica del anticipo.
+  const fecha = isEditing
+    ? item?.fecha?.slice(0, 10) ?? ''
+    : hoyGuatemalaIso();
 
   const [pagoConsultado, setPagoConsultado] = useState<Pago | null>(null);
   const [pagoVerificadoId, setPagoVerificadoId] = useState('');
@@ -317,9 +319,9 @@ export function AnticipoForm({
 
     const hoyActual = hoyGuatemalaIso();
 
-    if (fecha > hoyActual) {
+    if (!isEditing && fecha !== hoyActual) {
       setErrors({
-        fecha: 'La fecha del anticipo no puede ser futura.',
+        fecha: 'La fecha del anticipo debe ser la fecha actual de Guatemala.',
       });
       return;
     }
@@ -351,20 +353,24 @@ export function AnticipoForm({
     setBusy(true);
     setErrors({});
 
-    const payload = {
+    const datos = {
       idCliente: Number(idCliente),
       idPago: Number(idPago),
-      fecha,
     };
 
     try {
       if (isEditing) {
+        // No cambiar la fecha original en una edicion.
         await apiClient.patch(
           `/cxc/anticipos/${item!.idAnticipo}`,
-          payload,
+          datos,
         );
       } else {
-        await apiClient.post('/cxc/anticipos', payload);
+        // Recalcular al guardar por si cambio el dia.
+        await apiClient.post('/cxc/anticipos', {
+          ...datos,
+          fecha: hoyActual,
+        });
       }
 
       onSuccess();
@@ -477,22 +483,14 @@ export function AnticipoForm({
           label="Fecha"
           type="date"
           required
-          min={fechaPagoOriginal || undefined}
-          max={hoy}
           value={fecha}
-          onChange={(e: any) =>
-            setFecha(e.target.value)
-          }
           helperText={
-            fechaPagoOriginal
-              ? `Debe ser igual o posterior al pago (${fechaPagoOriginal}) y no puede ser futura.`
-              : 'Fecha real del anticipo; no puede ser futura.'
+            isEditing
+              ? 'Fecha original del anticipo. No se puede modificar.'
+              : 'Fecha automatica del sistema (Guatemala). No se puede modificar.'
           }
           error={errorFor('fecha', fecha)}
-          isReadOnly={
-            isLocked ||
-            (Boolean(idPago) && (cargandoPago || !pagoVerificado))
-          }
+          isReadOnly
         />
         {isEditing && (
           <TextInput
