@@ -80,7 +80,10 @@ async function assertPagoCliente(
   idCliente: number,
   fechaAnticipo: string,
 ): Promise<void> {
-  // El pago relacionado es opcional.
+  // Se conserva la compatibilidad con el contrato.
+  // La validación del respaldo obligatorio también
+  // debe mantenerse en el repositorio.
+
   if (idPago == null) {
     return;
   }
@@ -93,8 +96,8 @@ async function assertPagoCliente(
     );
   }
 
-  // Verificar que el anticipo y el pago
-  // pertenezcan al mismo cliente.
+  // El pago y el anticipo deben pertenecer
+  // al mismo cliente.
 
   if (pago.idCliente !== idCliente) {
     throw new BadRequestError(
@@ -102,8 +105,7 @@ async function assertPagoCliente(
     );
   }
 
-  // Impedir relacionar anticipos con
-  // pagos anulados o reversados.
+  // No permitir pagos anulados o reversados.
 
   const estadoPago = String(
     pago.estado ?? '',
@@ -117,8 +119,8 @@ async function assertPagoCliente(
     );
   }
 
-  // La fecha del anticipo debe ser igual
-  // o posterior a la fecha del pago.
+  // La fecha del anticipo no puede ser
+  // anterior a la fecha del pago.
 
   const fechaPago = pago.fechaPago.slice(0, 10);
 
@@ -138,19 +140,38 @@ export async function createAnticipo(
 ): Promise<Anticipo> {
   const input = createAnticipoSchema.parse(raw);
 
-  if (input.fecha > businessTodayIso()) {
+  // CORRECCIÓN:
+  // Un anticipo nuevo solamente puede registrarse
+  // con la fecha actual de Guatemala.
+  //
+  // Se rechazan fechas anteriores y futuras,
+  // incluso si llegan directamente a la API.
+
+  const hoy = businessTodayIso();
+
+  if (input.fecha !== hoy) {
     throw new BadRequestError(
-      'La fecha del anticipo no puede ser futura',
+      'La fecha del anticipo debe ser la fecha actual del sistema (Guatemala). No se permiten fechas anteriores ni futuras.',
     );
   }
+
+  // Conservar la validación del pago
+  // que respalda el anticipo.
 
   await assertPagoCliente(
     input.idPago,
     input.idCliente,
-    input.fecha,
+    hoy,
   );
 
-  const id = await repository.create(input);
+  // Se fija la fecha desde el servidor.
+  // No se utiliza directamente el valor
+  // recibido desde el navegador.
+
+  const id = await repository.create({
+    ...input,
+    fecha: hoy,
+  });
 
   return getAnticipo(id);
 }
@@ -178,8 +199,8 @@ export async function updateAnticipo(
     );
   }
 
-  // No permitir editar anticipos con
-  // aplicaciones confirmadas vigentes.
+  // Conservar la protección de
+  // aplicaciones confirmadas.
 
   const aplicado =
     await aplicacionRepository.sumAplicadoPorAnticipo(id);
@@ -192,17 +213,30 @@ export async function updateAnticipo(
 
   const input = updateAnticipoSchema.parse(raw);
 
-  const finalFecha =
-    input.fecha ?? current.fecha.slice(0, 10);
+  // CORRECCIÓN:
+  // La fecha de un anticipo existente
+  // no puede modificarse.
+  //
+  // Se permite omitir la fecha durante
+  // la edición, como hará el formulario.
+  //
+  // Si viene informada, debe coincidir
+  // exactamente con la fecha original.
 
-  if (finalFecha > businessTodayIso()) {
+  const fechaOriginal =
+    current.fecha.slice(0, 10);
+
+  if (
+    input.fecha !== undefined &&
+    input.fecha !== fechaOriginal
+  ) {
     throw new BadRequestError(
-      'La fecha del anticipo no puede ser futura',
+      'La fecha de un anticipo registrado no puede modificarse.',
     );
   }
 
-  // Verificar el pago relacionado utilizando
-  // los valores finales de la actualización.
+  // Calcular los valores finales para
+  // validar el pago relacionado.
 
   const finalIdPago =
     input.idPago === undefined
@@ -212,13 +246,29 @@ export async function updateAnticipo(
   const finalIdCliente =
     input.idCliente ?? current.idCliente;
 
+  // Mantener la fecha original, incluso
+  // cuando el anticipo fue creado antes
+  // de implementar la fecha automática.
+
   await assertPagoCliente(
     finalIdPago,
     finalIdCliente,
-    finalFecha,
+    fechaOriginal,
   );
 
-  await repository.update(id, input);
+  // CORRECCIÓN:
+  // Excluir fecha del PATCH enviado al
+  // repositorio para evitar alterar Oracle.
+
+  const {
+    fecha: _fechaNoModificable,
+    ...datosActualizables
+  } = input;
+
+  await repository.update(
+    id,
+    datosActualizables,
+  );
 
   return getAnticipo(id);
 }
@@ -251,6 +301,9 @@ export async function deleteAnticipo(
     );
   }
 
+  // El repositorio conserva sus
+  // validaciones y restricciones financieras.
+
   await repository.remove(id);
 }
 
@@ -270,7 +323,12 @@ export async function anularAnticipo(
 
   const input = anularAnticipoSchema.parse(rawInput);
 
-  // No permitir fechas de anulación futuras.
+  // Se mantiene la política original
+  // de anulación: no permitir fechas futuras.
+  //
+  // La fecha fija solicitada afecta
+  // el registro de anticipos, no el
+  // procedimiento de anulación.
 
   if (
     input.fechaAnulacion &&
@@ -297,6 +355,7 @@ export async function anularAnticipo(
 
   // El repositorio debe proteger el estado
   // y las aplicaciones durante la transacción.
+
   await repository.anular(id, input);
 
   return getAnticipo(id);

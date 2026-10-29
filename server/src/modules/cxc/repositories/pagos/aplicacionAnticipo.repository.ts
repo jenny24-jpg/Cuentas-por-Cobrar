@@ -15,14 +15,14 @@ interface Row {
   ID_APLICACION_ANTICIPO: number;
   ID_ANTICIPO: number;
   ID_DOCUMENTO: number;
-  FECHA_APLICACION: Date;
+  FECHA_APLICACION_ISO: string;
   MONTO_APLICADO: number;
   ID_EMPLEADO: number | null;
   NOMBRE_EMPLEADO: string | null;
   ESTADO: AplicacionAnticipo['estado'];
   ID_EMPLEADO_REVERSA: number | null;
   NOMBRE_EMPLEADO_REVERSA: string | null;
-  FECHA_REVERSA: Date | null;
+  FECHA_REVERSA_ISO: string | null;
   MOTIVO_REVERSA: string | null;
 }
 
@@ -57,18 +57,18 @@ const mapRow = (r: Row): AplicacionAnticipo => ({
   idAnticipo: r.ID_ANTICIPO,
   idDocumento: r.ID_DOCUMENTO,
   montoAplicado: r.MONTO_APLICADO,
-  fechaAplicacion: r.FECHA_APLICACION?.toISOString() ?? '',
+  fechaAplicacion: r.FECHA_APLICACION_ISO,
   idEmpleado: r.ID_EMPLEADO,
   nombreEmpleado: r.NOMBRE_EMPLEADO,
   estado: r.ESTADO,
   idEmpleadoReversa: r.ID_EMPLEADO_REVERSA,
   nombreEmpleadoReversa: r.NOMBRE_EMPLEADO_REVERSA,
-  fechaReversa: r.FECHA_REVERSA?.toISOString() ?? null,
+  fechaReversa: r.FECHA_REVERSA_ISO,
   motivoReversa: r.MOTIVO_REVERSA,
 });
 
 const SELECT_BASE = `
-  SELECT a.ID_APLICACION_ANTICIPO, a.ID_ANTICIPO, a.ID_DOCUMENTO, a.FECHA_APLICACION, a.MONTO_APLICADO,
+  SELECT a.ID_APLICACION_ANTICIPO, a.ID_ANTICIPO, a.ID_DOCUMENTO, TO_CHAR(a.FECHA_APLICACION, 'YYYY-MM-DD') AS FECHA_APLICACION_ISO, a.MONTO_APLICADO,
          a.ID_EMPLEADO,
          CASE
            WHEN e.ID_EMPLEADO IS NULL THEN NULL
@@ -79,7 +79,7 @@ const SELECT_BASE = `
            WHEN er.ID_EMPLEADO IS NULL THEN NULL
            ELSE TRIM(er.NOMBRE || ' ' || NVL(er.APELLIDO, ''))
          END AS NOMBRE_EMPLEADO_REVERSA,
-         a.FECHA_REVERSA, a.MOTIVO_REVERSA
+         TO_CHAR(a.FECHA_REVERSA, 'YYYY-MM-DD') AS FECHA_REVERSA_ISO, a.MOTIVO_REVERSA
     FROM CXC_APLICACION_ANTICIPO a
     LEFT JOIN EMPLEADO e ON e.ID_EMPLEADO = a.ID_EMPLEADO
     LEFT JOIN EMPLEADO er ON er.ID_EMPLEADO = a.ID_EMPLEADO_REVERSA
@@ -147,8 +147,9 @@ export async function create(input: CreateAplicacionAnticipoInput): Promise<numb
     const anticipo = anticipoResult.rows?.[0];
     if (!anticipo) throw new BadRequestError('El anticipo seleccionado no existe');
 
-    if (input.fechaAplicacion > businessTodayIso()) {
-      throw new BadRequestError('La fecha de aplicación no puede ser futura.');
+    const hoy = businessTodayIso();
+    if (input.fechaAplicacion !== hoy) {
+      throw new BadRequestError('La fecha de aplicación debe ser la fecha actual de Guatemala. No se permiten fechas anteriores ni futuras.');
     }
     if (input.fechaAplicacion < anticipo.FECHA_ISO) {
       throw new BadRequestError('La fecha de aplicación no puede ser anterior a la fecha del anticipo.');
@@ -188,6 +189,12 @@ export async function create(input: CreateAplicacionAnticipoInput): Promise<numb
       throw new BadRequestError('El monto aplicado no puede superar el monto disponible del anticipo');
     }
 
+    // Revalidar el día de negocio antes de insertar, por si cambió durante la operación.
+    const fechaRegistro = businessTodayIso();
+    if (fechaRegistro !== hoy) {
+      throw new BadRequestError('La fecha del sistema cambió durante el registro. Vuelve a guardar la aplicación.');
+    }
+
     const insert = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_APLICACION_ANTICIPO
          (ID_ANTICIPO, ID_DOCUMENTO, FECHA_APLICACION, MONTO_APLICADO, ID_EMPLEADO)
@@ -197,7 +204,7 @@ export async function create(input: CreateAplicacionAnticipoInput): Promise<numb
       {
         idAnticipo: input.idAnticipo,
         idDocumento: input.idDocumento,
-        fechaAplicacion: input.fechaAplicacion,
+        fechaAplicacion: fechaRegistro,
         montoAplicado,
         idEmpleado: input.idEmpleado,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
@@ -227,7 +234,7 @@ export async function create(input: CreateAplicacionAnticipoInput): Promise<numb
       monto: montoAplicado,
       naturaleza: 'ABONO',
       descripcion: `Anticipo #${input.idAnticipo} aplicado al documento`,
-      fecha: input.fechaAplicacion,
+      fecha: fechaRegistro,
     });
 
     await conn.commit();
@@ -240,42 +247,21 @@ export async function create(input: CreateAplicacionAnticipoInput): Promise<numb
   }
 }
 
-// Se conservan por compatibilidad de interfaz, pero el service las bloquea:
-// las aplicaciones confirmadas son inmutables (mismo criterio que
-// aplicacion-pago / aplicacion-nota-credito). Deshacer una aplicación
-// confirmada es reversar(), no update()/remove().
-export async function update(id: number, input: UpdateAplicacionAnticipoInput): Promise<void> {
-  const fields: string[] = [];
-  const binds: Record<string, any> = { id };
-  if (input.idAnticipo !== undefined) { fields.push('ID_ANTICIPO = :idAnticipo'); binds.idAnticipo = input.idAnticipo; }
-  if (input.idDocumento !== undefined) { fields.push('ID_DOCUMENTO = :idDocumento'); binds.idDocumento = input.idDocumento; }
-  if (input.montoAplicado !== undefined) { fields.push('MONTO_APLICADO = :montoAplicado'); binds.montoAplicado = input.montoAplicado; }
-  if (input.fechaAplicacion !== undefined) { fields.push(`FECHA_APLICACION = TO_DATE(:fechaAplicacion, 'YYYY-MM-DD')`); binds.fechaAplicacion = input.fechaAplicacion; }
-  if (!fields.length) return;
-
-  const conn = await getConnection();
-  try {
-    await conn.execute(`UPDATE CXC_APLICACION_ANTICIPO SET ${fields.join(', ')} WHERE ID_APLICACION_ANTICIPO = :id`, binds);
-    await conn.commit();
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    await conn.close();
-  }
+// Las aplicaciones financieras son inmutables. Se mantienen las firmas exportadas
+// para compatibilidad, pero las correcciones se realizan mediante reversa formal.
+export async function update(
+  _id: number,
+  _input: UpdateAplicacionAnticipoInput,
+): Promise<void> {
+  throw new ConflictError(
+    'Una aplicación de anticipo confirmada no se edita. Para corregirla, reversa la aplicación y regístrala de nuevo.',
+  );
 }
 
-export async function remove(id: number): Promise<void> {
-  const conn = await getConnection();
-  try {
-    await conn.execute(`DELETE FROM CXC_APLICACION_ANTICIPO WHERE ID_APLICACION_ANTICIPO = :id`, { id });
-    await conn.commit();
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    await conn.close();
-  }
+export async function remove(_id: number): Promise<void> {
+  throw new ConflictError(
+    'Una aplicación de anticipo confirmada no se elimina físicamente. Debe reversarse para conservar trazabilidad.',
+  );
 }
 
 export async function sumAplicadoPorAnticipo(idAnticipo: number, excludeId?: number): Promise<number> {
