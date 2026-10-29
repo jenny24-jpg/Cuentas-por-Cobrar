@@ -3,6 +3,15 @@ import { z } from 'zod';
 /** CLIENTE es una tabla del ERP; ESTADO es CHAR(1) con CHECK ('A' activo, 'I' inactivo). */
 export const ESTADOS_CLIENTE = ['A', 'I'] as const;
 
+/**
+ * Código de cobro del cliente: se deriva del ID (identity de CLIENTE), así que el sistema
+ * lo asigna solo, es único y crece con cada alta. Mismo formato que arma el SQL
+ * ('CR-' || LPAD(ID_CLIENTE, 5, '0')).
+ */
+export function codigoCobroCliente(idCliente: number): string {
+  return `CR-${String(idCliente).padStart(5, '0')}`;
+}
+
 /** Cliente con su condición de pago (CLIENTE.ID_CONDICION → CXC_CONDICIONES_CREDITO). */
 export const clienteSchema = z.object({
   idCliente: z.number().int(),
@@ -10,6 +19,8 @@ export const clienteSchema = z.object({
   codigoCliente: z.string().nullable(),
   nombre: z.string(),
   nit: z.string().nullable(),
+  direccion: z.string().nullable(),
+  codigoCobro: z.string(),
   idCondicion: z.number().int().nullable(),
   diasCredito: z.number().int().nullable(),
   diasGracia: z.number().int().nullable(),
@@ -48,6 +59,7 @@ const nombreClienteSchema = z
 export const updateClienteSchema = z.object({
   nombre: nombreClienteSchema,
   nit: z.string().trim().toUpperCase().min(1, 'El NIT es obligatorio').max(20, 'El NIT no puede superar 20 caracteres'),
+  direccion: z.string().trim().min(5, 'La dirección es obligatoria (mínimo 5 caracteres)').max(250, 'La dirección no puede superar 250 caracteres'),
   idCondicion: z.number({ error: 'Selecciona una condición de pago' }).int().positive('Selecciona una condición de pago'),
   estado: z.enum(ESTADOS_CLIENTE, { error: 'El estado debe ser Activo (A) o Inactivo (I)' }),
 });

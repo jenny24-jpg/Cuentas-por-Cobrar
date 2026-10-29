@@ -5,6 +5,8 @@ export interface CatalogoOption {
   id: number;
   label: string;
   idCliente?: number;
+  /** Código y nombre del cliente dueño de la opción (p. ej. pagos): "CR-00012 Juan Pérez". */
+  cliente?: string;
   monto?: number;
   saldo?: number;
   nit?: string | null;

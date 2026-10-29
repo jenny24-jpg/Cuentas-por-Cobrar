@@ -53,7 +53,7 @@ export const EmpresasPage = () => {
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
         <TextInput
           icon={Search} maxLength={100}
-          placeholder="Buscar por nombre o NIT..."
+          placeholder="Buscar por nombre, NIT, tipo de comercio o dirección..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="max-w-md"
@@ -73,6 +73,14 @@ export const EmpresasPage = () => {
         columns={[
           { header: 'Nombre', accessorKey: 'nombre' },
           { header: 'NIT', accessorKey: 'nit', cell: ({ value }: any) => value ?? '—' },
+          { header: 'Tipo de comercio', accessorKey: 'giroComercial', cell: ({ value }: any) => value ?? '—' },
+          {
+            header: 'Dirección',
+            accessorKey: 'direccion',
+            cell: ({ value }: any) => (
+              <span className="block max-w-xs truncate" title={value ?? undefined}>{value ?? '—'}</span>
+            ),
+          },
           {
             header: 'Estado',
             cell: ({ row }: any) => (

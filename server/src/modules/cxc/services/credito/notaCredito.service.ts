@@ -1,89 +1,311 @@
+
 import { businessTodayIso } from '../../../../shared/date';
+
 import {
   createNotaCreditoSchema,
   updateNotaCreditoSchema,
   anularNotaCreditoSchema,
   type NotaCredito,
 } from '@erp/contracts';
+
 import * as repository from '../../repositories/credito/notaCredito.repository';
 import * as documentoRepository from '../../repositories/documentos/documento.repository';
 import * as catalogosRepository from '../../repositories/catalogos.repository';
-import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
-import { isDocumentoBloqueadoParaAplicacion } from '../../shared/financialRules';
 
-async function assertDocumentoReferencia(idCliente: number, idDocumento: number | null | undefined, monto: number) {
-  if (!idDocumento) return;
-  const documento = await documentoRepository.findById(idDocumento);
-  if (!documento) throw new BadRequestError('El documento de referencia no existe');
-  if (documento.idCliente !== idCliente) throw new BadRequestError('El documento de referencia debe pertenecer al cliente seleccionado');
-  if (documento.saldo <= 0) throw new BadRequestError('El documento de referencia ya no tiene saldo pendiente');
-  if (monto > documento.saldo) throw new BadRequestError('El monto de la nota no puede superar el saldo del documento de referencia');
-  if (isDocumentoBloqueadoParaAplicacion(documento.estado)) {
-    throw new ConflictError('No se puede registrar una nota contra un documento pagado o anulado.');
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from '../../../../shared/errors/AppError';
+
+import {
+  isDocumentoBloqueadoParaAplicacion,
+} from '../../shared/financialRules';
+
+// =====================================================
+// VALIDAR DOCUMENTO DE REFERENCIA
+// =====================================================
+
+async function assertDocumentoReferencia(
+  idCliente: number,
+  idDocumento: number | null | undefined,
+  monto: number,
+): Promise<void> {
+  // Se conserva el comportamiento original.
+  // La obligatoriedad del documento también
+  // depende del esquema de validación.
+
+  if (!idDocumento) {
+    return;
+  }
+
+  const documento =
+    await documentoRepository.findById(idDocumento);
+
+  if (!documento) {
+    throw new BadRequestError(
+      'El documento de referencia no existe',
+    );
+  }
+
+  if (documento.idCliente !== idCliente) {
+    throw new BadRequestError(
+      'El documento de referencia debe pertenecer al cliente seleccionado',
+    );
+  }
+
+  if (documento.saldo <= 0) {
+    throw new BadRequestError(
+      'El documento de referencia ya no tiene saldo pendiente',
+    );
+  }
+
+  if (monto > documento.saldo) {
+    throw new BadRequestError(
+      'El monto de la nota no puede superar el saldo del documento de referencia',
+    );
+  }
+
+  if (
+    isDocumentoBloqueadoParaAplicacion(
+      documento.estado,
+    )
+  ) {
+    throw new ConflictError(
+      'No se puede registrar una nota contra un documento pagado o anulado.',
+    );
   }
 }
 
-export async function list(params: { page: number; limit: number; search?: string }) {
+// =====================================================
+// LISTAR NOTAS DE CRÉDITO
+// =====================================================
+
+export async function list(params: {
+  page: number;
+  limit: number;
+  search?: string;
+}) {
   return repository.findAll({
     ...params,
     page: Math.max(1, params.page),
-    limit: Math.min(100, Math.max(1, params.limit)),
+    limit: Math.min(
+      100,
+      Math.max(1, params.limit),
+    ),
   });
 }
 
-export async function getOne(id: number): Promise<NotaCredito> {
-  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de nota de crédito inválido');
+// =====================================================
+// CONSULTAR NOTA DE CRÉDITO POR ID
+// =====================================================
+
+export async function getOne(
+  id: number,
+): Promise<NotaCredito> {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new BadRequestError(
+      'ID de nota de crédito inválido',
+    );
+  }
+
   const nota = await repository.findById(id);
-  if (!nota) throw new NotFoundError(`Nota de crédito ${id} no encontrada`);
+
+  if (!nota) {
+    throw new NotFoundError(
+      `Nota de crédito ${id} no encontrada`,
+    );
+  }
+
   return nota;
 }
 
-export async function create(rawInput: unknown) {
+// =====================================================
+// CREAR NOTA DE CRÉDITO
+// =====================================================
+
+export async function create(
+  rawInput: unknown,
+): Promise<NotaCredito> {
   const input = createNotaCreditoSchema.parse(rawInput);
-  if (input.fecha > businessTodayIso()) throw new BadRequestError('La fecha de la nota de crédito no puede ser futura');
-  await assertDocumentoReferencia(input.idCliente, input.idDocumentoReferencia, input.monto);
-  const id = await repository.create(input);
+
+  // CORRECCIÓN:
+  // La fecha de una nueva nota de crédito
+  // debe coincidir exactamente con la fecha
+  // actual de Guatemala.
+  //
+  // Se rechazan fechas anteriores y futuras,
+  // incluso si llegan directamente a la API.
+
+  const hoy = businessTodayIso();
+
+  if (input.fecha !== hoy) {
+    throw new BadRequestError(
+      'La fecha de la nota de crédito debe ser la fecha actual del sistema (Guatemala). No se permiten fechas anteriores ni futuras.',
+    );
+  }
+
+  // Conservar la validación del documento
+  // y del monto correspondiente.
+
+  await assertDocumentoReferencia(
+    input.idCliente,
+    input.idDocumentoReferencia,
+    input.monto,
+  );
+
+  // La fecha se fija nuevamente en el servidor
+  // para no depender del valor del navegador.
+
+  const id = await repository.create({
+    ...input,
+    fecha: hoy,
+  });
+
   return getOne(id);
 }
 
-export async function update(id: number, rawInput: unknown) {
-  const current = await getOne(id);
-  const input = updateNotaCreditoSchema.parse(rawInput);
-  const finalFecha = input.fecha ?? current.fecha.slice(0, 10);
-  if (finalFecha > businessTodayIso()) throw new BadRequestError('La fecha de la nota de crédito no puede ser futura');
+// =====================================================
+// ACTUALIZAR NOTA DE CRÉDITO
+// =====================================================
 
-  if (input.idCliente !== undefined || input.idDocumentoReferencia !== undefined || input.monto !== undefined) {
+export async function update(
+  id: number,
+  rawInput: unknown,
+): Promise<NotaCredito> {
+  const current = await getOne(id);
+
+  const input =
+    updateNotaCreditoSchema.parse(rawInput);
+
+  // CORRECCIÓN:
+  // La fecha de una nota de crédito existente
+  // no puede modificarse.
+  //
+  // El formulario corregido ya no envía
+  // el campo fecha cuando se edita.
+  //
+  // Si otro cliente HTTP lo envía, solo se
+  // acepta si coincide con la fecha original.
+
+  const fechaOriginal =
+    current.fecha.slice(0, 10);
+
+  if (
+    input.fecha !== undefined &&
+    input.fecha !== fechaOriginal
+  ) {
+    throw new BadRequestError(
+      'La fecha de una nota de crédito registrada no puede modificarse.',
+    );
+  }
+
+  // Mantener validaciones sobre los documentos
+  // cuando se modifica el cliente, la referencia
+  // o el monto de una nota.
+
+  if (
+    input.idCliente !== undefined ||
+    input.idDocumentoReferencia !== undefined ||
+    input.monto !== undefined
+  ) {
     await assertDocumentoReferencia(
       input.idCliente ?? current.idCliente,
-      input.idDocumentoReferencia === undefined ? current.idDocumentoReferencia : input.idDocumentoReferencia,
+
+      input.idDocumentoReferencia === undefined
+        ? current.idDocumentoReferencia
+        : input.idDocumentoReferencia,
+
       input.monto ?? current.monto,
     );
   }
 
-  // repository.update() bloquea la fila (FOR UPDATE) y revalida bajo esa
-  // misma conexión que la nota sigue sin aplicaciones: una lectura suelta
-  // aquí (como antes) quedaría obsoleta frente a una aplicación concurrente.
-  await repository.update(id, input);
+  // CORRECCIÓN:
+  // Excluimos fecha del objeto que recibe el
+  // repositorio para conservarla en Oracle.
+
+  const {
+    fecha: _fechaNoModificable,
+    ...datosActualizables
+  } = input;
+
+  // El repositorio conserva el bloqueo
+  // FOR UPDATE y comprueba que no existan
+  // aplicaciones confirmadas.
+
+  await repository.update(
+    id,
+    datosActualizables,
+  );
+
   return getOne(id);
 }
 
-export async function remove(id: number) {
+// =====================================================
+// ELIMINAR NOTA DE CRÉDITO
+// =====================================================
+
+export async function remove(
+  id: number,
+): Promise<void> {
   await getOne(id);
-  // repository.remove() bloquea la fila, revalida aplicaciones y estado bajo
-  // FOR UPDATE antes de borrar.
+
+  // El repositorio protege la eliminación
+  // mediante FOR UPDATE y las reglas
+  // de aplicaciones y estados.
+
   await repository.remove(id);
 }
 
-export async function anular(id: number, rawInput: unknown): Promise<NotaCredito> {
-  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de nota de crédito inválido');
-  const input = anularNotaCreditoSchema.parse(rawInput);
-  if (input.fechaAnulacion && input.fechaAnulacion > businessTodayIso()) {
-    throw new BadRequestError('La fecha de anulación no puede ser futura');
-  }
-  if (!(await catalogosRepository.empleadoExiste(input.idEmpleadoAnulacion))) {
-    throw new BadRequestError('El empleado seleccionado no existe');
+// =====================================================
+// ANULAR NOTA DE CRÉDITO
+// =====================================================
+
+export async function anular(
+  id: number,
+  rawInput: unknown,
+): Promise<NotaCredito> {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new BadRequestError(
+      'ID de nota de crédito inválido',
+    );
   }
 
+  const input =
+    anularNotaCreditoSchema.parse(rawInput);
+
+  // Se conserva la política original:
+  // la fecha de anulación no puede ser futura.
+  //
+  // La fecha automática solicitada aplica
+  // al registro de notas de crédito, no al
+  // procedimiento de anulación.
+
+  if (
+    input.fechaAnulacion &&
+    input.fechaAnulacion > businessTodayIso()
+  ) {
+    throw new BadRequestError(
+      'La fecha de anulación no puede ser futura',
+    );
+  }
+
+  // Verificar que el empleado responsable exista.
+
+  if (
+    !(await catalogosRepository.empleadoExiste(
+      input.idEmpleadoAnulacion,
+    ))
+  ) {
+    throw new BadRequestError(
+      'El empleado seleccionado no existe',
+    );
+  }
+
+  // El repositorio comprueba el estado,
+  // las aplicaciones y las reglas financieras.
+
   await repository.anular(id, input);
+
   return getOne(id);
 }

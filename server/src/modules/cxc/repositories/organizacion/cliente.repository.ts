@@ -9,6 +9,8 @@ interface Row {
   CODIGO_CLIENTE: string | null;
   NOMBRE: string;
   NIT: string | null;
+  DIRECCION: string | null;
+  CODIGO_COBRO: string;
   ID_CONDICION: number | null;
   DIAS_CREDITO: number | null;
   DIAS_GRACIA: number | null;
@@ -21,6 +23,8 @@ const mapRow = (r: Row): Cliente => ({
   codigoCliente: r.CODIGO_CLIENTE,
   nombre: r.NOMBRE,
   nit: r.NIT,
+  direccion: r.DIRECCION,
+  codigoCobro: r.CODIGO_COBRO,
   idCondicion: r.ID_CONDICION,
   diasCredito: r.DIAS_CREDITO,
   diasGracia: r.DIAS_GRACIA,
@@ -29,7 +33,8 @@ const mapRow = (r: Row): Cliente => ({
 });
 
 const SELECT_BASE = `
-  SELECT c.ID_CLIENTE, c.CODIGO_CLIENTE, c.NOMBRE, c.NIT, c.ID_CONDICION,
+  SELECT c.ID_CLIENTE, c.CODIGO_CLIENTE, c.NOMBRE, c.NIT, c.DIRECCION,
+         'CR-' || LPAD(c.ID_CLIENTE, 5, '0') AS CODIGO_COBRO, c.ID_CONDICION,
          cc.DIAS_CREDITO, cc.DIAS_GRACIA, cc.PORCENTAJE_MORA,
          c.ESTADO
     FROM CLIENTE c
@@ -47,7 +52,10 @@ export async function findAll(params: {
     const conditions: string[] = [];
     const binds: Record<string, string> = {};
     if (params.search) {
-      conditions.push(`(UPPER(c.NOMBRE) LIKE UPPER(:search) OR UPPER(NVL(c.NIT, '')) LIKE UPPER(:search) OR UPPER(NVL(c.CODIGO_CLIENTE, '')) LIKE UPPER(:search) OR TO_CHAR(c.ID_CLIENTE) = :searchExacto)`);
+      conditions.push(`(UPPER(c.NOMBRE) LIKE UPPER(:search) OR UPPER(NVL(c.NIT, '')) LIKE UPPER(:search)
+        OR UPPER(NVL(c.DIRECCION, '')) LIKE UPPER(:search) OR UPPER(NVL(c.CODIGO_CLIENTE, '')) LIKE UPPER(:search)
+        OR TO_CHAR(c.ID_CLIENTE) = :searchExacto
+        OR 'CR-' || LPAD(c.ID_CLIENTE, 5, '0') = UPPER(:searchExacto))`);
       binds.search = `%${params.search}%`;
       binds.searchExacto = params.search.trim();
     }
@@ -164,12 +172,12 @@ export async function create(input: CreateClienteInput): Promise<number> {
     for (let intento = 1; ; intento++) {
       try {
         const result = await conn.execute<{ id: number[] }>(
-          `INSERT INTO CLIENTE (CODIGO_CLIENTE, NOMBRE, NIT, ID_CONDICION, ESTADO)
-           VALUES (:codigo, :nombre, :nit, :idCondicion, :estado)
+          `INSERT INTO CLIENTE (CODIGO_CLIENTE, NOMBRE, NIT, DIRECCION, ID_CONDICION, ESTADO)
+           VALUES (:codigo, :nombre, :nit, :direccion, :idCondicion, :estado)
            RETURNING ID_CLIENTE INTO :id`,
           {
             codigo: await siguienteCodigoCliente(conn),
-            nombre: input.nombre, nit: input.nit, idCondicion: input.idCondicion, estado: input.estado,
+            nombre: input.nombre, nit: input.nit, direccion: input.direccion, idCondicion: input.idCondicion, estado: input.estado,
             id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
           },
         );
@@ -206,9 +214,9 @@ export async function update(id: number, input: UpdateClienteInput & { nit: stri
 
     await conn.execute(
       `UPDATE CLIENTE
-          SET NOMBRE = :nombre, NIT = :nit, ID_CONDICION = :idCondicion, ESTADO = :estado
+          SET NOMBRE = :nombre, NIT = :nit, DIRECCION = :direccion, ID_CONDICION = :idCondicion, ESTADO = :estado
         WHERE ID_CLIENTE = :id`,
-      { nombre: input.nombre, nit: input.nit, idCondicion: input.idCondicion, estado: input.estado, id },
+      { nombre: input.nombre, nit: input.nit, direccion: input.direccion, idCondicion: input.idCondicion, estado: input.estado, id },
     );
     await conn.commit();
   } catch (err) {

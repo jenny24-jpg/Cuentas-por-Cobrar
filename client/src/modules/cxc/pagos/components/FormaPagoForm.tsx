@@ -2,12 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { TextInput, Select } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
-import {
-  hasErrors,
-  validateMaxLength,
-  validateRequired,
-  type ValidationErrors,
-} from '../../../../shared/validation';
+import { hasErrors, validateMaxLength, validateRequired, type ValidationErrors } from '../../../../shared/validation';
 import type { FormaPago } from '@erp/contracts';
 
 export function FormaPagoForm({
@@ -29,9 +24,12 @@ export function FormaPagoForm({
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
-    const requiredErr = validateRequired(nombre, 'El nombre');
+    const n = nombre.trim();
+    const requiredErr = validateRequired(n, 'El nombre');
     if (requiredErr) next.nombre = requiredErr;
-    const maxErr = validateMaxLength(nombre, 'El nombre', 80);
+    else if (n.length < 3) next.nombre = 'El nombre debe tener al menos 3 caracteres.';
+    else if (!/^[\p{L}][\p{L}\s]*$/u.test(n)) next.nombre = 'El nombre solo admite letras y espacios.';
+    const maxErr = validateMaxLength(n, 'El nombre', 80);
     if (maxErr) next.nombre = maxErr;
     return next;
   }, [nombre]);
@@ -75,7 +73,7 @@ export function FormaPagoForm({
           required
           restriction="letters"
           maxLength={80}
-          helperText="Solo letras y espacios; máximo 80."
+          helperText="Solo letras y espacios; no puede repetir otra forma de pago."
           value={nombre}
           onChange={(e: any) => setNombre(e.target.value)}
           error={errors.nombre ?? (nombre ? validationErrors.nombre : undefined)}

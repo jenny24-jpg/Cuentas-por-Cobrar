@@ -171,6 +171,17 @@ export async function updateDocumento(
     );
   }
 
+  // La serie y el número salen del tipo de documento: cambiar el tipo dejaría
+  // un correlativo de otra serie.
+  if (
+    input.idTipoDocumento !== undefined &&
+    input.idTipoDocumento !== current.idTipoDocumento
+  ) {
+    throw new BadRequestError(
+      'El tipo de documento no puede cambiarse porque define la serie y el número. Elimina o anula el documento y créalo con el tipo correcto.',
+    );
+  }
+
   // La fecha original no puede modificarse.
   const fechaOriginal = current.fechaDocumento.slice(0, 10);
 
@@ -188,12 +199,6 @@ export async function updateDocumento(
     idTipoDocumento:
       input.idTipoDocumento ?? current.idTipoDocumento,
     idMoneda: input.idMoneda ?? current.idMoneda,
-    serie:
-      input.serie !== undefined
-        ? input.serie
-        : current.serie,
-    numeroDocumento:
-      input.numeroDocumento ?? current.numeroDocumento,
     fechaDocumento: fechaOriginal,
     fechaVencimiento:
       input.fechaVencimiento ??

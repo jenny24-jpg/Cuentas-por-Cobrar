@@ -7,9 +7,7 @@ import {
   BUSINESS_DATE_MIN,
   hasErrors,
   todayIso,
-  validateIdentifier,
   validateMoney,
-  validateRequired,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
@@ -44,8 +42,8 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
   const [idTipoDocumento, setIdTipoDocumento] = useState(documento?.idTipoDocumento?.toString() ?? '');
   const [idMoneda, setIdMoneda] = useState(documento?.idMoneda?.toString() ?? '');
   const [idCondicionCredito, setIdCondicionCredito] = useState(documento?.idCondicionCredito?.toString() ?? '');
-  const [serie, setSerie] = useState(documento?.serie ?? '');
-  const [numeroDocumento, setNumeroDocumento] = useState(documento?.numeroDocumento ?? '');
+  const serie = documento?.serie ?? '';
+  const numeroDocumento = documento?.numeroDocumento ?? '';
   const [fechaDocumento] = useState(documento?.fechaDocumento?.slice(0, 10) ?? todayIso());
   const [fechaVencimiento, setFechaVencimiento] = useState(documento?.fechaVencimiento?.slice(0, 10) ?? '');
   const [total, setTotal] = useState(documento?.total?.toString() ?? '');
@@ -92,18 +90,6 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
     const monedaErr = validateRequiredSelect(idMoneda, 'una moneda');
     if (monedaErr) next.idMoneda = monedaErr;
 
-    if (serie) {
-      const serieErr = validateIdentifier(serie, 'La serie');
-      if (serieErr) next.serie = serieErr;
-    }
-
-    const numeroRequired = validateRequired(numeroDocumento, 'El número de documento');
-    if (numeroRequired) next.numeroDocumento = numeroRequired;
-    else {
-      const numeroErr = validateIdentifier(numeroDocumento, 'El número de documento');
-      if (numeroErr) next.numeroDocumento = numeroErr;
-    }
-
     const fechaDocumentoErr = validateRequiredDate(
       fechaDocumento,
       'La fecha del documento',
@@ -133,8 +119,6 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
     idCliente,
     idTipoDocumento,
     idMoneda,
-    serie,
-    numeroDocumento,
     fechaDocumento,
     fechaVencimiento,
     total,
@@ -181,8 +165,6 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
       idTipoDocumento: Number(idTipoDocumento),
       idMoneda: Number(idMoneda),
       idCondicionCredito: idCondicionCredito ? Number(idCondicionCredito) : null,
-      serie: serie.trim() || undefined,
-      numeroDocumento: numeroDocumento.trim(),
       fechaDocumento,
       fechaVencimiento,
       total: Number(total),
@@ -255,9 +237,9 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
           value={idTipoDocumento}
           onChange={(e: any) => setIdTipoDocumento(e.target.value)}
           options={tipos.map((t) => ({ value: t.id, label: t.label }))}
-          helperText="Define la naturaleza contable del documento."
+          helperText={isEditing ? 'No se cambia: define la serie y el número del documento.' : 'Define la naturaleza contable y la serie del documento.'}
           error={errorFor('idTipoDocumento')}
-          isReadOnly={isLocked}
+          isReadOnly={isLocked || isEditing}
         />
         <Select
           label="Moneda"
@@ -274,26 +256,15 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput
           label="Serie"
-          restriction="identifier"
-          uppercase
-          maxLength={30}
-          helperText="Serie fiscal o interna; letras y números, admite -, _ y / (máx. 30)."
-          value={serie}
-          onChange={(e: any) => setSerie(e.target.value)}
-          error={errorFor('serie', serie)}
-          isReadOnly={isLocked}
+          value={serie || 'Se asigna al guardar'}
+          isReadOnly
+          helperText="Automática: es el código del tipo de documento."
         />
         <TextInput
           label="Número de documento"
-          required
-          restriction="identifier"
-          uppercase
-          maxLength={50}
-          helperText="Correlativo o identificador del documento; máximo 50 caracteres."
-          value={numeroDocumento}
-          onChange={(e: any) => setNumeroDocumento(e.target.value)}
-          error={errorFor('numeroDocumento', numeroDocumento)}
-          isReadOnly={isLocked}
+          value={numeroDocumento || 'Se asigna al guardar'}
+          isReadOnly
+          helperText="Automático: siguiente correlativo de la serie (00000001, 00000002…)."
         />
       </div>
 

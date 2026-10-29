@@ -52,3 +52,8 @@ export async function remove(id: number) {
 export async function recalcular() {
   return repository.recalcularPendientes();
 }
+
+/** Cartera pendiente con la mora calculada a la fecha de negocio de hoy. */
+export async function cartera() {
+  return repository.findCartera(businessTodayIso());
+}

@@ -104,24 +104,35 @@ export async function listFormasPagoActivas(): Promise<FormaPagoOption[]> {
 export async function listDocumentosPendientesPorCliente(idCliente: number): Promise<CatalogoOption[]> {
   const conn = await getConnection();
   try {
+    // Solo documentos de cargo (facturas, pagarés...): son los únicos que un pago,
+    // anticipo o nota de crédito pueden rebajar.
     const result = await conn.execute<{
       ID_DOCUMENTO: number;
+      TIPO: string | null;
       SERIE: string | null;
       NUMERO_DOCUMENTO: string | null;
+      VENCE: string;
+      VENCIDO: number;
       SALDO: number;
     }>(
-      `SELECT ID_DOCUMENTO, SERIE, NUMERO_DOCUMENTO, SALDO
-       FROM CXC_DOCUMENTOS
-       WHERE ID_CLIENTE = :idCliente
-         AND SALDO > 0
-         AND UPPER(NVL(ESTADO,'PENDIENTE')) NOT IN ('PAGADO','PAGADA','ANULADO','ANULADA')
-       ORDER BY FECHA_VENCIMIENTO ASC`,
+      `SELECT d.ID_DOCUMENTO, t.NOMBRE AS TIPO, d.SERIE, d.NUMERO_DOCUMENTO,
+              TO_CHAR(d.FECHA_VENCIMIENTO, 'DD/MM/YYYY') AS VENCE,
+              CASE WHEN d.FECHA_VENCIMIENTO < TRUNC(SYSDATE) THEN 1 ELSE 0 END AS VENCIDO,
+              d.SALDO
+       FROM CXC_DOCUMENTOS d
+       LEFT JOIN CXC_TIPOS_DOCUMENTO t ON t.ID_TIPO_DOCUMENTO = d.ID_TIPO_DOCUMENTO
+       WHERE d.ID_CLIENTE = :idCliente
+         AND d.SALDO > 0
+         AND UPPER(NVL(d.ESTADO,'PENDIENTE')) NOT IN ('PAGADO','PAGADA','ANULADO','ANULADA')
+         AND NVL(t.NATURALEZA, 'CARGO') = 'CARGO'
+       ORDER BY d.FECHA_VENCIMIENTO ASC`,
       { idCliente },
     );
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_DOCUMENTO,
-      label: `${r.SERIE ?? ''}-${r.NUMERO_DOCUMENTO ?? r.ID_DOCUMENTO} (saldo: ${r.SALDO})`,
+      label: `${r.TIPO ?? 'Documento'} ${[r.SERIE, r.NUMERO_DOCUMENTO ?? r.ID_DOCUMENTO].filter(Boolean).join('-')}`
+        + ` · vence ${r.VENCE}${r.VENCIDO ? ' (VENCIDO)' : ''} · saldo Q ${Number(r.SALDO).toFixed(2)}`,
       saldo: r.SALDO,
     }));
   } finally {
@@ -183,10 +194,11 @@ export async function listAnticiposDisponiblesPorCliente(idCliente: number): Pro
   try {
     const result = await conn.execute<{
       ID_ANTICIPO: number;
+      MONTO_ORIGINAL: number;
       MONTO_DISPONIBLE: number;
       FECHA: Date;
     }>(
-      `SELECT ID_ANTICIPO, MONTO_DISPONIBLE, FECHA
+      `SELECT ID_ANTICIPO, MONTO_ORIGINAL, MONTO_DISPONIBLE, FECHA
          FROM CXC_ANTICIPOS
         WHERE ID_CLIENTE = :idCliente
           AND MONTO_DISPONIBLE > 0
@@ -197,7 +209,8 @@ export async function listAnticiposDisponiblesPorCliente(idCliente: number): Pro
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_ANTICIPO,
-      label: `Anticipo #${r.ID_ANTICIPO} · Disponible Q ${Number(r.MONTO_DISPONIBLE).toFixed(2)}`,
+      label: `Anticipo #${r.ID_ANTICIPO} · original Q ${Number(r.MONTO_ORIGINAL).toFixed(2)} · disponible Q ${Number(r.MONTO_DISPONIBLE).toFixed(2)}`,
+      monto: r.MONTO_ORIGINAL,
       saldo: r.MONTO_DISPONIBLE,
     }));
   } finally {

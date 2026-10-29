@@ -70,6 +70,7 @@ export const ClienteDetalle = ({ idCliente, puedeEditar, onEditar, onCerrar }: C
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Dato etiqueta="Código">{detalle.codigoCliente ?? '—'}</Dato>
           <Dato etiqueta="ID Cliente">#{detalle.idCliente}</Dato>
+          <Dato etiqueta="Código de cobro">{detalle.codigoCobro}</Dato>
           <Dato etiqueta="NIT">
             <span className="inline-flex items-center gap-1.5">
               {detalle.nit || '—'}
@@ -78,6 +79,7 @@ export const ClienteDetalle = ({ idCliente, puedeEditar, onEditar, onCerrar }: C
                 : <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700"><TriangleAlert size={12} aria-hidden="true" />Dígito verificador inválido</span>)}
             </span>
           </Dato>
+          <Dato etiqueta="Dirección">{detalle.direccion || 'Sin dirección registrada'}</Dato>
         </dl>
       </Seccion>
 

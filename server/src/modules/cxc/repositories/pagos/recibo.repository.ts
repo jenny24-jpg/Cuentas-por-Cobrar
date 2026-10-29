@@ -2,6 +2,7 @@ import oracledb, { type Connection } from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { Recibo, CreateReciboInput, UpdateReciboInput } from '@erp/contracts';
 import { ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
+import { asignarCorrelativo } from '../../shared/correlativos';
 
 interface Row {
   ID_RECIBO: number;
@@ -101,23 +102,25 @@ export async function create(input: CreateReciboInput): Promise<number> {
   try {
     const result = await c.execute<{ id: number[] }>(
       `INSERT INTO CXC_RECIBOS
-         (ID_CLIENTE, ID_PAGO, NUMERO_RECIBO, FECHA, MONTO, ESTADO)
+         (ID_CLIENTE, ID_PAGO, FECHA, MONTO, ESTADO)
        VALUES
-         (:idCliente, :idPago, :numeroRecibo,
+         (:idCliente, :idPago,
           TO_DATE(:fecha, 'YYYY-MM-DD'), :monto, :estado)
        RETURNING ID_RECIBO INTO :id`,
       {
         idCliente: input.idCliente,
         idPago: input.idPago,
-        numeroRecibo: input.numeroRecibo ?? null,
         fecha: input.fecha,
         monto: input.monto,
         estado: input.estado,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
     );
+    const id = result.outBinds!.id[0];
+    // El número lo asigna el sistema (REC-AAAA-000001), igual que en los recibos automáticos.
+    await asignarCorrelativo(c, 'recibo', id);
     await c.commit();
-    return result.outBinds!.id[0];
+    return id;
   } catch (error) {
     await c.rollback();
     throw error;
@@ -156,7 +159,6 @@ export async function update(id: number, input: UpdateReciboInput): Promise<void
   const columnas = [
     ['idCliente', 'ID_CLIENTE'],
     ['idPago', 'ID_PAGO'],
-    ['numeroRecibo', 'NUMERO_RECIBO'],
     ['monto', 'MONTO'],
     ['estado', 'ESTADO'],
   ] as const;
@@ -226,12 +228,6 @@ export async function crearReciboAutomatico(
     },
   );
   const idRecibo = insert.outBinds!.id[0];
-  await conn.execute(
-    `UPDATE CXC_RECIBOS
-        SET NUMERO_RECIBO = 'REC-' || TO_CHAR(FECHA, 'YYYY') || '-' ||
-                            LPAD(TO_CHAR(:idRecibo), 6, '0')
-      WHERE ID_RECIBO = :idRecibo`,
-    { idRecibo },
-  );
+  await asignarCorrelativo(conn, 'recibo', idRecibo);
   return idRecibo;
 }

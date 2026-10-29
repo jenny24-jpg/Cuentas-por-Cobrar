@@ -23,6 +23,14 @@ export async function options(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function tiposComercio(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await empresaService.listTiposComercio());
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getOne(req: Request, res: Response, next: NextFunction) {
   try {
     const empresa = await empresaService.getEmpresa(Number(req.params.id));

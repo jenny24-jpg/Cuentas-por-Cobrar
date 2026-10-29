@@ -352,9 +352,11 @@ export async function create(
       );
     }
 
-    if (input.fechaAplicacion > hoy) {
+    // Solo se permiten aplicaciones con la fecha actual de Guatemala.
+    // La fecha de emisión de la nota sigue siendo el límite mínimo.
+    if (input.fechaAplicacion !== hoy) {
       throw new BadRequestError(
-        'La fecha de aplicación no puede ser futura.',
+        'La fecha de aplicación debe ser la fecha actual de Guatemala. No se permiten fechas anteriores ni futuras.',
       );
     }
 
@@ -479,6 +481,15 @@ export async function create(
     // 9. INSERTAR APLICACIÓN
     // -------------------------------------------------
 
+    // Revalidar al insertar, por si cambió el día durante
+    // las consultas y los bloqueos de la transacción.
+    const fechaRegistro = businessTodayIso();
+    if (input.fechaAplicacion !== fechaRegistro) {
+      throw new BadRequestError(
+        'La fecha de Guatemala cambió durante el registro. Vuelve a guardar la aplicación.',
+      );
+    }
+
     const insert = await conn.execute<{
       id: number[];
     }>(
@@ -504,7 +515,7 @@ export async function create(
         idNotaCredito: input.idNotaCredito,
         idDocumento: input.idDocumento,
         montoAplicado,
-        fechaAplicacion: input.fechaAplicacion,
+        fechaAplicacion: fechaRegistro,
         idEmpleado: input.idEmpleado,
 
         id: {
@@ -587,7 +598,7 @@ export async function create(
       naturaleza: 'ABONO',
       descripcion:
         `Nota de crédito #${input.idNotaCredito} aplicada al documento`,
-      fecha: input.fechaAplicacion,
+      fecha: fechaRegistro,
     });
 
     // -------------------------------------------------

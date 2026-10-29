@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  isoDateSchema,
-  moneySchema,
-  optionalIdentifierSchema,
-  optionalTrimmedText,
-} from '../validation';
+import { isoDateSchema, moneySchema } from '../validation';
 
 export const ESTADOS_NOTA_CREDITO = [
   'PENDIENTE',
@@ -34,12 +29,16 @@ export const notaCreditoSchema = z.object({
 
 export type NotaCredito = z.infer<typeof notaCreditoSchema>;
 
+/**
+ * Serie y número los asigna el sistema (serie = código del tipo de documento CREDITO,
+ * número = correlativo): no forman parte de la entrada.
+ * Documento de referencia y descripción son obligatorios: una nota de crédito siempre
+ * rebaja un documento concreto y debe explicar por qué.
+ */
 const notaCreditoBaseSchema = z.object({
   idCliente: z.number().int().positive('Selecciona un cliente'),
-  idDocumentoReferencia: z.number().int().positive('Selecciona un documento válido').nullable().optional(),
-  descripcion: optionalTrimmedText('La descripción', 250),
-  serie: optionalIdentifierSchema('La serie', 30),
-  numero: optionalIdentifierSchema('El número', 30),
+  idDocumentoReferencia: z.number({ error: 'Selecciona el documento al que aplica la nota' }).int().positive('Selecciona el documento al que aplica la nota'),
+  descripcion: z.string().trim().min(10, 'Describe el motivo de la nota (mínimo 10 caracteres)').max(250, 'La descripción no puede superar 250 caracteres'),
   fecha: isoDateSchema('La fecha'),
   monto: moneySchema('El monto', true),
 });

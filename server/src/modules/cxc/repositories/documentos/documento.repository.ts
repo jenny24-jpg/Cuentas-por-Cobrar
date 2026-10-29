@@ -8,6 +8,7 @@ import type {
 } from '@erp/contracts';
 import { deriveDocumentoCondicion } from '../../shared/financialRules';
 import { ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
+import { siguienteNumeroDocumento } from '../../shared/correlativos';
 import { registrarEvento } from './documentoHistorial.repository';
 
 interface DocumentoRow {
@@ -146,6 +147,7 @@ export async function findById(id: number): Promise<Documento | null> {
 export async function create(input: CreateDocumentoInput & { nitCliente?: string | null }): Promise<number> {
   const conn = await getConnection();
   try {
+    const { serie, numero } = await siguienteNumeroDocumento(conn, input.idTipoDocumento);
     const result = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_DOCUMENTOS
          (ID_CLIENTE, NIT_CLIENTE, ID_TIPO_DOCUMENTO, ID_MONEDA, ID_CONDICION_CREDITO, ESTADO,
@@ -163,8 +165,8 @@ export async function create(input: CreateDocumentoInput & { nitCliente?: string
         idTipoDocumento: input.idTipoDocumento,
         idMoneda: input.idMoneda,
         idCondicionCredito: input.idCondicionCredito ?? null,
-        serie: input.serie ?? null,
-        numeroDocumento: input.numeroDocumento,
+        serie,
+        numeroDocumento: numero,
         fechaDocumento: input.fechaDocumento,
         fechaVencimiento: input.fechaVencimiento,
         total: input.total,
@@ -196,8 +198,6 @@ export async function update(id: number, input: DocumentoInternalUpdate): Promis
   if (input.idTipoDocumento !== undefined) { fields.push('ID_TIPO_DOCUMENTO = :idTipoDocumento'); binds.idTipoDocumento = input.idTipoDocumento; }
   if (input.idMoneda !== undefined) { fields.push('ID_MONEDA = :idMoneda'); binds.idMoneda = input.idMoneda; }
   if (input.idCondicionCredito !== undefined) { fields.push('ID_CONDICION_CREDITO = :idCondicionCredito'); binds.idCondicionCredito = input.idCondicionCredito ?? null; }
-  if (input.serie !== undefined) { fields.push('SERIE = :serie'); binds.serie = input.serie; }
-  if (input.numeroDocumento !== undefined) { fields.push('NUMERO_DOCUMENTO = :numeroDocumento'); binds.numeroDocumento = input.numeroDocumento; }
   if (input.fechaDocumento !== undefined) {
     fields.push(`FECHA_DOCUMENTO = TO_DATE(:fechaDocumento, 'YYYY-MM-DD')`);
     binds.fechaDocumento = input.fechaDocumento;

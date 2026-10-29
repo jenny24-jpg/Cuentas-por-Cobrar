@@ -163,8 +163,13 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
       Jornada: {JORNADA_COBRADOR}, con {REGLAS_RUTA.separacionMinutos} min como mínimo entre visitas ·
       {ancla ? ` Área: ${radio} km alrededor de ${ancla.CLIENTE}.` : ' Esta será la primera parada: define el centro del área de la ruta.'}
     </div>
-    <Select label="Documento" required value={idDocumento} onChange={(e: any) => { setIdDocumento(e.target.value); }}
-      options={disponibles.map((d) => ({ value: String(d.ID_DOCUMENTO), label: `${d.DOCUMENTO} · ${d.CLIENTE} · disponible ${d.MONEDA} ${money(d.DISPONIBLE)}` }))}
+    <Select label="Documento" required value={idDocumento} onChange={(e: any) => {
+        const elegido = disponibles.find((d) => String(d.ID_DOCUMENTO) === e.target.value);
+        setIdDocumento(e.target.value);
+        // Propone la dirección registrada del cliente; se puede ajustar antes de guardar.
+        if (elegido?.DIRECCION_CLIENTE) setDireccion(elegido.DIRECCION_CLIENTE.slice(0, 200));
+      }}
+      options={disponibles.map((d) => ({ value: String(d.ID_DOCUMENTO), label: `${d.CODIGO_COBRO} · ${d.CLIENTE} · ${d.DOCUMENTO} · disponible ${d.MONEDA} ${money(d.DISPONIBLE)}` }))}
       error={f.errors.idDocumento}
       helperText={disponibles.length === 0 ? 'No hay documentos pendientes disponibles: todos tienen saldo cero o ya están asignados a una ruta.' : 'Documento con saldo disponible que aún no está asignado a esta ruta.'} />
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -178,7 +183,7 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
     </div>
     <TextInput label="Dirección" required maxLength={200} value={direccion} onChange={(e: any) => setDireccion(e.target.value)}
       error={f.errorFor('direccion', direccion)} placeholder="Ej. Avenida Petapa 39-45, zona 12"
-      helperText="Dirección de la visita; máximo 200 caracteres." />
+      helperText={doc && !doc.DIRECCION_CLIENTE ? 'El cliente no tiene dirección registrada: escríbela o regístrala en Clientes.' : 'Se toma de la dirección del cliente; puedes ajustarla. Máximo 200 caracteres.'} />
     <BuscadorDireccion texto={direccion} onSeleccionar={(r) => fijarPunto(r.lat, r.lon)} />
     <div className="flex flex-col gap-1.5">
       <span className="form-label text-xs font-semibold text-slate-700">Ubicación en el mapa</span>
