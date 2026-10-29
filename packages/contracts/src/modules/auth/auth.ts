@@ -128,10 +128,8 @@ export const empleadoSchema = z.object({
   nombre: z.string().trim().min(2, 'Ingresa el nombre').max(120, 'El nombre no puede superar 120 caracteres'),
   apellido: z.string().trim().max(120, 'El apellido no puede superar 120 caracteres').optional(),
   puesto: z.string().trim().max(100, 'El puesto no puede superar 100 caracteres').optional(),
-  /** Si se deja vacío, el sistema asigna el siguiente código (CXC-EMP-###). */
-  codigo: z.string().trim()
-    .refine((v) => v === '' || CODIGO_EMPLEADO_REGEX.test(v), 'El código admite letras, números, punto, guion, guion bajo y / (máx. 30)')
-    .optional(),
+  /** Sucursal a la que pertenece el empleado: solo puede tener rutas de su sucursal. */
+  idSucursal: z.number({ error: 'Selecciona una sucursal' }).int().positive('Selecciona una sucursal'),
   email: z.string().trim().max(150, 'El correo no puede superar 150 caracteres')
     .refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v), 'Ingresa un correo válido (ejemplo: nombre@empresa.com)')
     .optional(),
@@ -149,6 +147,8 @@ export interface EmpleadoAdmin {
   apellido: string | null;
   nombreCompleto: string;
   puesto: string | null;
+  idSucursal: number | null;
+  nombreSucursal: string | null;
   email: string | null;
   telefono: string | null;
   estado: 'A' | 'I';

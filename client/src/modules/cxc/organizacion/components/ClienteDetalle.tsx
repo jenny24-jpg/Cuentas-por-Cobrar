@@ -68,6 +68,7 @@ export const ClienteDetalle = ({ idCliente, puedeEditar, onEditar, onCerrar }: C
 
       <Seccion titulo="Datos generales" icono={<FileText size={15} className="text-blue-700" aria-hidden="true" />}>
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Dato etiqueta="Código">{detalle.codigoCliente ?? '—'}</Dato>
           <Dato etiqueta="ID Cliente">#{detalle.idCliente}</Dato>
           <Dato etiqueta="NIT">
             <span className="inline-flex items-center gap-1.5">

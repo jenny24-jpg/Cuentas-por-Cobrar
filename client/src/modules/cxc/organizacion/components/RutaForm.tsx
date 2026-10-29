@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { TextInput, Select, TextArea } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
+import { useSucursales } from '../../../../shared/hooks';
 import {
   BUSINESS_DATE_MAX,
   hasErrors,
   todayIso,
   sanitizeSoloLetras,
-  validateIdentifier,
   validateMaxLength,
   validateRequired,
   validateRequiredDate,
@@ -17,7 +17,7 @@ import {
   type ValidationErrors,
 } from '../../../../shared/validation';
 import { TriangleAlert } from 'lucide-react';
-import { REGLAS_RUTA, TRANSICIONES_RUTA, JORNADA_COBRADOR, esDiaDeVisita, mensajeDiaDescanso, type CatalogoOption, type PaginatedResponse, type Ruta } from '@erp/contracts';
+import { REGLAS_RUTA, TRANSICIONES_RUTA, JORNADA_COBRADOR, esDiaDeVisita, mensajeDiaDescanso, type CatalogoOption, type PaginatedResponse, type Ruta, type SugerenciaSucursalRuta } from '@erp/contracts';
 
 const ETIQUETA_ESTADO: Record<string, string> = {
   PLANIFICADA: 'Planificada', EN_PROCESO: 'En proceso', COMPLETADA: 'Completada', CANCELADA: 'Cancelada',
@@ -32,7 +32,9 @@ interface RutaFormProps {
 export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
   const isEditing = Boolean(ruta);
   const [empleados, setEmpleados] = useState<CatalogoOption[]>([]);
-  const [codigoRuta, setCodigoRuta] = useState(ruta?.codigoRuta ?? '');
+  const sucursales = useSucursales();
+  const [idSucursal, setIdSucursal] = useState(ruta?.idSucursal?.toString() ?? '');
+  const [sugerencia, setSugerencia] = useState<SugerenciaSucursalRuta | null>(null);
   const [nombre, setNombre] = useState(ruta?.nombre ?? '');
   const [idEmpleado, setIdEmpleado] = useState(ruta?.idEmpleado?.toString() ?? '');
   const fechaOriginal = ruta?.fecha?.slice(0, 10) ?? '';
@@ -48,6 +50,23 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
   useEffect(() => {
     apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados').then(setEmpleados).catch(() => setEmpleados([]));
   }, []);
+
+  // Al editar: sucursal más cercana a la primera parada con ubicación (solo es una sugerencia).
+  useEffect(() => {
+    if (!ruta) return;
+    apiClient.get<SugerenciaSucursalRuta>(`/cxc/rutas/${ruta.idRuta}/sucursal-sugerida`).then(setSugerencia).catch(() => setSugerencia(null));
+  }, [ruta]);
+
+  // Solo se ofrecen los empleados de la sucursal elegida: un empleado solo tiene rutas de su sucursal.
+  const empleadosDeLaSucursal = idSucursal ? empleados.filter((e) => String(e.idSucursal ?? '') === idSucursal) : [];
+
+  const textoSugerencia = (() => {
+    if (!sugerencia) return null;
+    if (!sugerencia.sugerida) return sugerencia.motivo;
+    const { nombre, distanciaKm, idSucursal: idSug } = sugerencia.sugerida;
+    const coincide = String(idSug) === idSucursal;
+    return `Sucursal más cercana a la primera parada: ${nombre} (${distanciaKm} km)${coincide ? ', la que tiene elegida.' : '. Es solo una sugerencia.'}`;
+  })();
 
   // Aviso (no bloquea): el cobrador ya tiene otra ruta ese mismo día.
   useEffect(() => {
@@ -67,10 +86,8 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
-    if (codigoRuta) {
-      const codeErr = validateIdentifier(codigoRuta, 'El código de ruta');
-      if (codeErr) next.codigoRuta = codeErr;
-    }
+    const sucErr = validateRequiredSelect(idSucursal, 'una sucursal');
+    if (sucErr) next.idSucursal = sucErr;
     const nameErr = validateRequired(nombre, 'El nombre');
     if (nameErr) next.nombre = nameErr;
     const nameMax = validateMaxLength(nombre, 'El nombre', 120);
@@ -93,7 +110,7 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
     const observacionesErr = validateTextOnly(observaciones, 'Las observaciones', { required: true, minLength: 1, maxLength: 500 });
     if (observacionesErr) next.observaciones = observacionesErr;
     return next;
-  }, [codigoRuta, nombre, idEmpleado, fecha, fechaOriginal, radioKm, observaciones]);
+  }, [idSucursal, nombre, idEmpleado, fecha, fechaOriginal, radioKm, observaciones]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -108,8 +125,8 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
     setErrors({});
     setIsSubmitting(true);
     const payload = {
-      codigoRuta: codigoRuta.trim().toUpperCase() || undefined,
       nombre: nombre.trim(),
+      idSucursal: Number(idSucursal),
       idEmpleado: Number(idEmpleado),
       fecha: fecha || undefined,
       ...(isEditing && estado === ruta!.estado ? {} : { estado }),
@@ -141,14 +158,11 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput
           label="Código de ruta"
-          restriction="identifier"
-          uppercase
-          maxLength={20}
-          value={codigoRuta}
-          onChange={(e: any) => setCodigoRuta(e.target.value)}
-          error={errors.codigoRuta ?? (codigoRuta ? validationErrors.codigoRuta : undefined)}
-          helperText="Código corto; admite letras, números, -, _ y /."
-          placeholder="Ej. RT-001"
+          isReadOnly
+          disabled
+          value={ruta?.codigoRuta ?? ''}
+          placeholder="Se asigna automáticamente (RUT-###)"
+          helperText="Lo genera el sistema y no se puede cambiar."
         />
         <TextInput
           label="Nombre"
@@ -164,12 +178,31 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Select
+          label="Sucursal"
+          required
+          value={idSucursal}
+          onChange={(e: any) => {
+            const nueva = e.target.value;
+            setIdSucursal(nueva);
+            // Si el responsable elegido no es de la nueva sucursal, se limpia para elegir otro.
+            if (idEmpleado && !empleados.some((x) => String(x.id) === idEmpleado && String(x.idSucursal ?? '') === nueva)) setIdEmpleado('');
+          }}
+          options={sucursales.map((s) => ({ value: s.id, label: s.nombre }))}
+          placeholder="Selecciona una sucursal"
+          helperText={textoSugerencia ?? 'Sucursal que se encarga del cobro de esta ruta.'}
+          error={errors.idSucursal}
+        />
+        <Select
           label="Empleado responsable"
           required
           value={idEmpleado}
           onChange={(e: any) => setIdEmpleado(e.target.value)}
-          options={empleados.map((e) => ({ value: e.id, label: e.label }))}
-          helperText="Empleado asignado a la ruta."
+          options={empleadosDeLaSucursal.map((e) => ({ value: e.id, label: e.label }))}
+          placeholder={idSucursal ? 'Selecciona un empleado' : 'Elige primero la sucursal'}
+          isReadOnly={!idSucursal}
+          helperText={idSucursal
+            ? (empleadosDeLaSucursal.length ? 'Solo se muestran los empleados de la sucursal elegida.' : 'Esta sucursal no tiene empleados. Asígnalos en Usuarios y accesos → Empleados.')
+            : 'Selecciona primero la sucursal.'}
           error={errors.idEmpleado}
         />
         <TextInput

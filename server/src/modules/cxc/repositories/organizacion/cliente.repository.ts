@@ -6,6 +6,7 @@ import { roundMoney } from '../../shared/financialRules';
 
 interface Row {
   ID_CLIENTE: number;
+  CODIGO_CLIENTE: string | null;
   NOMBRE: string;
   NIT: string | null;
   ID_CONDICION: number | null;
@@ -17,6 +18,7 @@ interface Row {
 
 const mapRow = (r: Row): Cliente => ({
   idCliente: r.ID_CLIENTE,
+  codigoCliente: r.CODIGO_CLIENTE,
   nombre: r.NOMBRE,
   nit: r.NIT,
   idCondicion: r.ID_CONDICION,
@@ -27,7 +29,7 @@ const mapRow = (r: Row): Cliente => ({
 });
 
 const SELECT_BASE = `
-  SELECT c.ID_CLIENTE, c.NOMBRE, c.NIT, c.ID_CONDICION,
+  SELECT c.ID_CLIENTE, c.CODIGO_CLIENTE, c.NOMBRE, c.NIT, c.ID_CONDICION,
          cc.DIAS_CREDITO, cc.DIAS_GRACIA, cc.PORCENTAJE_MORA,
          c.ESTADO
     FROM CLIENTE c
@@ -45,7 +47,7 @@ export async function findAll(params: {
     const conditions: string[] = [];
     const binds: Record<string, string> = {};
     if (params.search) {
-      conditions.push(`(UPPER(c.NOMBRE) LIKE UPPER(:search) OR UPPER(NVL(c.NIT, '')) LIKE UPPER(:search) OR TO_CHAR(c.ID_CLIENTE) = :searchExacto)`);
+      conditions.push(`(UPPER(c.NOMBRE) LIKE UPPER(:search) OR UPPER(NVL(c.NIT, '')) LIKE UPPER(:search) OR UPPER(NVL(c.CODIGO_CLIENTE, '')) LIKE UPPER(:search) OR TO_CHAR(c.ID_CLIENTE) = :searchExacto)`);
       binds.search = `%${params.search}%`;
       binds.searchExacto = params.search.trim();
     }
@@ -142,23 +144,42 @@ async function validarNitUnico(conn: Connection, nit: string, excluirId: number 
 /** ORA-00001: otro usuario registró el mismo NIT entre la validación y el guardado. */
 const esNitDuplicado = (err: unknown) => (err as { errorNum?: number })?.errorNum === 1;
 
-/** Crea el cliente; el ID lo asigna la columna identity. */
+/** ORA-00001 sobre el código de cliente: otro cliente tomó el mismo consecutivo; se recalcula y se reintenta. */
+const esCodigoClienteRepetido = (err: unknown) =>
+  esNitDuplicado(err) && String((err as Error).message).includes('UX_CLIENTE_CODIGO');
+
+/** Siguiente código libre con el formato CLI-00001. */
+async function siguienteCodigoCliente(conn: Connection): Promise<string> {
+  const r = await conn.execute<{ C: string }>(`SELECT CODIGO_CLIENTE AS C FROM CLIENTE WHERE REGEXP_LIKE(CODIGO_CLIENTE, '^CLI-[0-9]+$')`);
+  const max = (r.rows ?? []).reduce((m, x) => Math.max(m, Number(x.C.slice(4))), 0);
+  return `CLI-${String(max + 1).padStart(5, '0')}`;
+}
+
+/** Crea el cliente; el ID lo asigna la columna identity y el código (CLI-00001) lo genera el servidor. */
 export async function create(input: CreateClienteInput): Promise<number> {
   const conn = await getConnection();
   try {
     await validarCondicion(conn, input.idCondicion, null);
     await validarNitUnico(conn, input.nit, null);
-    const result = await conn.execute<{ id: number[] }>(
-      `INSERT INTO CLIENTE (NOMBRE, NIT, ID_CONDICION, ESTADO)
-       VALUES (:nombre, :nit, :idCondicion, :estado)
-       RETURNING ID_CLIENTE INTO :id`,
-      {
-        nombre: input.nombre, nit: input.nit, idCondicion: input.idCondicion, estado: input.estado,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-      },
-    );
-    await conn.commit();
-    return result.outBinds!.id[0];
+    for (let intento = 1; ; intento++) {
+      try {
+        const result = await conn.execute<{ id: number[] }>(
+          `INSERT INTO CLIENTE (CODIGO_CLIENTE, NOMBRE, NIT, ID_CONDICION, ESTADO)
+           VALUES (:codigo, :nombre, :nit, :idCondicion, :estado)
+           RETURNING ID_CLIENTE INTO :id`,
+          {
+            codigo: await siguienteCodigoCliente(conn),
+            nombre: input.nombre, nit: input.nit, idCondicion: input.idCondicion, estado: input.estado,
+            id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          },
+        );
+        await conn.commit();
+        return result.outBinds!.id[0];
+      } catch (err) {
+        if (esCodigoClienteRepetido(err) && intento < 3) { await conn.rollback(); continue; }
+        throw err;
+      }
+    }
   } catch (err) {
     await conn.rollback();
     if (esNitDuplicado(err)) throw new ConflictError('El NIT ya está registrado para otro cliente.');
