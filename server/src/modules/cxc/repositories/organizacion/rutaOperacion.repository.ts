@@ -132,34 +132,149 @@ export async function asignar(idRuta: number, input: AsignarDocumentoRuta) {
     await conn.commit();
   } catch(e) {await conn.rollback();throw e;} finally {await conn.close();}
 }
-export async function registrar(idRuta:number,input:RegistrarBitacoraRuta) {
-  const conn=await getConnection();
+/**
+ * Registra una gestion operativa sin crear movimientos financieros.
+ * PAGO_DENEGADO queda identificado en RESULTADO y se marca como
+ * VISITADO porque el contacto existio. El cierre de la ruta debera
+ * evaluar tambien el ultimo resultado de la bitacora.
+ */
+export async function registrar(idRuta: number, input: RegistrarBitacoraRuta) {
+  const conn = await getConnection();
   try {
-    const ruta = await lockRuta(conn,idRuta);
+    const ruta = await lockRuta(conn, idRuta);
     const hoy = businessTodayIso();
+
     if (ruta.FECHA && ruta.FECHA > hoy) {
-      throw new ConflictError(`La ruta está planificada para el ${fechaLegible(ruta.FECHA)}; las visitas se registran a partir de ese día.`);
+      throw new ConflictError(
+        `La ruta está planificada para el ${fechaLegible(ruta.FECHA)}; las visitas se registran a partir de ese día.`,
+      );
     }
-    if (input.tipo === 'REPROGRAMACION' && input.nuevaFecha) {
-      if (input.nuevaFecha <= hoy) throw new BadRequestError('La nueva fecha de visita debe ser posterior a hoy.');
-      if (!esDiaDeVisita(input.nuevaFecha)) throw new BadRequestError(mensajeDiaDescanso(input.nuevaFecha));
+
+    // Proteccion tambien para llamadas directas al repositorio.
+    const tiposPermitidos = [
+      'VISITA',
+      'NO_ENCONTRADO',
+      'PAGO_DENEGADO',
+      'INCIDENCIA',
+      'REPROGRAMACION',
+    ] as const;
+
+    if (!tiposPermitidos.some((tipo) => tipo === input.tipo)) {
+      throw new BadRequestError('Tipo de actividad no permitido.');
     }
-    const a=await conn.execute<{ID_CLIENTE:number;ID_DOCUMENTO:number;ID_COBRADOR:number}>(`SELECT ID_CLIENTE,ID_DOCUMENTO,ID_COBRADOR FROM CXC_RUTA_DETALLE
-      WHERE ID_RUTA_DETALLE=:id AND ID_RUTA=:idRuta AND ID_DOCUMENTO IS NOT NULL FOR UPDATE`,{id:input.idAsignacion,idRuta});
-    if(!a.rows?.length) throw new NotFoundError('La asignación no pertenece a esta ruta');
-    const row=a.rows[0];
-    await conn.execute(`INSERT INTO CXC_GESTIONES_COBRO(ID_CLIENTE,ID_DOCUMENTO,ID_EMPLEADO,FECHA_GESTION,TIPO_GESTION,RESULTADO,OBSERVACION,ID_RUTA_DETALLE,FECHA_COMPROMISO)
-      VALUES(:cliente,:documento,:empleado,SYSDATE,:tipo,:resultado,:observaciones,:detalle,TO_DATE(:nuevaFecha,'YYYY-MM-DD'))`,
-      {cliente:row.ID_CLIENTE,documento:row.ID_DOCUMENTO,empleado:row.ID_COBRADOR,tipo:['VISITA','NO_ENCONTRADO'].includes(input.tipo)?'VISITA':'OTRO',
-        resultado:input.tipo,observaciones:input.observaciones,detalle:input.idAsignacion,nuevaFecha:input.tipo==='REPROGRAMACION'?input.nuevaFecha ?? null:null});
-    const estadoVisita = { VISITA: 'VISITADO', NO_ENCONTRADO: 'NO_ENCONTRADO', REPROGRAMACION: 'REPROGRAMADO' }[input.tipo as 'VISITA'];
-    // HORA_VISITA es la hora REAL de la visita; la acordada vive en HORA_PROGRAMADA.
-    if (estadoVisita) await conn.execute(`UPDATE CXC_RUTA_DETALLE SET ESTADO_VISITA=:estado,HORA_VISITA=:hora WHERE ID_RUTA_DETALLE=:id`,
-      {estado:estadoVisita,hora:input.tipo==='REPROGRAMACION'?null:businessNowHHMM(),id:input.idAsignacion});
-    if (input.tipo !== 'INCIDENCIA') await iniciarRuta(conn, idRuta);
+
+    if (!input.observaciones?.trim()) {
+      throw campo('observaciones', 'Las observaciones son obligatorias.');
+    }
+
+    if (input.tipo === 'REPROGRAMACION') {
+      if (!input.nuevaFecha) {
+        throw campo('nuevaFecha', 'Indica la nueva fecha de la visita.');
+      }
+      if (input.nuevaFecha <= hoy) {
+        throw new BadRequestError('La nueva fecha de visita debe ser posterior a hoy.');
+      }
+      if (!esDiaDeVisita(input.nuevaFecha)) {
+        throw new BadRequestError(mensajeDiaDescanso(input.nuevaFecha));
+      }
+    }
+
+    // Bloquear la parada antes de registrar la gestion y modificar su estado.
+    const a = await conn.execute<{
+      ID_CLIENTE: number;
+      ID_DOCUMENTO: number;
+      ID_COBRADOR: number;
+    }>(
+      `SELECT ID_CLIENTE, ID_DOCUMENTO, ID_COBRADOR
+       FROM CXC_RUTA_DETALLE
+       WHERE ID_RUTA_DETALLE = :id
+         AND ID_RUTA = :idRuta
+         AND ID_DOCUMENTO IS NOT NULL
+       FOR UPDATE`,
+      { id: input.idAsignacion, idRuta },
+    );
+
+    const row = a.rows?.[0];
+    if (!row) {
+      throw new NotFoundError('La asignación no pertenece a esta ruta');
+    }
+
+    // TIPO_GESTION mantiene las categorias ya empleadas por el ERP.
+    // El resultado preciso (incluido PAGO_DENEGADO) se registra en RESULTADO.
+    const tipoGestion = [
+      'VISITA',
+      'NO_ENCONTRADO',
+      'PAGO_DENEGADO',
+    ].includes(input.tipo) ? 'VISITA' : 'OTRO';
+
+    await conn.execute(
+      `INSERT INTO CXC_GESTIONES_COBRO (
+         ID_CLIENTE, ID_DOCUMENTO, ID_EMPLEADO,
+         FECHA_GESTION, TIPO_GESTION, RESULTADO,
+         OBSERVACION, ID_RUTA_DETALLE, FECHA_COMPROMISO
+       ) VALUES (
+         :cliente, :documento, :empleado,
+         SYSDATE, :tipo, :resultado,
+         :observaciones, :detalle,
+         TO_DATE(:nuevaFecha, 'YYYY-MM-DD')
+       )`,
+      {
+        cliente: row.ID_CLIENTE,
+        documento: row.ID_DOCUMENTO,
+        empleado: row.ID_COBRADOR,
+        tipo: tipoGestion,
+        resultado: input.tipo,
+        observaciones: input.observaciones.trim(),
+        detalle: input.idAsignacion,
+        nuevaFecha: input.tipo === 'REPROGRAMACION'
+          ? input.nuevaFecha ?? null
+          : null,
+      },
+    );
+
+    // PAGO_DENEGADO significa visita efectuada, NO pago realizado.
+    // Se reutiliza VISITADO para evitar introducir valores nuevos en
+    // ESTADO_VISITA sin verificar las restricciones de Oracle.
+    // El detalle de la negativa permanece en la bitacora.
+    const estadosVisita: Record<RegistrarBitacoraRuta['tipo'], string | null> = {
+      VISITA: 'VISITADO',
+      NO_ENCONTRADO: 'NO_ENCONTRADO',
+      PAGO_DENEGADO: 'VISITADO',
+      REPROGRAMACION: 'REPROGRAMADO',
+      INCIDENCIA: null,
+    };
+
+    const estadoVisita = estadosVisita[input.tipo];
+    if (estadoVisita) {
+      await conn.execute(
+        `UPDATE CXC_RUTA_DETALLE
+         SET ESTADO_VISITA = :estado,
+             HORA_VISITA = :hora
+         WHERE ID_RUTA_DETALLE = :id`,
+        {
+          estado: estadoVisita,
+          hora: input.tipo === 'REPROGRAMACION' ? null : businessNowHHMM(),
+          id: input.idAsignacion,
+        },
+      );
+    }
+
+    // Una incidencia por si sola no inicia la ruta.
+    // Un rechazo de pago si implica una visita realizada.
+    if (input.tipo !== 'INCIDENCIA') {
+      await iniciarRuta(conn, idRuta);
+    }
+
+    // No se crean aplicaciones de pago, recibos ni ajustes de saldo.
     await conn.commit();
-  } catch(e) {await conn.rollback();throw e;} finally {await conn.close();}
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    await conn.close();
+  }
 }
+
 export async function perfil(idEmpleado:number,input:PerfilCobradorInput) {
   const conn=await getConnection();
   try {const result=await conn.execute('UPDATE EMPLEADO SET TELEFONO=:telefono,FOTO_URL=:fotoUrl WHERE ID_EMPLEADO=:idEmpleado',{idEmpleado,...input});
