@@ -120,7 +120,7 @@ async function validarPagoRespaldo(
     );
   }
 
-  // Verificar aplicaciones confirmadas del pago.
+  // Un pago con aplicación confirmada o solicitud pendiente no puede reservarse también como anticipo.
 
   const aplicado = await conn.execute<{
     TOTAL: number;
@@ -132,7 +132,7 @@ async function validarPagoRespaldo(
       FROM CXC_APLICACION_PAGOS
 
       WHERE ID_PAGO = :idPago
-        AND ESTADO = 'CONFIRMADA'
+        AND ESTADO IN ('CONFIRMADA', 'PENDIENTE')
     `,
     { idPago },
   );

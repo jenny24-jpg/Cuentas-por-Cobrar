@@ -79,8 +79,9 @@ export const DocumentosPage = () => {
           },
           { header: 'Tipo', accessorKey: 'nombreTipoDocumento' },
           { header: 'Vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Total', accessorKey: 'total', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
-          { header: 'Saldo', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Saldo inicial', accessorKey: 'total', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Pago recibido', accessorKey: 'montoPagado', cell: ({ value }: any) => `Q ${Number(value ?? 0).toFixed(2)}` },
+          { header: 'Saldo actual', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
           {
             header: 'Estado',
             cell: ({ row }: any) => <StatusBadge status={row.estado} />,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isoDateSchema, moneySchema } from '../validation';
 
-export const ESTADOS_APLICACION_PAGO = ['CONFIRMADA', 'REVERSADA'] as const;
+export const ESTADOS_APLICACION_PAGO = ['PENDIENTE', 'CONFIRMADA', 'REVERSADA', 'RECHAZADA'] as const;
 
 export const aplicacionPagoSchema = z.object({
   idAplicacion: z.number().int(),
@@ -19,6 +19,10 @@ export const aplicacionPagoSchema = z.object({
   nombreEmpleadoReversa: z.string().nullable().optional(),
   fechaReversa: z.string().nullable(),
   motivoReversa: z.string().nullable(),
+  idEmpleadoAprobador: z.number().int().nullable().optional(),
+  nombreEmpleadoAprobador: z.string().nullable().optional(),
+  fechaAprobacion: z.string().nullable().optional(),
+  motivoRechazo: z.string().nullable().optional(),
 });
 export type AplicacionPago = z.infer<typeof aplicacionPagoSchema>;
 
@@ -42,3 +46,8 @@ export const reversarAplicacionPagoSchema = z.object({
   fechaReversa: isoDateSchema('La fecha de reversa').optional(),
 });
 export type ReversarAplicacionPagoInput = z.infer<typeof reversarAplicacionPagoSchema>;
+
+export const rechazarAplicacionPagoSchema = z.object({
+  motivoRechazo: z.string().trim().min(5, 'Describe el motivo del rechazo (mínimo 5 caracteres)').max(250, 'El motivo no puede superar 250 caracteres'),
+});
+export type RechazarAplicacionPagoInput = z.infer<typeof rechazarAplicacionPagoSchema>;
