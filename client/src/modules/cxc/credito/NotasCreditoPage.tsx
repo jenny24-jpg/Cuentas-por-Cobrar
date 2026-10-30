@@ -89,6 +89,7 @@ export const NotasCreditoPage = () => {
         emptyText="No hay notas de crédito registradas"
         columns={[
           { header: 'ID', accessorKey: 'idNotaCredito' },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || `Cliente #${row.idCliente}` },
           { header: 'Serie', accessorKey: 'serie', cell: ({ value }: any) => value || '—' },
           { header: 'Número', accessorKey: 'numero', cell: ({ value }: any) => value || '—' },

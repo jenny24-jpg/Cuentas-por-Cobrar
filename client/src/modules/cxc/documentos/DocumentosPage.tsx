@@ -73,6 +73,7 @@ export const DocumentosPage = () => {
         data={data}
         emptyText="No hay documentos registrados"
         columns={[
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           {
             header: 'Documento',

@@ -59,7 +59,7 @@ function TablaDocumentos({ docs, mostrarCliente }: { docs: CarteraMoraDocumento[
               {mostrarCliente && (
                 <td className="px-3 py-2">
                   <span className="block font-medium">{d.cliente}</span>
-                  <span className="text-xs opacity-70">{d.codigoCliente}</span>
+                  <span className="text-xs opacity-70 tabular-nums">ID #{d.idCliente}</span>
                 </td>
               )}
               <td className="px-3 py-2 font-medium">{d.documento}</td>
@@ -124,7 +124,7 @@ export const MoraPage = () => {
   const filtrados = useMemo(() => {
     const q = search.trim().toUpperCase();
     if (!q) return docs;
-    return docs.filter((d) => `${d.cliente} ${d.codigoCliente} ${d.documento}`.toUpperCase().includes(q));
+    return docs.filter((d) => `${d.cliente} #${d.idCliente} ${d.codigoCliente} ${d.documento}`.toUpperCase().includes(q));
   }, [docs, search]);
 
   const grupos = useMemo(() => {
@@ -279,7 +279,7 @@ export const MoraPage = () => {
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate font-semibold ${g.enMora ? 'text-red-800' : 'text-slate-900'}`}>{g.cliente}</span>
                       <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        <span className="font-medium text-slate-700">{g.codigo}</span>
+                        <span className="font-medium tabular-nums text-slate-700">ID #{g.idCliente}</span>
                         <span>{plural(g.docs.length, 'documento', 'documentos')}</span>
                         {g.enMora > 0 && <span className="font-medium text-red-700">{g.enMora} en mora · mayor atraso {plural(g.maxDias, 'día', 'días')}</span>}
                       </span>

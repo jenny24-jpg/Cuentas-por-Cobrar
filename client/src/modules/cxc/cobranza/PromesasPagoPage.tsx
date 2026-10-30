@@ -69,6 +69,7 @@ export const PromesasPagoPage = () => {
         data={data}
         emptyText="No hay promesas de pago registradas"
         columns={[
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Fecha promesa', accessorKey: 'fechaPromesa', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Fecha compromiso', accessorKey: 'fechaCompromiso', cell: ({ value }: any) => formatDateGT(value) },

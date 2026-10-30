@@ -62,6 +62,7 @@ export const AnticiposPage = () => {
         emptyText="No hay registros"
         columns={[
           { header: 'ID', accessorKey: 'idAnticipo' },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Pago', cell: ({ row }: any) => (row.idPago ? row.referenciaPago || `Pago #${row.idPago}` : 'Sin pago') },
           { header: 'Original', accessorKey: 'montoOriginal', cell: ({ value }: any) => money(value) },

@@ -51,17 +51,20 @@ export const AplicacionesNotaCreditoPage = () => {
         data={data}
         emptyText="No hay aplicaciones de notas de crédito registradas"
         columns={[
-          { header: 'ID', accessorKey: 'idAplicacionNc' },
-          { header: 'Nota de Crédito', cell: ({ row }: any) => row.referenciaNota ?? `Nota #${row.idNotaCredito}` },
-          { header: 'Documento', cell: ({ row }: any) => row.referenciaDocumento ?? `Documento #${row.idDocumento}` },
-          { header: 'Monto Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
-          { header: 'Fecha de Aplicación', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Empleado', cell: ({ row }: any) => row.nombreEmpleado || (row.idEmpleado ? `#${row.idEmpleado}` : '—') },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">{value ? `#${value}` : '—'}</span> },
+          { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || '—' },
+          { header: 'No. nota de crédito', cell: ({ row }: any) => <span className="whitespace-nowrap">{row.referenciaNota ?? `Nota #${row.idNotaCredito}`}</span> },
+          { header: 'Factura aplicada', cell: ({ row }: any) => <span className="whitespace-nowrap">{row.referenciaDocumento ?? `Documento #${row.idDocumento}`}</span> },
+          { header: 'Monto aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => <span className="whitespace-nowrap">{money(value)}</span> },
+          { header: 'Fecha', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Aplicó', cell: ({ row }: any) => row.nombreEmpleado || (row.idEmpleado ? `#${row.idEmpleado}` : '—') },
           {
             header: 'Estado',
             cell: ({ row }: any) => (
               <div className="flex flex-col gap-0.5">
-                <StatusBadge status={row.estado} />
+                {row.estado === 'CONFIRMADA' && pend.pendientes.has(row.idAplicacionNc)
+                  ? <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Reversa solicitada</span>
+                  : <StatusBadge status={row.estado} />}
                 {row.estado === 'REVERSADA' && row.nombreEmpleadoReversa && (
                   <span className="text-[11px] text-slate-400">por {row.nombreEmpleadoReversa}</span>
                 )}
@@ -72,12 +75,10 @@ export const AplicacionesNotaCreditoPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) =>
-              row.estado === 'CONFIRMADA' && pend.pendientes.has(row.idAplicacionNc) ? (
-                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Reversa solicitada</span>
-              ) : row.estado === 'CONFIRMADA' ? (
+              row.estado === 'CONFIRMADA' && !pend.pendientes.has(row.idAplicacionNc) ? (
                 <button
                   onClick={() => setAReversar(row)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
                 >
                   <Undo2 size={13} /> Solicitar reversa
                 </button>

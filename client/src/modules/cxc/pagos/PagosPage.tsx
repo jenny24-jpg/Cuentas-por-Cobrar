@@ -71,6 +71,7 @@ export const PagosPage = () => {
         emptyText="No hay pagos registrados"
         columns={[
           { header: 'ID', accessorKey: 'idPago' },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || `Cliente #${row.idCliente}` },
           { header: 'Fecha', accessorKey: 'fechaPago', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Monto registrado', accessorKey: 'monto', cell: ({ value }: any) => money(value) },
