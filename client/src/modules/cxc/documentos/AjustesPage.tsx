@@ -173,6 +173,7 @@ export const AjustesPage = () => {
         data={data}
         emptyText="No hay ajustes registrados"
         columns={[
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Documento', accessorKey: 'idDocumento', cell: ({ value }: any) => value ?? '—' },
           { header: 'Tipo', accessorKey: 'tipoAjuste' },

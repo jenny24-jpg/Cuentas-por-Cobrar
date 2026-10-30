@@ -74,6 +74,7 @@ export const GestionesCobroPage = () => {
         emptyText="No hay gestiones de cobro registradas"
         columns={[
           { header: 'Fecha', accessorKey: 'fechaGestion', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Empleado', accessorKey: 'nombreEmpleado' },
           { header: 'Tipo', accessorKey: 'tipoGestion', cell: ({ value }: any) => value ?? '—' },

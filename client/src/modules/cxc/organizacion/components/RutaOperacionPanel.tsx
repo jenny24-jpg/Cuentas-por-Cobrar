@@ -422,138 +422,116 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
 
 }
 
-interface CobroPayload { idAsignacion: number; idPago: number; monto: number; fecha: string }
+interface CobroPayload { idAsignacion: number; idPago?: number; idFormaPago?: number; monto: number; fecha: string }
 
+/**
+ * Cobro en ruta. El cobrador recibe el dinero: indica la forma de pago y el sistema
+ * registra el pago y lo aplica a la factura en una sola operación. También puede
+ * usar un pago ya registrado y libre. Si el cliente paga en oficina, el operador lo
+ * registra en Pagos → Nuevo pago.
+ */
 function CobroForm({ data, pagos, onSubmit, onClose }: {
-
   data?: RutaOperacion; pagos: RutaPagoDisponible[]; onClose: () => void;
-
   onSubmit: (payload: CobroPayload) => Promise<void>;
-
 }) {
-
   const [idAsignacion, setIdAsignacion] = useState('');
-
+  const [origen, setOrigen] = useState<'NUEVO' | 'REGISTRADO'>('NUEVO');
+  const [idFormaPago, setIdFormaPago] = useState('');
   const [idPago, setIdPago] = useState('');
-
   const [monto, setMonto] = useState('');
+  const [formas, setFormas] = useState<CatalogoOption[]>([]);
+  const hoy = todayIso();
+  // Un pago nuevo lleva la fecha de hoy; uno ya registrado puede aplicarse con otra fecha de la ruta.
+  const [fecha, setFecha] = useState(hoy);
 
-  const [fecha, setFecha] = useState(todayIso());
+  useEffect(() => {
+    apiClient.get<CatalogoOption[]>('/cxc/catalogos/formas-pago').then(setFormas).catch(() => setFormas([]));
+  }, []);
 
   const cobro = data?.asignaciones.find((a) => String(a.ID_ASIGNACION) === idAsignacion);
-
   const pagosCliente = pagos.filter((p) => p.ID_CLIENTE === cobro?.ID_CLIENTE && p.ID_MONEDA === cobro?.ID_MONEDA);
-
   const pago = pagosCliente.find((p) => String(p.ID_PAGO) === idPago);
-
   const restante = cobro ? Math.max(0, cobro.MONTO_ASIGNADO - cobro.MONTO_REGISTRADO) : undefined;
-
-  const limite = cobro ? Math.max(0, Math.min(restante ?? 0, cobro.SALDO_DOCUMENTO, pago ? pago.DISPONIBLE : Infinity)) : undefined;
+  const limite = cobro
+    ? Math.max(0, Math.min(restante ?? 0, cobro.SALDO_DOCUMENTO, origen === 'REGISTRADO' && pago ? pago.DISPONIBLE : Infinity))
+    : undefined;
 
   const validation: ValidationErrors = {};
-
   const asigErr = validateRequiredSelect(idAsignacion, 'un documento asignado'); if (asigErr) validation.idAsignacion = asigErr;
-
-  if (cobro && pagosCliente.length === 0) {
-
-    validation.idPago = 'No hay pagos disponibles de este cliente y moneda. Registra uno en Pagos y pulsa Actualizar.';
-
+  if (origen === 'NUEVO') {
+    const formaErr = validateRequiredSelect(idFormaPago, 'la forma de pago'); if (formaErr) validation.idFormaPago = formaErr;
+  } else if (cobro && pagosCliente.length === 0) {
+    validation.idPago = 'Este cliente no tiene pagos libres registrados. Usa «Pago recibido ahora».';
   } else {
-
-    const pagoErr = validateRequiredSelect(idPago, 'un pago disponible'); if (pagoErr) validation.idPago = pagoErr;
-
+    const pagoErr = validateRequiredSelect(idPago, 'un pago registrado'); if (pagoErr) validation.idPago = pagoErr;
   }
-
-  const montoErr = validateMoney(monto, 'El monto a aplicar', { required: true, positive: true });
-
+  const montoErr = validateMoney(monto, 'El monto cobrado', { required: true, positive: true });
   if (montoErr) validation.monto = montoErr;
-
   else if (limite !== undefined && Number(monto) > limite) {
-
     const causa = Number(monto) > (restante ?? Infinity) ? 'lo que resta por cobrar en la ruta'
-
       : Number(monto) > (cobro?.SALDO_DOCUMENTO ?? Infinity) ? 'el saldo actual del documento'
-
         : 'el monto disponible del pago';
-
-    validation.monto = `El monto a aplicar no puede superar ${causa} (${money(limite)}).`;
-
+    validation.monto = `El monto no puede superar ${causa} (${money(limite)}).`;
   }
-
-  const fechaErr = validateRequiredDate(fecha, 'La fecha de aplicación', { notFuture: true }); if (fechaErr) validation.fecha = fechaErr;
-
+  const fechaErr = validateRequiredDate(fecha, 'La fecha del cobro', { notFuture: true }); if (fechaErr) validation.fecha = fechaErr;
   const sinCobro = cobro && limite === 0 ? 'Este documento ya no tiene saldo por cobrar en la ruta.' : undefined;
-
   if (sinCobro) validation.idAsignacion = sinCobro;
 
-  const reset = () => { setIdAsignacion(''); setIdPago(''); setMonto(''); setFecha(todayIso()); };
-
+  const reset = () => { setIdAsignacion(''); setIdPago(''); setIdFormaPago(''); setMonto(''); setFecha(hoy); };
   const f = useRutaForm(
-
-    () => onSubmit({ idAsignacion: Number(idAsignacion), idPago: Number(idPago), monto: Number(monto), fecha }),
-
-    () => { reset(); onClose(); }, validation, 'No se pudo aplicar el cobro',
-
+    () => onSubmit({
+      idAsignacion: Number(idAsignacion),
+      monto: Number(monto),
+      fecha: origen === 'NUEVO' ? hoy : fecha,
+      ...(origen === 'NUEVO' ? { idFormaPago: Number(idFormaPago) } : { idPago: Number(idPago) }),
+    }),
+    () => { reset(); onClose(); }, validation, 'No se pudo registrar el cobro',
   );
 
   return <form onSubmit={f.handleSubmit} className="flex flex-col gap-4" noValidate>
-
     <Select label="Documento asignado" required value={idAsignacion}
-
       onChange={(e: any) => { setIdAsignacion(e.target.value); setIdPago(''); }}
-
       options={(data?.asignaciones ?? []).map((a) => ({ value: String(a.ID_ASIGNACION), label: `${a.DOCUMENTO} · ${a.CLIENTE} · ${a.COBRADOR}` }))}
-
       error={f.errors.idAsignacion ?? (idAsignacion ? validation.idAsignacion : undefined)}
-
-      helperText={(data?.asignaciones.length ?? 0) === 0 ? 'Primero asigna un documento a la ruta en la pestaña Documentos y mapa.' : 'Documento de la ruta al que se aplicará el cobro.'} />
-
+      helperText={(data?.asignaciones.length ?? 0) === 0 ? 'Primero asigna un documento a la ruta en la pestaña Documentos y mapa.' : 'Documento de la ruta que el cliente está pagando.'} />
     {cobro && <p className="text-sm bg-blue-50 text-blue-900 p-3 rounded-lg">
-
       Cobrador: {cobro.COBRADOR} · Restante asignado: {cobro.MONEDA} {money(restante ?? 0)} · Saldo del documento: {money(cobro.SALDO_DOCUMENTO)}
-
     </p>}
-
+    <Select label="¿Cómo se cobra?" required value={origen}
+      onChange={(e: any) => { setOrigen(e.target.value); setIdPago(''); setIdFormaPago(''); setFecha(hoy); }}
+      options={[
+        { value: 'NUEVO', label: 'Pago recibido ahora por el cobrador' },
+        { value: 'REGISTRADO', label: 'Usar un pago ya registrado en Pagos' },
+      ]}
+      helperText={origen === 'NUEVO'
+        ? 'Se registra el pago con referencia automática y se aplica a la factura en la misma operación.'
+        : 'Para pagos libres que ya existían. Si el cliente paga en la oficina, regístralo en Pagos → Nuevo pago.'} />
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-      <Select label="Pago disponible" required value={idPago} onChange={(e: any) => setIdPago(e.target.value)}
-
-        options={pagosCliente.map((p) => ({ value: String(p.ID_PAGO), label: `${p.REFERENCIA} · ${p.MONEDA} ${money(p.DISPONIBLE)}` }))}
-
-        error={f.errors.idPago ?? (cobro && pagosCliente.length === 0 ? validation.idPago : undefined)}
-
-        helperText={cobro ? 'Pagos del mismo cliente y moneda con monto disponible.' : 'Selecciona primero el documento asignado.'} />
-
-    </div>
-
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-      <TextInput label="Monto a aplicar" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" required
-
+      {origen === 'NUEVO' ? (
+        <Select label="Forma de pago" required value={idFormaPago} onChange={(e: any) => setIdFormaPago(e.target.value)}
+          options={formas.map((x) => ({ value: String(x.id), label: x.label }))}
+          error={f.errors.idFormaPago} helperText="Cómo pagó el cliente al cobrador." />
+      ) : (
+        <Select label="Pago registrado" required value={idPago} onChange={(e: any) => setIdPago(e.target.value)}
+          options={pagosCliente.map((p) => ({ value: String(p.ID_PAGO), label: `${p.REFERENCIA} · ${p.MONEDA} ${money(p.DISPONIBLE)}` }))}
+          error={f.errors.idPago ?? (cobro && pagosCliente.length === 0 ? validation.idPago : undefined)}
+          helperText={cobro ? 'Pagos libres del mismo cliente y moneda.' : 'Selecciona primero el documento asignado.'} />
+      )}
+      <TextInput label="Monto cobrado" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" required
         max={limite !== undefined ? String(limite) : undefined} value={monto} onChange={(e: any) => setMonto(e.target.value)}
-
         error={f.errorFor('monto', monto)} placeholder="Ej. 100.00"
-
-        helperText={limite !== undefined ? `Mayor a 0 y hasta ${money(limite)} (el menor entre lo restante, el saldo del documento y el pago).` : 'Mayor a 0; máximo 2 decimales.'} />
-
-      <TextInput label="Fecha de aplicación" type="date" required max={todayIso()} value={fecha}
-
-        onChange={(e: any) => setFecha(e.target.value)} error={f.errorFor('fecha', fecha)}
-
-        helperText="No puede ser una fecha futura." />
-
+        helperText={limite !== undefined ? `Mayor a 0 y hasta ${money(limite)}.` : 'Mayor a 0; máximo 2 decimales.'} />
     </div>
-
+    <TextInput label="Fecha del cobro" type="date" required max={hoy} value={origen === 'NUEVO' ? hoy : fecha}
+      onChange={(e: any) => setFecha(e.target.value)} isReadOnly={origen === 'NUEVO'} error={f.errorFor('fecha', fecha)}
+      helperText={origen === 'NUEVO' ? 'Un pago recibido ahora lleva la fecha de hoy.' : 'No puede ser una fecha futura.'} />
     {f.general && <p role="alert" className={formErrorClass}>{f.general}</p>}
-
     <FormActionButtons onCancel={onClose} isSubmitting={f.submitting} isFormValid={f.isFormValid}
-
-      blockers={validation} createLabel="Aplicar cobro y generar recibo" confirmTitle="Confirmar cobro"
-
-      confirmMessage="Se aplicará el pago al documento, se reducirá su saldo y se generará el recibo. ¿Continuar?" />
-
+      blockers={validation} createLabel="Registrar cobro y generar recibo" confirmTitle="Confirmar cobro"
+      confirmMessage={origen === 'NUEVO'
+        ? 'Se registrará el pago, se aplicará al documento (bajará su saldo) y se generará el recibo. ¿Continuar?'
+        : 'Se aplicará el pago al documento, se reducirá su saldo y se generará el recibo. ¿Continuar?'} />
   </form>;
-
 }
 
 const TIPOS_BITACORA = [

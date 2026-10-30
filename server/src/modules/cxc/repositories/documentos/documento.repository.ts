@@ -317,6 +317,45 @@ export async function anular(id: number, input: AnularDocumentoInput): Promise<v
       fecha: input.fechaAnulacion,
     });
 
+    // Las notas de débito por mora de esta factura se anulan con ella: no puede
+    // quedar un recargo pendiente por una factura que ya no existe. Las ya
+    // pagadas se conservan (ese dinero sí se recibió).
+    const notas = await conn.execute<{ ID_DOCUMENTO: number; ESTADO: string; SALDO: number }>(
+      `SELECT ID_DOCUMENTO, ESTADO, SALDO FROM CXC_DOCUMENTOS
+        WHERE ID_DOCUMENTO_ORIGEN = :id
+          AND UPPER(TRIM(ESTADO)) NOT IN ('PAGADO', 'PAGADA', 'ANULADO', 'ANULADA')
+        FOR UPDATE`,
+      { id },
+    );
+    for (const nota of notas.rows ?? []) {
+      await conn.execute(
+        `UPDATE CXC_DOCUMENTOS
+            SET SALDO = 0,
+                ESTADO = 'ANULADO',
+                ID_EMPLEADO_ANULACION = :idEmpleadoAnulacion,
+                FECHA_ANULACION = NVL(TO_DATE(:fechaAnulacion, 'YYYY-MM-DD'), SYSDATE),
+                MOTIVO_ANULACION = :motivo
+          WHERE ID_DOCUMENTO = :idNota`,
+        {
+          idEmpleadoAnulacion: input.idEmpleadoAnulacion,
+          fechaAnulacion: input.fechaAnulacion ?? null,
+          motivo: `Anulada junto con su factura de origen: ${input.motivoAnulacion}`.slice(0, 250),
+          idNota: nota.ID_DOCUMENTO,
+        },
+      );
+      await registrarEvento(conn, {
+        idDocumento: nota.ID_DOCUMENTO,
+        estadoAnterior: nota.ESTADO,
+        estadoNuevo: 'ANULADO',
+        idEmpleado: input.idEmpleadoAnulacion,
+        tipoEvento: 'ANULACION_DOCUMENTO',
+        monto: nota.SALDO,
+        naturaleza: 'ABONO',
+        descripcion: 'Anulada junto con su factura de origen',
+        fecha: input.fechaAnulacion,
+      });
+    }
+
     await conn.commit();
   } catch (err) {
     await conn.rollback();

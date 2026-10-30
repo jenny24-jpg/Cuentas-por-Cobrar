@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { solicitarDesde } from '../../controllers/autorizaciones/solicitudReversa.controller';
 import * as condicionCreditoController from '../../controllers/credito/condicionCredito.controller';
 import * as notaCreditoController from '../../controllers/credito/notaCredito.controller';
 import * as aplicacionNotaCreditoController from '../../controllers/credito/aplicacionNotaCredito.controller';
@@ -21,7 +22,7 @@ router.get('/notas-credito/:id', notaCreditoController.getOne);
 router.post('/notas-credito', notaCreditoController.create);
 router.patch('/notas-credito/:id', notaCreditoController.update);
 router.delete('/notas-credito/:id', notaCreditoController.remove);
-router.post('/notas-credito/:id/anular', notaCreditoController.anular);
+router.post('/notas-credito/:id/anular', solicitarDesde('ANULACION_NOTA_CREDITO', 'motivoAnulacion'));
 router.post('/notas-credito/:id/aprobar', notaCreditoController.aprobar);
 router.post('/notas-credito/:id/rechazar', notaCreditoController.rechazar);
 
@@ -52,7 +53,7 @@ router.delete(
 
 router.post(
   '/aplicaciones-nota-credito/:id/reversar',
-  aplicacionNotaCreditoController.reversar,
+  solicitarDesde('REVERSA_APLICACION_NC', 'motivoReversa'),
 );
 
 

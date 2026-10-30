@@ -50,6 +50,8 @@ interface AplicacionNotaCreditoRow {
   MOTIVO_REVERSA: string | null;
 
   REFERENCIA_NOTA: string | null;
+  ID_CLIENTE: number | null;
+  NOMBRE_CLIENTE: string | null;
   REFERENCIA_DOCUMENTO: string | null;
 }
 
@@ -106,6 +108,8 @@ const mapRow = (
   motivoReversa: row.MOTIVO_REVERSA,
   referenciaNota: row.REFERENCIA_NOTA ?? `Nota #${row.ID_NOTA_CREDITO}`,
   referenciaDocumento: row.REFERENCIA_DOCUMENTO ?? `Documento #${row.ID_DOCUMENTO}`,
+  idCliente: row.ID_CLIENTE,
+  nombreCliente: row.NOMBRE_CLIENTE,
 });
 
 // =====================================================
@@ -152,7 +156,11 @@ const SELECT_BASE = `
 
     -- Serie-número legibles de la nota y del documento.
     TRIM(BOTH '-' FROM n.SERIE || '-' || n.NUMERO) AS REFERENCIA_NOTA,
-    TRIM(BOTH '-' FROM d.SERIE || '-' || d.NUMERO_DOCUMENTO) AS REFERENCIA_DOCUMENTO
+    TRIM(BOTH '-' FROM d.SERIE || '-' || d.NUMERO_DOCUMENTO) AS REFERENCIA_DOCUMENTO,
+
+    -- Cliente de la nota.
+    c.ID_CLIENTE,
+    c.NOMBRE AS NOMBRE_CLIENTE
 
   FROM CXC_APLICACION_NOTA_CREDITO a
 
@@ -161,6 +169,9 @@ const SELECT_BASE = `
 
   LEFT JOIN CXC_DOCUMENTOS d
     ON d.ID_DOCUMENTO = a.ID_DOCUMENTO
+
+  LEFT JOIN CLIENTE c
+    ON c.ID_CLIENTE = NVL(n.ID_CLIENTE, d.ID_CLIENTE)
 
 
   LEFT JOIN EMPLEADO e

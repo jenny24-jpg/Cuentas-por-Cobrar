@@ -57,9 +57,10 @@ describe.each([
 
 describe('mapeo de filas', () => {
   it('aplicación: referencia de documento armada o de respaldo y fechas ISO', async () => {
-    const { conn } = crearConexion([{ sql: /WHERE a.ID_APLICACION = :id/, rows: [{ ID_APLICACION: 1, ID_DOCUMENTO: 3, SERIE_DOCUMENTO: null, NUMERO_DOCUMENTO: null, FECHA_APLICACION: FECHA, FECHA_REVERSA: FECHA }] }]);
+    const { conn } = crearConexion([{ sql: /WHERE a.ID_APLICACION = :id/, rows: [{ ID_APLICACION: 1, ID_DOCUMENTO: 3, SERIE_DOCUMENTO: null, NUMERO_DOCUMENTO: null, FECHA_APLICACION_ISO: '2026-10-20', FECHA_REVERSA: FECHA }] }]);
     db.getConnection.mockResolvedValue(conn);
-    expect(await aplicaciones.findById(1)).toMatchObject({ referenciaDocumento: 'Documento #3', fechaAplicacion: FECHA.toISOString(), fechaReversa: FECHA.toISOString() });
+    // La fecha de aplicación llega como texto AAAA-MM-DD (TO_CHAR) para no correrse por zona horaria.
+    expect(await aplicaciones.findById(1)).toMatchObject({ referenciaDocumento: 'Documento #3', fechaAplicacion: '2026-10-20', fechaReversa: FECHA.toISOString() });
   });
   it('pago: disponible cae al monto cuando Oracle no lo calcula y las fechas conservan el día de Oracle', async () => {
     // Las fechas llegan como texto AAAA-MM-DD (TO_CHAR en Oracle) para no correrse por zona horaria.
@@ -172,7 +173,8 @@ describe('pago.create / pago.listOptions', () => {
     const [op] = await pagos.listOptions(1);
     expect(op).toMatchObject({ id: 4, idCliente: 1, cliente: 'CR-00001 Ana', saldo: 25.5, label: 'PAG-2026-000004 · 27/10/2026 · Efectivo · disponible Q 25.50' });
     expect(r.ejecuciones[0].binds).toEqual({ idCliente: 1 });
-    expect(r.ejecuciones[0].sql).not.toContain('NOT EXISTS');
+    // Un pago que respalda un anticipo ya no se ofrece como libre.
+    expect(r.ejecuciones[0].sql).toContain('NOT EXISTS');
 
     r = crearConexion([{ sql: /GROUP BY/, rows: [{ ID_PAGO: 5, NUMERO_REFERENCIA: null, FORMA_PAGO: null, FECHA: '01/10/2026', MONTO: 1, DISPONIBLE: 1 }] }]);
     db.getConnection.mockResolvedValue(r.conn);

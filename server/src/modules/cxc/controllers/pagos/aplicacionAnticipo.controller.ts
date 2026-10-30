@@ -49,10 +49,3 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function reversar(req: Request, res: Response, next: NextFunction) {
-  try {
-    res.json(await service.reversarAplicacionAnticipo(Number(req.params.id), await conEmpleadoActual(req, 'idEmpleadoReversa')));
-  } catch (e) {
-    next(e);
-  }
-}

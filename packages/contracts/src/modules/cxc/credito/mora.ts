@@ -48,7 +48,7 @@ export type UpdateMoraInput = z.infer<typeof updateMoraSchema>;
  * La mora se cobra con notas de débito (tipo con ES_MORA = 'S'); cuando sube de
  * tramo se emite otra nota solo por la diferencia.
  */
-export const ESTADOS_CARTERA_MORA = ['EN_MORA', 'EN_GRACIA', 'POR_VENCER', 'AL_DIA'] as const;
+export const ESTADOS_CARTERA_MORA = ['EN_MORA', 'EN_GRACIA', 'EN_CONVENIO', 'POR_VENCER', 'AL_DIA'] as const;
 export type EstadoCarteraMora = (typeof ESTADOS_CARTERA_MORA)[number];
 
 /** Ventana de "próximos a vencer", en días. */

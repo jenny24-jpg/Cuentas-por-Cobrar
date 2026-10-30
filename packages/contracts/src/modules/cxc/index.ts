@@ -11,3 +11,4 @@ export * from './dashboard';
 export * from './reportes';
 export * from './facturacion';
 export * from './analitica';
+export * from './autorizaciones';

@@ -116,6 +116,10 @@ export function PagoForm({
     pago?.idBanco?.toString() ?? '',
   );
 
+  // El banco solo aplica a medios con referencia bancaria (REQUIERE_REFERENCIA = S en
+  // CXC_FORMAS_PAGO: cheque, depósito, transferencia, tarjeta); en efectivo queda bloqueado.
+  const usaBanco = Boolean(formas.find((f) => String(f.id) === idFormaPago)?.requiereReferencia);
+
   // CORRECCIÓN:
   // Al crear, la fecha se obtiene automáticamente.
   // Al editar, se conserva la fecha original.
@@ -499,9 +503,10 @@ export function PagoForm({
       idCliente: Number(idCliente),
       idFormaPago: Number(idFormaPago),
       idMoneda: Number(idMoneda),
-      idBanco: idBanco
+      // Sin banco cuando la forma de pago no lo usa (también limpia un banco viejo en efectivo).
+      idBanco: usaBanco && idBanco
         ? Number(idBanco)
-        : undefined,
+        : null,
       monto: Number(montoFinal),
       estado,
     };
@@ -581,7 +586,7 @@ export function PagoForm({
       {!isEditing && moraCliente && moraTotal > 0.005 && (
         <div
           role="alert"
-          className="sticky top-0 z-10 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-sm"
+          className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
           <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
           <div>
@@ -658,9 +663,11 @@ export function PagoForm({
           label="Forma de pago"
           required
           value={idFormaPago}
-          onChange={(e: any) =>
-            setIdFormaPago(e.target.value)
-          }
+          onChange={(e: any) => {
+            setIdFormaPago(e.target.value);
+            // Un medio sin referencia bancaria (efectivo) no lleva banco.
+            if (!formas.find((f) => String(f.id) === e.target.value)?.requiereReferencia) setIdBanco('');
+          }}
           options={formas.map((x) => ({
             value: x.id,
             label: x.label,
@@ -778,7 +785,7 @@ export function PagoForm({
 
         <Select
           label="Banco"
-          placeholder="Ninguno (opcional)"
+          placeholder={usaBanco ? 'Ninguno (opcional)' : 'No aplica'}
           value={idBanco}
           onChange={(e: any) =>
             setIdBanco(e.target.value)
@@ -787,9 +794,11 @@ export function PagoForm({
             value: x.id,
             label: x.label,
           }))}
-          helperText="Opcional. Solo aplica si el pago se recibió por transferencia/depósito bancario."
+          helperText={usaBanco
+            ? 'Banco del cheque, depósito, transferencia o tarjeta.'
+            : idFormaPago ? 'Esta forma de pago no se recibe por un banco.' : 'Selecciona primero la forma de pago.'}
           error={errorFor('idBanco')}
-          isReadOnly={isLocked}
+          isReadOnly={isLocked || !usaBanco}
         />
       </div>
 

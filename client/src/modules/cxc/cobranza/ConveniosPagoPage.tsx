@@ -101,6 +101,7 @@ export const ConveniosPagoPage = () => {
         emptyText="No hay convenios de pago registrados"
         onRowClick={(row: ConvenioPago) => navigate(`/cxc/cobranza/convenios-pago/${row.idConvenio}`)}
         columns={[
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Fecha', accessorKey: 'fechaConvenio', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Monto deuda', accessorKey: 'montoDeuda', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },

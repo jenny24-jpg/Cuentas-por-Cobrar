@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { solicitarDesde } from '../../controllers/autorizaciones/solicitudReversa.controller';
 import * as controller from '../../controllers/facturacion/factura.controller';
 import { validarIdsDeRuta } from '../../../../shared/idParams';
 
@@ -10,6 +11,6 @@ router.get('/facturas', controller.list);
 router.post('/facturas/validar', controller.validar);
 router.post('/facturas', controller.emitir);
 router.get('/facturas/:id', controller.getOne);
-router.post('/facturas/:id/anular', controller.anular);
+router.post('/facturas/:id/anular', solicitarDesde('ANULACION_FACTURA_FEL', 'motivoAnulacion'));
 
 export default router;

@@ -7,4 +7,3 @@ export async function create(req:Request,res:Response,next:NextFunction){try{res
 export async function siguienteReferencia(_req:Request,res:Response,next:NextFunction){try{res.json(await service.previewReferencia());}catch(e){next(e);}}
 export async function update(req:Request,res:Response,next:NextFunction){try{res.json(await service.updatePago(Number(req.params.id),req.body));}catch(e){next(e);}}
 export async function remove(req:Request,res:Response,next:NextFunction){try{await service.deletePago(Number(req.params.id));res.status(204).send();}catch(e){next(e);}}
-export async function anular(req:Request,res:Response,next:NextFunction){try{res.json(await service.anularPago(Number(req.params.id),await conEmpleadoActual(req,'idEmpleadoAnulacion')));}catch(e){next(e);}}

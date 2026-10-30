@@ -3,7 +3,7 @@ import { Plus, Pencil, Search, Ban, CheckCircle2, XCircle } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal, TrazabilidadActionModal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { NotaCredito } from '@erp/contracts';
@@ -19,6 +19,7 @@ const porAprobar = (nota: NotaCredito) =>
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const NotasCreditoPage = () => {
+  const pend = useSolicitudesPendientes('ANULACION_NOTA_CREDITO');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useTamanoPagina('cxc.credito.NotasCreditoPage');
   const [search, setSearch] = useState('');
@@ -88,6 +89,7 @@ export const NotasCreditoPage = () => {
         emptyText="No hay notas de crédito registradas"
         columns={[
           { header: 'ID', accessorKey: 'idNotaCredito' },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || `Cliente #${row.idCliente}` },
           { header: 'Serie', accessorKey: 'serie', cell: ({ value }: any) => value || '—' },
           { header: 'Número', accessorKey: 'numero', cell: ({ value }: any) => value || '—' },
@@ -115,9 +117,11 @@ export const NotasCreditoPage = () => {
             align: 'right',
             cell: ({ row }: any) => {
               const locked = Number(row.montoAplicado ?? 0) > 0.005 || ['APLICADA', 'ANULADA'].includes(String(row.estado).toUpperCase());
-              const anulable = Number(row.montoAplicado ?? 0) <= 0.005 && String(row.estado).toUpperCase() !== 'ANULADA';
+              const pendiente = pend.pendientes.has(row.idNotaCredito);
+              const anulable = (Number(row.montoAplicado ?? 0) <= 0.005 && String(row.estado).toUpperCase() !== 'ANULADA') && !pendiente;
               return (
                 <div className="flex justify-end gap-1">
+                  {pendiente && <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Anulación solicitada</span>}
                   {esAdmin && porAprobar(row) && (
                     <>
                       <button
@@ -147,7 +151,7 @@ export const NotasCreditoPage = () => {
                     onClick={() => anulable && setAAnular(row)}
                     disabled={!anulable}
                     className={`p-1.5 rounded-md transition-colors ${anulable ? 'text-slate-400 hover:text-amber-700 hover:bg-amber-50' : 'text-slate-300 cursor-not-allowed'}`}
-                    title={anulable ? 'Anular nota' : 'Una nota con aplicaciones o ya anulada no se puede anular de nuevo'}
+                    title={pendiente ? 'Anulación solicitada: espera la aprobación de un administrador' : anulable ? 'Anular nota' : 'Una nota con aplicaciones o ya anulada no se puede anular de nuevo'}
                   >
                     <Ban size={15} />
                   </button>
@@ -202,14 +206,15 @@ export const NotasCreditoPage = () => {
 
       {aAnular && (
         <TrazabilidadActionModal
-          title={`Anular nota de crédito #${aAnular.idNotaCredito}`}
-          description="La nota quedará marcada como anulada de forma permanente. Solo se puede anular una nota sin aplicaciones vigentes."
+          title={`Solicitar anulación de nota de crédito #${aAnular.idNotaCredito}`}
+          description="Al aprobarse, la nota quedará marcada como anulada de forma permanente. Solo se puede anular una nota sin aplicaciones vigentes."
           endpoint={`/cxc/notas-credito/${aAnular.idNotaCredito}/anular`}
-          actionLabel="Anular"
+          actionLabel="Solicitar anulación"
+          requiereAutorizacion
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}
-          onSuccess={() => { setAAnular(null); refetch(); }}
+          onSuccess={() => { setAAnular(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

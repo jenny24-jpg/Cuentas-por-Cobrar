@@ -451,7 +451,8 @@ export const NotaCreditoForm = ({
           onChange={(e: any) =>
             setMonto(e.target.value)
           }
-          error={errors.monto}
+          // Igual que los demás campos: el error se ve al escribir, no solo al guardar.
+          error={errors.monto ?? (monto ? validationErrors.monto : undefined)}
           placeholder="0.00"
           helperText={
             selectedDocumento?.saldo !== undefined

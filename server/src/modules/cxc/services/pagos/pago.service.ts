@@ -60,6 +60,13 @@ async function assertCatalogos(
     );
   }
 
+  // Solo los medios con referencia bancaria (cheque, depósito, transferencia, tarjeta) llevan banco.
+  if (idBanco && !forma.requiereReferencia) {
+    throw new BadRequestError(
+      `${forma.label} no se recibe por un banco; quita el banco seleccionado.`,
+    );
+  }
+
   if (idBanco && !bancoOk) {
     throw new BadRequestError(
       'El banco seleccionado no existe o está inactivo',
