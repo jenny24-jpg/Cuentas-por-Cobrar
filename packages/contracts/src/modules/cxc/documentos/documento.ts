@@ -34,6 +34,7 @@ export const documentoSchema = z.object({
   fechaDocumento: z.string(),
   fechaVencimiento: z.string(),
   total: z.number(),
+  montoPagado: z.number().optional(),
   saldo: z.number(),
   idEmpleadoAnulacion: z.number().int().nullable(),
   nombreEmpleadoAnulacion: z.string().nullable().optional(),

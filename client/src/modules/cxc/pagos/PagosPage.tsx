@@ -72,9 +72,9 @@ export const PagosPage = () => {
           { header: 'ID', accessorKey: 'idPago' },
           { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || `Cliente #${row.idCliente}` },
           { header: 'Fecha', accessorKey: 'fechaPago', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Monto', accessorKey: 'monto', cell: ({ value }: any) => money(value) },
-          { header: 'Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
-          { header: 'Disponible', accessorKey: 'montoDisponible', cell: ({ value }: any) => money(value) },
+          { header: 'Monto registrado', accessorKey: 'monto', cell: ({ value }: any) => money(value) },
+          { header: 'Monto aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
+          { header: 'Monto disponible', accessorKey: 'montoDisponible', cell: ({ value }: any) => money(value) },
           { header: 'Referencia', accessorKey: 'numeroReferencia', cell: ({ value }: any) => value || '—' },
           { header: 'Estado', accessorKey: 'estado', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
           {
