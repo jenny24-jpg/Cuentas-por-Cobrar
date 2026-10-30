@@ -28,6 +28,3 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   try { await service.remove(Number(req.params.id)); res.status(204).send(); } catch (error) { next(error); }
 }
 
-export async function reversar(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await service.reversar(Number(req.params.id), await conEmpleadoActual(req, 'idEmpleadoReversa'))); } catch (error) { next(error); }
-}

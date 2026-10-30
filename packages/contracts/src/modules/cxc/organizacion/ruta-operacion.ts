@@ -185,10 +185,21 @@ export const registrarBitacoraRutaSchema = z
 // APLICAR COBRO DE RUTA
 // =====================================================
 
+/**
+ * Cobro en ruta. Dos formas:
+ * - El cobrador recibe el dinero: indica la forma de pago y el sistema registra
+ *   el pago y lo aplica a la factura asignada en la misma operación.
+ * - Se usa un pago ya registrado y libre (idPago).
+ * Si el cliente llega a la oficina, el pago se registra en Pagos → Nuevo pago.
+ */
 export const cobrarRutaSchema = z.object({
   idAsignacion: id,
 
-  idPago: id,
+  idPago: id.optional(),
+
+  idFormaPago: id.optional(),
+
+  idBanco: id.nullable().optional(),
 
   idEmpleado: id,
 
@@ -207,6 +218,9 @@ export const cobrarRutaSchema = z.object({
    * el mismo cobro más de una vez.
    */
   claveOperacion: z.string().uuid(),
+}).refine((v) => Boolean(v.idPago) !== Boolean(v.idFormaPago), {
+  path: ['idFormaPago'],
+  message: 'Indica la forma de pago del cobro o selecciona un pago ya registrado, no ambos.',
 });
 
 // =====================================================

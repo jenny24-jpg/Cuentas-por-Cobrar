@@ -35,7 +35,9 @@ async function evaluar(input: EmitirFacturaInput) {
     repo.getMoneda(input.idMoneda),
     repo.getTipoFacturaId(),
   ]);
-  const diasCredito = input.idCondicionCredito ? await repo.getDiasCredito(input.idCondicionCredito) : 0;
+  // Igual que en Documentos: sin condición en la factura rige la del cliente; sin ninguna, es de contado.
+  const idCondicionCredito = input.idCondicionCredito ?? cliente?.idCondicion ?? null;
+  const diasCredito = idCondicionCredito ? await repo.getDiasCredito(idCondicionCredito) : 0;
 
   const nitReceptor = normalizarNit(input.nitReceptor ?? cliente?.nit ?? 'CF') || 'CF';
   const nombreReceptor = (input.nombreReceptor?.trim() || (nitReceptor === 'CF' ? 'Consumidor Final' : cliente?.nombre) || '').trim();
@@ -67,7 +69,7 @@ async function evaluar(input: EmitirFacturaInput) {
     total: totales.total,
     fechaVencimiento,
   };
-  return { validacion, emisor, moneda, idTipo, totales, nitReceptor, nombreReceptor, fechaVencimiento };
+  return { validacion, emisor, moneda, idTipo, totales, nitReceptor, nombreReceptor, fechaVencimiento, idCondicionCredito };
 }
 
 export async function validarFacturaSat(rawInput: unknown): Promise<ValidacionSat> {
@@ -95,7 +97,7 @@ export async function emitirFactura(rawInput: unknown): Promise<FacturaFelDetall
     idCliente: input.idCliente,
     idTipoDocumento: ev.idTipo!,
     idMoneda: input.idMoneda,
-    idCondicionCredito: input.idCondicionCredito ?? null,
+    idCondicionCredito: ev.idCondicionCredito,
     idEmpleado: input.idEmpleado,
     serieFel,
     uuid,

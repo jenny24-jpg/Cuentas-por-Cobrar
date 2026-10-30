@@ -56,10 +56,3 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function anular(req: Request, res: Response, next: NextFunction) {
-  try {
-    res.json(await documentoService.anularDocumento(Number(req.params.id), await conEmpleadoActual(req, 'idEmpleadoAnulacion')));
-  } catch (err) {
-    next(err);
-  }
-}

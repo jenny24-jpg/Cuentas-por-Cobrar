@@ -14,6 +14,7 @@ const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno
 const ESTADO: Record<EstadoCarteraMora, { label: string; badge: string; fila: string }> = {
   EN_MORA: { label: 'En mora', badge: 'border-red-200 bg-red-50 text-red-700', fila: 'bg-red-50/60 text-red-800' },
   EN_GRACIA: { label: 'Vencido (en gracia)', badge: 'border-amber-200 bg-amber-50 text-amber-800', fila: 'text-amber-900' },
+  EN_CONVENIO: { label: 'En convenio (mora suspendida)', badge: 'border-violet-200 bg-violet-50 text-violet-800', fila: 'text-violet-900' },
   POR_VENCER: { label: 'Por vencer', badge: 'border-blue-200 bg-blue-50 text-blue-800', fila: '' },
   AL_DIA: { label: 'Al día', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700', fila: '' },
 };

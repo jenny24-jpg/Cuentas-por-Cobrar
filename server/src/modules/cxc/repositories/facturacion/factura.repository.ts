@@ -76,15 +76,15 @@ export async function getEmisor(): Promise<{ idEmpresa: number; nombre: string; 
   }
 }
 
-export async function getCliente(idCliente: number): Promise<{ nombre: string; nit: string | null } | null> {
+export async function getCliente(idCliente: number): Promise<{ nombre: string; nit: string | null; idCondicion: number | null } | null> {
   const conn = await getConnection();
   try {
-    const result = await conn.execute<{ NOMBRE: string; NIT: string | null }>(
-      `SELECT NOMBRE, NIT FROM CLIENTE WHERE ID_CLIENTE = :idCliente`,
+    const result = await conn.execute<{ NOMBRE: string; NIT: string | null; ID_CONDICION: number | null }>(
+      `SELECT NOMBRE, NIT, ID_CONDICION FROM CLIENTE WHERE ID_CLIENTE = :idCliente`,
       { idCliente },
     );
     const row = result.rows?.[0];
-    return row ? { nombre: row.NOMBRE, nit: row.NIT } : null;
+    return row ? { nombre: row.NOMBRE, nit: row.NIT, idCondicion: row.ID_CONDICION ?? null } : null;
   } finally {
     await conn.close();
   }

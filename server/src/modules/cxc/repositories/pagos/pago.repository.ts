@@ -266,6 +266,83 @@ export async function findById(id: number) {
 // CREAR PAGO
 // =====================================================
 
+/**
+ * Cobro en ruta: el cobrador recibe el dinero, así que en una sola transacción se
+ * registra el pago (cliente y moneda del documento asignado, referencia automática)
+ * y se aplica a ese documento con su recibo. La clave de operación evita duplicados:
+ * si el cobrador reintenta con la misma clave, se devuelve el cobro ya registrado.
+ */
+export async function cobrarEnRuta(i: {
+  idRutaDetalle: number;
+  idDocumento: number;
+  idFormaPago: number;
+  idBanco?: number | null;
+  monto: number;
+  fecha: string;
+  idEmpleado: number;
+  claveRuta: string;
+}): Promise<number> {
+  const c = await getConnection();
+  try {
+    const previo = await c.execute<{ ID_APLICACION: number }>(
+      `SELECT ID_APLICACION FROM CXC_APLICACION_PAGOS WHERE CLAVE_RUTA = :clave`,
+      { clave: i.claveRuta },
+    );
+    if (previo.rows?.length) return previo.rows[0].ID_APLICACION;
+
+    // Mismo orden de bloqueo que los demás cobros de ruta: primero la ruta.
+    await c.execute(
+      `SELECT r.ID_RUTA FROM CXC_RUTAS r
+        WHERE r.ID_RUTA = (SELECT d.ID_RUTA FROM CXC_RUTA_DETALLE d WHERE d.ID_RUTA_DETALLE = :id)
+        FOR UPDATE`,
+      { id: i.idRutaDetalle },
+    );
+
+    const doc = await c.execute<{ ID_CLIENTE: number; ID_MONEDA: number }>(
+      `SELECT ID_CLIENTE, ID_MONEDA FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id`,
+      { id: i.idDocumento },
+    );
+    if (!doc.rows?.length) throw new NotFoundError('El documento asignado no existe');
+
+    const numeroReferencia = await siguienteReferenciaPago(c);
+    const r = await c.execute<{ id: number[] }>(
+      `INSERT INTO CXC_PAGOS
+         (ID_CLIENTE, ID_FORMA_PAGO, ID_MONEDA, ID_BANCO, FECHA_PAGO, MONTO, NUMERO_REFERENCIA, ESTADO)
+       VALUES
+         (:idCliente, :idFormaPago, :idMoneda, :idBanco, TO_DATE(:fecha, 'YYYY-MM-DD'), :monto, :numeroReferencia, 'NO_APLICADO')
+       RETURNING ID_PAGO INTO :id`,
+      {
+        idCliente: doc.rows[0].ID_CLIENTE,
+        idFormaPago: i.idFormaPago,
+        idMoneda: doc.rows[0].ID_MONEDA,
+        idBanco: i.idBanco ?? null,
+        fecha: i.fecha,
+        monto: i.monto,
+        numeroReferencia,
+        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      },
+    );
+
+    const idAplicacion = await aplicarEnConexion(c, {
+      idPago: r.outBinds!.id[0],
+      idDocumento: i.idDocumento,
+      fechaAplicacion: i.fecha,
+      montoAplicado: i.monto,
+      idEmpleado: i.idEmpleado,
+      idRutaDetalle: i.idRutaDetalle,
+      claveRuta: i.claveRuta,
+    });
+
+    await c.commit();
+    return idAplicacion;
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
 /** Referencia que tendría hoy el próximo pago (vista previa, sin bloquear). */
 export async function previewReferencia(): Promise<string> {
   const c = await getConnection();

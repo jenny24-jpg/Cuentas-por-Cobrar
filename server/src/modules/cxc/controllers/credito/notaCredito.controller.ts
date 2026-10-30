@@ -33,9 +33,6 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   try { await service.remove(Number(req.params.id)); res.status(204).send(); } catch (error) { next(error); }
 }
 
-export async function anular(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await service.anular(Number(req.params.id), await conEmpleadoActual(req, 'idEmpleadoAnulacion'), req.auth?.rol)); } catch (error) { next(error); }
-}
 
 export async function siguienteNumero(_req: Request, res: Response, next: NextFunction) {
   try {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Search, Undo2 } from 'lucide-react';
 import { DataTable, Button, TextInput, StatusBadge } from '../../../shared/ui-kit';
 import { Modal, TrazabilidadActionModal } from '../../../shared/components';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { formatDateGT } from '../../../shared/date';
 import type { AplicacionPago } from '@erp/contracts';
 import { AplicacionPagoForm } from './components/AplicacionPagoForm';
@@ -15,6 +15,7 @@ const money = (value: unknown) =>
   })}`;
 
 export const AplicacionesPagoPage = () => {
+  const pend = useSolicitudesPendientes('REVERSA_APLICACION_PAGO');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.AplicacionesPagoPage');
   const [search, setSearch] = useState('');
@@ -108,12 +109,14 @@ export const AplicacionesPagoPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) =>
-              row.estado === 'CONFIRMADA' ? (
+              row.estado === 'CONFIRMADA' && pend.pendientes.has(row.idAplicacion) ? (
+                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Reversa solicitada</span>
+              ) : row.estado === 'CONFIRMADA' ? (
                 <button
                   onClick={() => setAReversar(row)}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
                 >
-                  <Undo2 size={13} /> Reversar
+                  <Undo2 size={13} /> Solicitar reversa
                 </button>
               ) : null,
           },
@@ -143,14 +146,15 @@ export const AplicacionesPagoPage = () => {
 
       {aReversar && (
         <TrazabilidadActionModal
-          title={`Reversar aplicación #${aReversar.idAplicacion}`}
-          description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y al disponible del pago.`}
+          title={`Solicitar reversa de aplicación #${aReversar.idAplicacion}`}
+          description={`Al aprobarse, se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y al disponible del pago.`}
           endpoint={`/cxc/aplicaciones-pago/${aReversar.idAplicacion}/reversar`}
-          actionLabel="Reversar"
+          actionLabel="Solicitar reversa"
+          requiereAutorizacion
           motivoLabel="Motivo de la reversa"
           motivoFieldName="motivoReversa"
           onClose={() => setAReversar(null)}
-          onSuccess={() => { setAReversar(null); refetch(); }}
+          onSuccess={() => { setAReversar(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

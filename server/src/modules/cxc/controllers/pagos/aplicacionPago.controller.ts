@@ -5,4 +5,3 @@ export async function getOne(req:Request,res:Response,next:NextFunction){try{res
 export async function create(req:Request,res:Response,next:NextFunction){try{res.status(201).json(await service.createAplicacionPago(await conEmpleadoActual(req)));}catch(e){next(e);}}
 export async function update(req:Request,res:Response,next:NextFunction){try{res.json(await service.updateAplicacionPago(Number(req.params.id),req.body));}catch(e){next(e);}}
 export async function remove(req:Request,res:Response,next:NextFunction){try{await service.deleteAplicacionPago(Number(req.params.id));res.status(204).send();}catch(e){next(e);}}
-export async function reversar(req:Request,res:Response,next:NextFunction){try{res.json(await service.reversarAplicacionPago(Number(req.params.id),await conEmpleadoActual(req,'idEmpleadoReversa')));}catch(e){next(e);}}

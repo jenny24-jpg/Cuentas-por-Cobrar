@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { solicitarDesde } from '../../controllers/autorizaciones/solicitudReversa.controller';
 import * as documentoController from '../../controllers/documentos/documento.controller';
 import * as tipoDocumentoController from '../../controllers/documentos/tipoDocumento.controller';
 import * as detalleController from '../../controllers/documentos/documentoDetalle.controller';
@@ -25,7 +26,7 @@ router.get('/documentos/:id', documentoController.getOne);
 router.post('/documentos', documentoController.create);
 router.patch('/documentos/:id', documentoController.update);
 router.delete('/documentos/:id', documentoController.remove);
-router.post('/documentos/:id/anular', documentoController.anular);
+router.post('/documentos/:id/anular', solicitarDesde('ANULACION_DOCUMENTO', 'motivoAnulacion'));
 
 // --- CXC_DOCUMENTO_DETALLE (anidado al documento) ---
 router.get('/documentos/:id/detalles', detalleController.listByDocumento);

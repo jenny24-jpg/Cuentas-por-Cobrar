@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal, TrazabilidadActionModal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Documento } from '@erp/contracts';
@@ -13,6 +13,7 @@ import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 
 export const DocumentosPage = () => {
+  const pend = useSolicitudesPendientes('ANULACION_DOCUMENTO');
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useTamanoPagina('cxc.documentos.DocumentosPage');
@@ -89,9 +90,11 @@ export const DocumentosPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) => {
-              const anulable = !['ANULADO', 'ANULADA', 'PAGADO', 'PAGADA'].includes(String(row.estado).toUpperCase());
+              const pendiente = pend.pendientes.has(row.idDocumento);
+              const anulable = (!['ANULADO', 'ANULADA', 'PAGADO', 'PAGADA'].includes(String(row.estado).toUpperCase())) && !pendiente;
               return (
                 <div className="flex justify-end gap-1">
+                  {pendiente && <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Anulación solicitada</span>}
                   <button
                     onClick={() => navigate(`/cxc/documentos/documentos/${row.idDocumento}`)}
                     className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
@@ -110,7 +113,7 @@ export const DocumentosPage = () => {
                     onClick={() => !anulable ? undefined : setAAnular(row)}
                     disabled={!anulable}
                     className={`p-1.5 rounded-md transition-colors ${anulable ? 'text-slate-400 hover:text-amber-700 hover:bg-amber-50' : 'text-slate-300 cursor-not-allowed'}`}
-                    title={anulable ? 'Anular documento' : 'No se puede anular un documento pagado o ya anulado'}
+                    title={pendiente ? 'Anulación solicitada: espera la aprobación de un administrador' : anulable ? 'Anular documento' : 'No se puede anular un documento pagado o ya anulado'}
                   >
                     <Ban size={15} />
                   </button>
@@ -158,14 +161,15 @@ export const DocumentosPage = () => {
 
       {aAnular && (
         <TrazabilidadActionModal
-          title={`Anular documento ${[aAnular.serie, aAnular.numeroDocumento].filter(Boolean).join('-')}`}
-          description="El saldo pendiente del documento se llevará a cero. No se revierten los pagos/notas/anticipos ya aplicados a él."
+          title={`Solicitar anulación de documento ${[aAnular.serie, aAnular.numeroDocumento].filter(Boolean).join('-')}`}
+          description="Al aprobarse, el saldo pendiente del documento se llevará a cero. No se revierten los pagos/notas/anticipos ya aplicados a él."
           endpoint={`/cxc/documentos/${aAnular.idDocumento}/anular`}
-          actionLabel="Anular"
+          actionLabel="Solicitar anulación"
+          requiereAutorizacion
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}
-          onSuccess={() => { setAAnular(null); refetch(); }}
+          onSuccess={() => { setAAnular(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

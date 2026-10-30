@@ -176,7 +176,7 @@ interface CarteraRow {
   ID_MONEDA: number; MONEDA: string | null; NIT_CLIENTE: string | null;
   FECHA_DOCUMENTO: string; FECHA_VENCIMIENTO: string; FECHA_INICIO_MORA: string;
   DIAS_GRACIA: number; DIAS_VENCIDO: number; SALDO: number;
-  SEGMENTO: string | null; REDUCCION_MORA: number; EMITIDO: number;
+  SEGMENTO: string | null; REDUCCION_MORA: number; EMITIDO: number; EN_CONVENIO: number;
 }
 
 // Documentos de cargo con saldo. Las notas de débito por mora no generan mora.
@@ -196,7 +196,13 @@ const SELECT_CARTERA = `
          NVL(sg.REDUCCION_MORA, 0) AS REDUCCION_MORA,
          -- Incluye notas anuladas: anular una nota es perdonar ese recargo, no volver a cobrarlo.
          NVL((SELECT SUM(nd.TOTAL) FROM CXC_DOCUMENTOS nd
-               WHERE nd.ID_DOCUMENTO_ORIGEN = d.ID_DOCUMENTO), 0) AS EMITIDO
+               WHERE nd.ID_DOCUMENTO_ORIGEN = d.ID_DOCUMENTO), 0) AS EMITIDO,
+         -- Mientras un convenio ACTIVO cubre el documento, la mora queda suspendida.
+         CASE WHEN EXISTS (SELECT 1 FROM CXC_CONVENIO_DOCUMENTOS cvd
+                             JOIN CXC_CONVENIOS_PAGO cv ON cv.ID_CONVENIO = cvd.ID_CONVENIO
+                            WHERE cvd.ID_DOCUMENTO = d.ID_DOCUMENTO
+                              AND UPPER(TRIM(cv.ESTADO)) = 'ACTIVO')
+              THEN 1 ELSE 0 END AS EN_CONVENIO
     FROM CXC_DOCUMENTOS d
     JOIN CLIENTE c ON c.ID_CLIENTE = d.ID_CLIENTE
     LEFT JOIN CXC_TIPOS_DOCUMENTO t ON t.ID_TIPO_DOCUMENTO = d.ID_TIPO_DOCUMENTO
@@ -215,14 +221,17 @@ const SELECT_CARTERA = `
 function calcular(r: CarteraRow, tramos: Tramo[]): CarteraMoraDocumento {
   const diasVencido = Number(r.DIAS_VENCIDO);
   const diasGracia = Number(r.DIAS_GRACIA);
-  const diasMora = Math.max(0, diasVencido - diasGracia);
+  // En convenio activo no corre la mora: el cliente paga según las cuotas pactadas.
+  const enConvenio = Number(r.EN_CONVENIO) === 1;
+  const diasMora = enConvenio ? 0 : Math.max(0, diasVencido - diasGracia);
   const saldo = roundMoney(Number(r.SALDO));
   const porcentajeTramo = porcentajeDeTramo(tramos, diasMora);
   const reduccionMora = Number(r.REDUCCION_MORA);
   const porcentajeMora = diasMora > 0 ? Math.max(0, roundMoney(porcentajeTramo - reduccionMora)) : 0;
   const montoMora = diasMora > 0 ? roundMoney((saldo * porcentajeMora) / 100) : 0;
   const montoEmitido = roundMoney(Number(r.EMITIDO));
-  const estado: EstadoCarteraMora = diasMora > 0 ? 'EN_MORA'
+  const estado: EstadoCarteraMora = enConvenio ? 'EN_CONVENIO'
+    : diasMora > 0 ? 'EN_MORA'
     : diasVencido > 0 ? 'EN_GRACIA'
       : -diasVencido <= DIAS_PROXIMOS_A_VENCER ? 'POR_VENCER'
         : 'AL_DIA';

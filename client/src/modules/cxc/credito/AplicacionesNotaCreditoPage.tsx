@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Search, Undo2 } from 'lucide-react';
 import { DataTable, TextInput, StatusBadge } from '../../../shared/ui-kit';
 import { TrazabilidadActionModal } from '../../../shared/components';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { formatDateGT } from '../../../shared/date';
 import type { AplicacionNotaCredito } from '@erp/contracts';
 import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
@@ -10,6 +10,7 @@ import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const AplicacionesNotaCreditoPage = () => {
+  const pend = useSolicitudesPendientes('REVERSA_APLICACION_NC');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useTamanoPagina('cxc.credito.AplicacionesNotaCreditoPage');
   const [search, setSearch] = useState('');
@@ -71,12 +72,14 @@ export const AplicacionesNotaCreditoPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) =>
-              row.estado === 'CONFIRMADA' ? (
+              row.estado === 'CONFIRMADA' && pend.pendientes.has(row.idAplicacionNc) ? (
+                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Reversa solicitada</span>
+              ) : row.estado === 'CONFIRMADA' ? (
                 <button
                   onClick={() => setAReversar(row)}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
                 >
-                  <Undo2 size={13} /> Reversar
+                  <Undo2 size={13} /> Solicitar reversa
                 </button>
               ) : null,
           },
@@ -91,14 +94,15 @@ export const AplicacionesNotaCreditoPage = () => {
 
       {aReversar && (
         <TrazabilidadActionModal
-          title={`Reversar aplicación #${aReversar.idAplicacionNc}`}
-          description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y la nota volverá a quedar por aprobar: para aplicarla otra vez, un administrador debe aprobarla de nuevo.`}
+          title={`Solicitar reversa de aplicación #${aReversar.idAplicacionNc}`}
+          description={`Al aprobarse, se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y la nota volverá a quedar por aprobar: para aplicarla otra vez, un administrador debe aprobarla de nuevo.`}
           endpoint={`/cxc/aplicaciones-nota-credito/${aReversar.idAplicacionNc}/reversar`}
-          actionLabel="Reversar"
+          actionLabel="Solicitar reversa"
+          requiereAutorizacion
           motivoLabel="Motivo de la reversa"
           motivoFieldName="motivoReversa"
           onClose={() => setAReversar(null)}
-          onSuccess={() => { setAReversar(null); refetch(); }}
+          onSuccess={() => { setAReversar(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

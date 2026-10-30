@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FileText,
   GraduationCap,
+  ClipboardCheck,
   HelpCircle,
   Landmark,
   LayoutDashboard,
@@ -34,6 +35,7 @@ import {
 } from '../tutoriales';
 import { useAuth } from '../../../shared/auth/AuthContext';
 import { ROL_LABEL } from '@erp/contracts';
+import { apiClient } from '../../../shared/api';
 
 type CxcMenuItem = {
   id: string;
@@ -157,6 +159,7 @@ const CXC_GROUPS: CxcMenuGroup[] = [
 
 const CXC_DASHBOARD_PATH = '/cxc/dashboard';
 const CXC_TUTORIALS_PATH = '/cxc/tutoriales';
+const CXC_AUTORIZACIONES_PATH = '/cxc/autorizaciones';
 const ADMIN_USUARIOS_PATH = '/admin/usuarios';
 
 // `enConstruccion`: módulos sin desarrollar; su ruta muestra la pantalla "Módulo en construcción".
@@ -183,15 +186,24 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
 
   const isDashboardActive = location.pathname === CXC_DASHBOARD_PATH;
   const isTutorialsActive = location.pathname === CXC_TUTORIALS_PATH;
+  const isAutorizacionesActive = location.pathname === CXC_AUTORIZACIONES_PATH;
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(0);
+
+  // Contador del menú: reversas y anulaciones esperando aprobación (se refresca al navegar).
+  useEffect(() => {
+    apiClient.get<{ pendientes: number }>('/cxc/solicitudes-reversa/conteo')
+      .then((r) => setSolicitudesPendientes(r.pendientes))
+      .catch(() => setSolicitudesPendientes(0));
+  }, [location.pathname]);
   const isAdminActive = location.pathname.startsWith('/admin');
   const moduloObra = moduloEnConstruccionActivo(location.pathname);
 
   const activeGroup = useMemo(
     () =>
-      isDashboardActive || isTutorialsActive || isAdminActive || moduloObra
+      isDashboardActive || isTutorialsActive || isAutorizacionesActive || isAdminActive || moduloObra
         ? undefined
         : CXC_GROUPS.find((group) => location.pathname.startsWith(group.matchPrefix)) ?? CXC_GROUPS[0],
-    [location.pathname, isDashboardActive, isTutorialsActive, isAdminActive, moduloObra],
+    [location.pathname, isDashboardActive, isTutorialsActive, isAutorizacionesActive, isAdminActive, moduloObra],
   );
 
   const pageTutorial = useMemo(() => getTutorialForPath(location.pathname), [location.pathname]);
@@ -327,6 +339,25 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
                       <span className="flex-1 text-left">Tutoriales</span>
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => navigate(CXC_AUTORIZACIONES_PATH)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        isAutorizacionesActive
+                          ? 'text-blue-300 bg-slate-800/80'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                      }`}
+                      aria-current={isAutorizacionesActive ? 'page' : undefined}
+                    >
+                      <ClipboardCheck size={15} aria-hidden="true" />
+                      <span className="flex-1 text-left">Autorizaciones</span>
+                      {solicitudesPendientes > 0 && (
+                        <span className="shrink-0 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-slate-900" aria-label={`${solicitudesPendientes} solicitudes pendientes`}>
+                          {solicitudesPendientes}
+                        </span>
+                      )}
+                    </button>
+
                     {CXC_GROUPS.map((group) => {
                       const GroupIcon = group.icon;
                       const groupActive = activeGroup?.id === group.id;
@@ -426,7 +457,7 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">{isAdminActive ? 'Sistema' : moduloObra ? 'Módulo en construcción' : 'Cuentas por Cobrar'}</p>
             <h2 className="text-slate-800 truncate text-sm font-bold">
-              {isAdminActive ? 'Administración' : moduloObra ? moduloObra.label : isDashboardActive ? 'Dashboard' : isTutorialsActive ? 'Tutoriales' : activeGroup?.label}
+              {isAdminActive ? 'Administración' : moduloObra ? moduloObra.label : isDashboardActive ? 'Dashboard' : isTutorialsActive ? 'Tutoriales' : isAutorizacionesActive ? 'Autorizaciones' : activeGroup?.label}
             </h2>
           </div>
           {pageTutorial && (

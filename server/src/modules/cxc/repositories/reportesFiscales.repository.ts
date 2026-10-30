@@ -134,6 +134,7 @@ export async function getEstadisticaCobranza(desde: string, hasta: string): Prom
       `SELECT TO_CHAR(FECHA_DOCUMENTO, 'YYYY-MM') AS PERIODO, SUM(TOTAL) AS MONTO
          FROM CXC_DOCUMENTOS
         WHERE ${fecha('FECHA_DOCUMENTO')} AND UPPER(ESTADO) NOT IN ('ANULADO', 'ANULADA')
+          AND ID_DOCUMENTO_ORIGEN IS NULL
         GROUP BY TO_CHAR(FECHA_DOCUMENTO, 'YYYY-MM')`,
       binds,
     );

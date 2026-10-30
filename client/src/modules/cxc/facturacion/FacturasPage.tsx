@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Ban, Download, Eye, Plus, Search } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal, TrazabilidadActionModal } from '../../../shared/components';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import { moneyGT } from '../../../shared/csv';
@@ -17,6 +17,7 @@ const Dato = ({ label, value }: { label: string; value: React.ReactNode }) => (
 );
 
 export const FacturasPage = () => {
+  const pend = useSolicitudesPendientes('ANULACION_FACTURA_FEL');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useTamanoPagina('cxc.facturacion.FacturasPage');
   const [search, setSearch] = useState('');
@@ -84,12 +85,14 @@ export const FacturasPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) => {
-              const anulable = row.estado === 'CERTIFICADA' && Math.abs(Number(row.total) - Number(row.saldo)) < 0.005;
+              const pendiente = pend.pendientes.has(row.idFacturaFel);
+              const anulable = (row.estado === 'CERTIFICADA' && Math.abs(Number(row.total) - Number(row.saldo)) < 0.005) && !pendiente;
               const motivo = row.estado === 'ANULADA'
                 ? 'La factura ya está anulada'
                 : !anulable ? 'La factura tiene pagos o ajustes aplicados; reversa esas aplicaciones primero' : 'Anular factura';
               return (
                 <div className="flex justify-end gap-1">
+                  {pendiente && <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Anulación solicitada</span>}
                   <button onClick={() => verDetalle(row.idFacturaFel)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors" title="Ver certificado">
                     <Eye size={15} />
                   </button>
@@ -97,7 +100,7 @@ export const FacturasPage = () => {
                     <Download size={15} />
                   </button>
                   <button onClick={() => anulable && setAAnular(row)} disabled={!anulable}
-                    className={`p-1.5 rounded-md transition-colors ${anulable ? 'text-slate-400 hover:text-amber-700 hover:bg-amber-50' : 'text-slate-300 cursor-not-allowed'}`} title={motivo}>
+                    className={`p-1.5 rounded-md transition-colors ${anulable ? 'text-slate-400 hover:text-amber-700 hover:bg-amber-50' : 'text-slate-300 cursor-not-allowed'}`} title={pendiente ? 'Anulación solicitada: espera la aprobación de un administrador' : motivo}>
                     <Ban size={15} />
                   </button>
                 </div>
@@ -162,14 +165,15 @@ export const FacturasPage = () => {
 
       {aAnular && (
         <TrazabilidadActionModal
-          title={`Anular factura ${aAnular.serieFel}-${aAnular.numeroFel}`}
-          description="Se anula el DTE ante la SAT simulada, el documento por cobrar queda anulado y el saldo en cero."
+          title={`Solicitar anulación de factura ${aAnular.serieFel}-${aAnular.numeroFel}`}
+          description="Al aprobarse, se anula el DTE ante la SAT simulada, el documento por cobrar queda anulado y el saldo en cero."
           endpoint={`/cxc/facturas/${aAnular.idFacturaFel}/anular`}
-          actionLabel="Anular factura"
+          actionLabel="Solicitar anulación"
+          requiereAutorizacion
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}
-          onSuccess={() => { setAAnular(null); refetch(); }}
+          onSuccess={() => { setAAnular(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

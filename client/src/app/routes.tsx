@@ -11,6 +11,9 @@ import { DashboardPage } from '../modules/cxc/dashboard/DashboardPage';
 import { ModuloEnConstruccionPage, type ModuloEnConstruccion } from '../modules/construccion/ModuloEnConstruccionPage';
 import { TutorialsPage } from '../modules/cxc/tutoriales';
 
+// --- CXC / Autorizaciones ---
+import { SolicitudesReversaPage } from '../modules/cxc/autorizaciones/SolicitudesReversaPage';
+
 // --- CXC / Reportes ---
 import { ReportesLayout } from '../modules/cxc/reportes/ReportesLayout';
 import { AntiguedadSaldosPage } from '../modules/cxc/reportes/AntiguedadSaldosPage';
@@ -151,6 +154,18 @@ export const routes: RouteObject[] = [
       <MainLayout>
         <CxcAppLayout>
           <ClientesRiesgoPage />
+        </CxcAppLayout>
+      </MainLayout>
+    ),
+  },
+
+  // --- CXC / Autorizaciones (reversas y anulaciones por aprobar) ---
+  {
+    path: '/cxc/autorizaciones',
+    element: (
+      <MainLayout>
+        <CxcAppLayout>
+          <SolicitudesReversaPage />
         </CxcAppLayout>
       </MainLayout>
     ),

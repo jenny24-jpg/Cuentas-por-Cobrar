@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { solicitarDesde } from '../../controllers/autorizaciones/solicitudReversa.controller';
 import * as pago from '../../controllers/pagos/pago.controller';
 import * as aplicacion from '../../controllers/pagos/aplicacionPago.controller';
 import * as anticipo from '../../controllers/pagos/anticipo.controller';
@@ -15,10 +16,10 @@ const router = validarIdsDeRuta(Router());
 router.get('/pagos/siguiente-referencia', pago.siguienteReferencia);
 router.get('/recibos/siguiente', recibo.siguiente);
 for (const [path,c] of [['/pagos',pago],['/aplicaciones-pago',aplicacion],['/anticipos',anticipo],['/aplicaciones-anticipo',aplicacionAnticipo],['/recibos',recibo],['/formas-pago',forma]] as const){router.get(path,c.list);router.get(`${path}/:id`,c.getOne);router.post(path,c.create);router.patch(`${path}/:id`,c.update);router.delete(`${path}/:id`,c.remove);}
-router.post('/pagos/:id/anular', pago.anular);
-router.post('/anticipos/:id/anular', anticipo.anular);
-router.post('/aplicaciones-pago/:id/reversar', aplicacion.reversar);
-router.post('/aplicaciones-anticipo/:id/reversar', aplicacionAnticipo.reversar);
+router.post('/pagos/:id/anular', solicitarDesde('ANULACION_PAGO', 'motivoAnulacion'));
+router.post('/anticipos/:id/anular', solicitarDesde('ANULACION_ANTICIPO', 'motivoAnulacion'));
+router.post('/aplicaciones-pago/:id/reversar', solicitarDesde('REVERSA_APLICACION_PAGO', 'motivoReversa'));
+router.post('/aplicaciones-anticipo/:id/reversar', solicitarDesde('REVERSA_APLICACION_ANTICIPO', 'motivoReversa'));
 router.get('/catalogos/pagos', async (req, res, next) => {
   try {
     const rawIdCliente = req.query.idCliente;
