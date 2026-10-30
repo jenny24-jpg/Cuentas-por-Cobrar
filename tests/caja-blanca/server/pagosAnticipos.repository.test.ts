@@ -19,7 +19,8 @@ afterEach(() => vi.useRealTimers());
 describe('anticipo.create — pago que lo respalda', () => {
   const reglas = (o: { pago?: unknown[]; aplicado?: number; otros?: number } = {}): Regla[] => [
     { sql: /SELECT ID_CLIENTE, MONTO, ESTADO FROM CXC_PAGOS WHERE ID_PAGO = :idPago FOR UPDATE/, rows: o.pago ?? [{ ID_CLIENTE: 10, MONTO: 500, ESTADO: 'NO_APLICADO' }] },
-    { sql: /FROM CXC_APLICACION_PAGOS WHERE ID_PAGO = :idPago AND ESTADO = 'CONFIRMADA'/, rows: [{ TOTAL: o.aplicado ?? 0 }] },
+    // Una solicitud de aplicación PENDIENTE también reserva el pago.
+    { sql: /FROM CXC_APLICACION_PAGOS WHERE ID_PAGO = :idPago AND ESTADO IN \('CONFIRMADA', 'PENDIENTE'\)/, rows: [{ TOTAL: o.aplicado ?? 0 }] },
     { sql: /COUNT\(\*\) AS TOTAL FROM CXC_ANTICIPOS WHERE ID_PAGO/, rows: [{ TOTAL: o.otros ?? 0 }] },
     { sql: /INSERT INTO CXC_ANTICIPOS/, outId: 40 },
   ];

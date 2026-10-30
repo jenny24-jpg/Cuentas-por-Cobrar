@@ -26,6 +26,7 @@ interface DocumentoRow {
   FECHA_DOCUMENTO: Date;
   FECHA_VENCIMIENTO: Date;
   TOTAL: number;
+  MONTO_PAGADO: number;
   SALDO: number;
   ID_EMPLEADO_ANULACION: number | null;
   NOMBRE_EMPLEADO_ANULACION: string | null;
@@ -51,6 +52,7 @@ function mapRow(row: DocumentoRow): Documento {
     fechaDocumento: row.FECHA_DOCUMENTO?.toISOString() ?? '',
     fechaVencimiento: row.FECHA_VENCIMIENTO?.toISOString() ?? '',
     total: row.TOTAL,
+    montoPagado: Number(row.MONTO_PAGADO ?? 0),
     saldo: row.SALDO,
     idEmpleadoAnulacion: row.ID_EMPLEADO_ANULACION,
     nombreEmpleadoAnulacion: row.NOMBRE_EMPLEADO_ANULACION,
@@ -74,6 +76,17 @@ const SELECT_BASE = `
          d.FECHA_DOCUMENTO,
          d.FECHA_VENCIMIENTO,
          d.TOTAL,
+         NVL((
+           SELECT SUM(ap.MONTO_APLICADO)
+             FROM CXC_APLICACION_PAGOS ap
+            WHERE ap.ID_DOCUMENTO = d.ID_DOCUMENTO
+              AND ap.ESTADO = 'CONFIRMADA'
+         ), 0) + NVL((
+           SELECT SUM(aa.MONTO_APLICADO)
+             FROM CXC_APLICACION_ANTICIPO aa
+            WHERE aa.ID_DOCUMENTO = d.ID_DOCUMENTO
+              AND aa.ESTADO = 'CONFIRMADA'
+         ), 0) AS MONTO_PAGADO,
          d.SALDO,
          d.ID_EMPLEADO_ANULACION,
          CASE

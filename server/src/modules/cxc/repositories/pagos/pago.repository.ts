@@ -108,11 +108,18 @@ const SELECT_BASE = `
           AND a.ESTADO = 'CONFIRMADA'
       ),
       0
+    ) + NVL(
+      (
+        SELECT MAX(ant.MONTO_ORIGINAL)
+        FROM CXC_ANTICIPOS ant
+        WHERE ant.ID_PAGO = p.ID_PAGO
+          AND ant.ESTADO <> 'CANCELADO'
+      ),
+      0
     ) AS MONTO_APLICADO,
 
     GREATEST(
-      p.MONTO -
-      NVL(
+      p.MONTO - NVL(
         (
           SELECT SUM(a.MONTO_APLICADO)
           FROM CXC_APLICACION_PAGOS a
@@ -120,12 +127,37 @@ const SELECT_BASE = `
             AND a.ESTADO = 'CONFIRMADA'
         ),
         0
+      ) - NVL(
+        (
+          SELECT MAX(ant.MONTO_ORIGINAL)
+          FROM CXC_ANTICIPOS ant
+          WHERE ant.ID_PAGO = p.ID_PAGO
+            AND ant.ESTADO <> 'CANCELADO'
+        ),
+        0
+      ) - NVL(
+        (
+          SELECT SUM(ap.MONTO_APLICADO)
+          FROM CXC_APLICACION_PAGOS ap
+          WHERE ap.ID_PAGO = p.ID_PAGO
+            AND ap.ESTADO = 'PENDIENTE'
+        ),
+        0
       ),
       0
     ) AS MONTO_DISPONIBLE,
 
     p.NUMERO_REFERENCIA,
-    p.ESTADO,
+    CASE
+      WHEN UPPER(NVL(p.ESTADO, '')) = 'ANULADO' THEN p.ESTADO
+      WHEN EXISTS (
+        SELECT 1
+        FROM CXC_ANTICIPOS ant
+        WHERE ant.ID_PAGO = p.ID_PAGO
+          AND ant.ESTADO <> 'CANCELADO'
+      ) THEN 'APLICADO'
+      ELSE p.ESTADO
+    END AS ESTADO,
     p.ID_EMPLEADO_ANULACION,
 
     CASE
@@ -798,6 +830,13 @@ export async function listOptions(
         ? ['p.ID_CLIENTE = :idCliente']
         : []),
 
+      `NOT EXISTS (
+        SELECT 1
+        FROM CXC_ANTICIPOS ant
+        WHERE ant.ID_PAGO = p.ID_PAGO
+          AND ant.ESTADO <> 'CANCELADO'
+      )`,
+
       ...(opciones.libres && !opciones.paraAnticipo
         ? [
             `NOT EXISTS (
@@ -815,7 +854,7 @@ export async function listOptions(
               SELECT 1
               FROM CXC_APLICACION_PAGOS x
               WHERE x.ID_PAGO = p.ID_PAGO
-                AND x.ESTADO = 'CONFIRMADA'
+                AND x.ESTADO IN ('CONFIRMADA', 'PENDIENTE')
             )`,
 
             `NOT EXISTS (
@@ -864,8 +903,7 @@ export async function listOptions(
           p.MONTO,
 
           GREATEST(
-            p.MONTO -
-            NVL(SUM(a.MONTO_APLICADO), 0),
+            p.MONTO - NVL(SUM(a.MONTO_APLICADO), 0),
             0
           ) AS DISPONIBLE,
 
@@ -881,7 +919,7 @@ export async function listOptions(
 
         LEFT JOIN CXC_APLICACION_PAGOS a
           ON a.ID_PAGO = p.ID_PAGO
-         AND a.ESTADO = 'CONFIRMADA'
+         AND a.ESTADO IN ('CONFIRMADA', 'PENDIENTE')
 
         ${where}
 
@@ -897,8 +935,7 @@ export async function listOptions(
 
         HAVING
           GREATEST(
-            p.MONTO -
-            NVL(SUM(a.MONTO_APLICADO), 0),
+            p.MONTO - NVL(SUM(a.MONTO_APLICADO), 0),
             0
           ) > 0
 

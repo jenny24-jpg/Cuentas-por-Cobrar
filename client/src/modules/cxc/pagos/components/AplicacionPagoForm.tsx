@@ -27,7 +27,7 @@ export function AplicacionPagoForm({
   onCancel,
 }: {
   item?: AplicacionPago | null;
-  onSuccess: () => void;
+  onSuccess: (result?: AplicacionPago) => void;
   onCancel: () => void;
 }) {
   const isEditing = Boolean(item);
@@ -358,19 +358,21 @@ export function AplicacionPagoForm({
     };
 
     try {
+      let result: AplicacionPago | undefined;
       if (isEditing) {
         await apiClient.patch(
           `/cxc/aplicaciones-pago/${item!.idAplicacion}`,
           payload,
         );
       } else {
-        await apiClient.post(
+        result = await apiClient.post<AplicacionPago>(
           '/cxc/aplicaciones-pago',
           payload,
+          { successMessage: false },
         );
       }
 
-      onSuccess();
+      onSuccess(result);
     } catch (err) {
       if (
         err instanceof ApiError &&

@@ -11,15 +11,19 @@ import * as pagoRepo from '../../repositories/pagos/pago.repository';
 import * as catalogosRepository from '../../repositories/catalogos.repository';
 import { validarIdsDeRuta } from '../../../../shared/idParams';
 import { BadRequestError } from '../../../../shared/errors/AppError';
+import { requireCurrentRole } from '../../../auth/auth.middleware';
 const router = validarIdsDeRuta(Router());
 // Antes de /pagos/:id para que "siguiente-referencia" no se tome como id.
 router.get('/pagos/siguiente-referencia', pago.siguienteReferencia);
 router.get('/recibos/siguiente', recibo.siguiente);
+router.post('/aplicaciones-pago', requireCurrentRole('ADMIN', 'OPERADOR'), aplicacion.create);
 for (const [path,c] of [['/pagos',pago],['/aplicaciones-pago',aplicacion],['/anticipos',anticipo],['/aplicaciones-anticipo',aplicacionAnticipo],['/recibos',recibo],['/formas-pago',forma]] as const){router.get(path,c.list);router.get(`${path}/:id`,c.getOne);router.post(path,c.create);router.patch(`${path}/:id`,c.update);router.delete(`${path}/:id`,c.remove);}
 router.post('/pagos/:id/anular', solicitarDesde('ANULACION_PAGO', 'motivoAnulacion'));
 router.post('/anticipos/:id/anular', solicitarDesde('ANULACION_ANTICIPO', 'motivoAnulacion'));
 router.post('/aplicaciones-pago/:id/reversar', solicitarDesde('REVERSA_APLICACION_PAGO', 'motivoReversa'));
 router.post('/aplicaciones-anticipo/:id/reversar', solicitarDesde('REVERSA_APLICACION_ANTICIPO', 'motivoReversa'));
+router.post('/aplicaciones-pago/:id/aprobar', requireCurrentRole('ADMIN'), aplicacion.aprobar);
+router.post('/aplicaciones-pago/:id/rechazar', requireCurrentRole('ADMIN'), aplicacion.rechazar);
 router.get('/catalogos/pagos', async (req, res, next) => {
   try {
     const rawIdCliente = req.query.idCliente;
