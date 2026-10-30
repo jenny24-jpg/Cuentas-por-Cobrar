@@ -16,6 +16,9 @@ interface Row {
   DIAS_GRACIA: number | null;
   PORCENTAJE_MORA: number | null;
   ESTADO: string | null;
+  ID_SEGMENTO: number | null;
+  SEGMENTO: string | null;
+  REDUCCION_MORA: number | null;
 }
 
 const mapRow = (r: Row): Cliente => ({
@@ -30,16 +33,62 @@ const mapRow = (r: Row): Cliente => ({
   diasGracia: r.DIAS_GRACIA,
   porcentajeMora: r.PORCENTAJE_MORA,
   estado: r.ESTADO ? r.ESTADO.trim() : null,
+  idSegmento: r.ID_SEGMENTO,
+  segmento: r.SEGMENTO,
+  reduccionMora: r.REDUCCION_MORA,
 });
 
 const SELECT_BASE = `
   SELECT c.ID_CLIENTE, c.CODIGO_CLIENTE, c.NOMBRE, c.NIT, c.DIRECCION,
          'CR-' || LPAD(c.ID_CLIENTE, 5, '0') AS CODIGO_COBRO, c.ID_CONDICION,
          cc.DIAS_CREDITO, cc.DIAS_GRACIA, cc.PORCENTAJE_MORA,
-         c.ESTADO
+         c.ESTADO,
+         cs.ID_SEGMENTO, sg.CODIGO AS SEGMENTO, sg.REDUCCION_MORA
     FROM CLIENTE c
     LEFT JOIN CXC_CONDICIONES_CREDITO cc ON cc.ID_CONDICION = c.ID_CONDICION
+    LEFT JOIN CXC_CLIENTE_SEGMENTO cs ON cs.ID_CLIENTE = c.ID_CLIENTE
+    LEFT JOIN CXC_SEGMENTOS_CLIENTE sg ON sg.ID_SEGMENTO = cs.ID_SEGMENTO
 `;
+
+/**
+ * Guarda el segmento del cliente en CXC_CLIENTE_SEGMENTO (no se altera CLIENTE,
+ * que comparten otros módulos). null quita el segmento. Sin commit.
+ */
+async function guardarSegmento(conn: Connection, idCliente: number, idSegmento: number | null | undefined) {
+  if (idSegmento === undefined) return;
+  if (idSegmento === null) {
+    await conn.execute(`DELETE FROM CXC_CLIENTE_SEGMENTO WHERE ID_CLIENTE = :idCliente`, { idCliente });
+    return;
+  }
+  const segmento = await conn.execute<{ ESTADO: string }>(
+    `SELECT ESTADO FROM CXC_SEGMENTOS_CLIENTE WHERE ID_SEGMENTO = :idSegmento`, { idSegmento });
+  if (!segmento.rows?.length) throw new BadRequestError('El segmento seleccionado no existe.');
+  if (String(segmento.rows[0].ESTADO).trim() !== 'A') throw new BadRequestError('El segmento seleccionado está inactivo.');
+  await conn.execute(
+    `MERGE INTO CXC_CLIENTE_SEGMENTO cs
+     USING (SELECT :idCliente AS ID_CLIENTE, :idSegmento AS ID_SEGMENTO FROM DUAL) n
+        ON (cs.ID_CLIENTE = n.ID_CLIENTE)
+      WHEN MATCHED THEN UPDATE SET cs.ID_SEGMENTO = n.ID_SEGMENTO
+      WHEN NOT MATCHED THEN INSERT (ID_CLIENTE, ID_SEGMENTO) VALUES (n.ID_CLIENTE, n.ID_SEGMENTO)`,
+    { idCliente, idSegmento },
+  );
+}
+
+/** Segmentos activos para el selector de clientes. */
+export async function listSegmentos(): Promise<Array<{ id: number; codigo: string; nombre: string; reduccionMora: number }>> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ID_SEGMENTO: number; CODIGO: string; NOMBRE: string; REDUCCION_MORA: number }>(
+      `SELECT ID_SEGMENTO, CODIGO, NOMBRE, REDUCCION_MORA FROM CXC_SEGMENTOS_CLIENTE
+        WHERE TRIM(ESTADO) = 'A' ORDER BY CODIGO`,
+    );
+    return (result.rows ?? []).map((r) => ({
+      id: r.ID_SEGMENTO, codigo: r.CODIGO, nombre: r.NOMBRE, reduccionMora: Number(r.REDUCCION_MORA),
+    }));
+  } finally {
+    await conn.close();
+  }
+}
 
 export async function findAll(params: {
   page: number;
@@ -181,8 +230,11 @@ export async function create(input: CreateClienteInput): Promise<number> {
             id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
           },
         );
+        const idCliente = result.outBinds!.id[0];
+        // El segmento va en la misma transacción que el alta del cliente.
+        await guardarSegmento(conn, idCliente, input.idSegmento);
         await conn.commit();
-        return result.outBinds!.id[0];
+        return idCliente;
       } catch (err) {
         if (esCodigoClienteRepetido(err) && intento < 3) { await conn.rollback(); continue; }
         throw err;
@@ -218,6 +270,7 @@ export async function update(id: number, input: UpdateClienteInput & { nit: stri
         WHERE ID_CLIENTE = :id`,
       { nombre: input.nombre, nit: input.nit, direccion: input.direccion, idCondicion: input.idCondicion, estado: input.estado, id },
     );
+    await guardarSegmento(conn, id, input.idSegmento);
     await conn.commit();
   } catch (err) {
     await conn.rollback();

@@ -390,76 +390,94 @@ export async function create(
   const conn = await getConnection();
 
   try {
-    // Conservar el bloqueo del pago
-    // que respalda el anticipo.
-
-    const original = await validarPagoRespaldo(
-      conn,
-      input.idPago,
-      input.idCliente,
-    );
-
     // Revalidar la fecha antes del INSERT.
     // La fecha se obtiene del servidor.
 
-    const fechaRegistro = businessTodayIso();
-
-    if (input.fecha !== fechaRegistro) {
+    if (input.fecha !== businessTodayIso()) {
       throw new BadRequestError(
         'La fecha del sistema cambió durante el registro. Vuelve a guardar el anticipo.',
       );
     }
 
-    const result = await conn.execute<{
-      id: number[];
-    }>(
-      `
-        INSERT INTO CXC_ANTICIPOS (
-          ID_CLIENTE,
-          ID_PAGO,
-          MONTO_ORIGINAL,
-          MONTO_DISPONIBLE,
-          FECHA,
-          ESTADO
-        )
-        VALUES (
-          :idCliente,
-          :idPago,
-          :montoOriginal,
-          :montoDisponible,
-          TO_DATE(:fecha, 'YYYY-MM-DD'),
-          'DISPONIBLE'
-        )
-
-        RETURNING ID_ANTICIPO INTO :id
-      `,
-      {
-        idCliente: input.idCliente,
-        idPago: input.idPago ?? null,
-
-        montoOriginal: original,
-        montoDisponible: original,
-
-        // Nunca se toma directamente la fecha
-        // proporcionada por el navegador.
-        fecha: fechaRegistro,
-
-        id: {
-          dir: oracledb.BIND_OUT,
-          type: oracledb.NUMBER,
-        },
-      },
-    );
+    const id = await crearEnConexion(conn, {
+      idCliente: input.idCliente,
+      idPago: input.idPago,
+    });
 
     await conn.commit();
 
-    return result.outBinds!.id[0];
+    return id;
   } catch (error) {
     await conn.rollback();
     throw error;
   } finally {
     await conn.close();
   }
+}
+
+/**
+ * Crea el anticipo respaldado por un pago sobre una conexión ya abierta, sin
+ * commit: lo usa create() y también pago.repository::create() para registrar
+ * el pago y su anticipo en una sola transacción. Valida y bloquea el pago
+ * (mismo cliente, sin aplicaciones, sin otro anticipo vigente) y toma su monto.
+ */
+export async function crearEnConexion(
+  conn: oracledb.Connection,
+  input: { idCliente: number; idPago: number },
+): Promise<number> {
+  // Conservar el bloqueo del pago
+  // que respalda el anticipo.
+
+  const original = await validarPagoRespaldo(
+    conn,
+    input.idPago,
+    input.idCliente,
+  );
+
+  const fechaRegistro = businessTodayIso();
+
+  const result = await conn.execute<{
+    id: number[];
+  }>(
+    `
+      INSERT INTO CXC_ANTICIPOS (
+        ID_CLIENTE,
+        ID_PAGO,
+        MONTO_ORIGINAL,
+        MONTO_DISPONIBLE,
+        FECHA,
+        ESTADO
+      )
+      VALUES (
+        :idCliente,
+        :idPago,
+        :montoOriginal,
+        :montoDisponible,
+        TO_DATE(:fecha, 'YYYY-MM-DD'),
+        'DISPONIBLE'
+      )
+
+      RETURNING ID_ANTICIPO INTO :id
+    `,
+    {
+      idCliente: input.idCliente,
+      idPago: input.idPago,
+
+      montoOriginal: original,
+      montoDisponible: original,
+
+      // Nunca se toma directamente la fecha
+      // proporcionada por el navegador.
+      fecha: fechaRegistro,
+
+      id: {
+        dir: oracledb.BIND_OUT,
+        type: oracledb.NUMBER,
+      },
+    },
+  );
+
+  return result.outBinds!.id[0];
 }
 
 // =====================================================

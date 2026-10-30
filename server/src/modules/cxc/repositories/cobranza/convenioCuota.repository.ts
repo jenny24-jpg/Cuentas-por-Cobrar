@@ -6,7 +6,7 @@ import { EPSILON, roundMoney, deriveDocumentoEstado } from '../../shared/financi
 import { businessTodayIso } from '../../../../shared/date';
 import { registrarEvento } from '../documentos/documentoHistorial.repository';
 import { crearReciboAutomatico } from '../pagos/recibo.repository';
-import { asignarCorrelativo } from '../../shared/correlativos';
+import { siguienteReferenciaPago } from '../../shared/correlativos';
 
 interface ConvenioCuotaRow {
   ID_CUOTA: number;
@@ -186,12 +186,11 @@ export async function registrarPago(
         idMoneda: documentos[0].ID_MONEDA,
         fechaPago: fechaHoy,
         monto: montoPagado,
-        numeroReferencia: referenciaPago ?? null,
+        numeroReferencia: referenciaPago || (await siguienteReferenciaPago(conn)),
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
     );
     const idPago = pagoInsert.outBinds!.id[0];
-    if (!referenciaPago) await asignarCorrelativo(conn, 'pago', idPago);
 
     let restante = roundMoney(montoPagado);
     let totalAplicado = 0;

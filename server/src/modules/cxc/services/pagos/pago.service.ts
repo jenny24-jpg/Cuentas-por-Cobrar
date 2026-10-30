@@ -158,15 +158,38 @@ export async function createPago(
     input.idBanco,
   );
 
+  // Destino del pago en la misma transacción: facturas o anticipo.
+  // Las aplicaciones necesitan al empleado que registra (lo pone el controlador).
+  const aplicaciones = input.aplicaciones ?? [];
+  let idEmpleado: number | undefined;
+
+  if (aplicaciones.length) {
+    idEmpleado = Number((raw as { idEmpleado?: unknown })?.idEmpleado);
+
+    if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
+      throw new BadRequestError(
+        'No se identificó al empleado que registra el pago.',
+      );
+    }
+  }
+
   // El servidor fija nuevamente la fecha
   // antes de enviarla al repositorio.
 
-  const id = await repository.create({
-    ...input,
-    fechaPago: hoy,
-  });
+  const id = await repository.create(
+    {
+      ...input,
+      fechaPago: hoy,
+    },
+    { aplicaciones, idEmpleado, comoAnticipo: Boolean(input.comoAnticipo) },
+  );
 
   return getPago(id);
+}
+
+/** Referencia que recibirá el próximo pago (vista previa para el formulario). */
+export async function previewReferencia(): Promise<{ numeroReferencia: string }> {
+  return { numeroReferencia: await repository.previewReferencia() };
 }
 
 // =====================================================

@@ -48,6 +48,9 @@ interface AplicacionNotaCreditoRow {
   FECHA_REVERSA_ISO: string | null;
 
   MOTIVO_REVERSA: string | null;
+
+  REFERENCIA_NOTA: string | null;
+  REFERENCIA_DOCUMENTO: string | null;
 }
 
 interface NotaLockRow {
@@ -55,6 +58,8 @@ interface NotaLockRow {
   ID_CLIENTE: number;
   MONTO: number;
   ESTADO: string;
+  ID_EMPLEADO_APROBACION: number | null;
+  ID_DOCUMENTO_REFERENCIA: number | null;
   FECHA_ISO: string;
 }
 
@@ -99,6 +104,8 @@ const mapRow = (
 
   fechaReversa: row.FECHA_REVERSA_ISO,
   motivoReversa: row.MOTIVO_REVERSA,
+  referenciaNota: row.REFERENCIA_NOTA ?? `Nota #${row.ID_NOTA_CREDITO}`,
+  referenciaDocumento: row.REFERENCIA_DOCUMENTO ?? `Documento #${row.ID_DOCUMENTO}`,
 });
 
 // =====================================================
@@ -141,9 +148,20 @@ const SELECT_BASE = `
       'YYYY-MM-DD'
     ) AS FECHA_REVERSA_ISO,
 
-    a.MOTIVO_REVERSA
+    a.MOTIVO_REVERSA,
+
+    -- Serie-número legibles de la nota y del documento.
+    TRIM(BOTH '-' FROM n.SERIE || '-' || n.NUMERO) AS REFERENCIA_NOTA,
+    TRIM(BOTH '-' FROM d.SERIE || '-' || d.NUMERO_DOCUMENTO) AS REFERENCIA_DOCUMENTO
 
   FROM CXC_APLICACION_NOTA_CREDITO a
+
+  LEFT JOIN CXC_NOTAS_CREDITO n
+    ON n.ID_NOTA_CREDITO = a.ID_NOTA_CREDITO
+
+  LEFT JOIN CXC_DOCUMENTOS d
+    ON d.ID_DOCUMENTO = a.ID_DOCUMENTO
+
 
   LEFT JOIN EMPLEADO e
     ON e.ID_EMPLEADO = a.ID_EMPLEADO
@@ -280,340 +298,452 @@ export async function create(
   const conn = await getConnection();
 
   try {
-    // -------------------------------------------------
-    // 1. BLOQUEAR NOTA DE CRÉDITO
-    // -------------------------------------------------
-
-    const notaResult = await conn.execute<NotaLockRow>(
-      `
-        SELECT
-          ID_NOTA_CREDITO,
-          ID_CLIENTE,
-          MONTO,
-          ESTADO,
-          TO_CHAR(FECHA, 'YYYY-MM-DD') AS FECHA_ISO
-
-        FROM CXC_NOTAS_CREDITO
-
-        WHERE ID_NOTA_CREDITO = :idNotaCredito
-
-        FOR UPDATE
-      `,
-      {
-        idNotaCredito: input.idNotaCredito,
-      },
-    );
-
-    const nota = notaResult.rows?.[0];
-
-    if (!nota) {
-      throw new BadRequestError(
-        'La nota de crédito seleccionada no existe',
-      );
-    }
-
-    // -------------------------------------------------
-    // 2. VALIDAR ESTADO DE NOTA
-    // -------------------------------------------------
-
-    const notaEstado = String(
-      nota.ESTADO ?? '',
-    ).trim().toUpperCase();
-
-    if (notaEstado === 'ANULADA') {
-      throw new ConflictError(
-        'Una nota de crédito anulada no puede aplicarse.',
-      );
-    }
-
-    if (notaEstado === 'APLICADA') {
-      throw new ConflictError(
-        'La nota de crédito ya está totalmente aplicada.',
-      );
-    }
-
-    if (!isNotaCreditoAplicable(notaEstado)) {
-      throw new ConflictError(
-        `La nota de crédito está en un estado no aplicable: ${
-          notaEstado || 'SIN ESTADO'
-        }.`,
-      );
-    }
-
-    // -------------------------------------------------
-    // 3. VALIDAR FECHA DE APLICACIÓN
-    // -------------------------------------------------
-
-    const hoy = businessTodayIso();
-
-    if (input.fechaAplicacion < nota.FECHA_ISO) {
-      throw new BadRequestError(
-        'La fecha de aplicación no puede ser anterior a la fecha de emisión de la nota de crédito.',
-      );
-    }
-
-    // Solo se permiten aplicaciones con la fecha actual de Guatemala.
-    // La fecha de emisión de la nota sigue siendo el límite mínimo.
-    if (input.fechaAplicacion !== hoy) {
-      throw new BadRequestError(
-        'La fecha de aplicación debe ser la fecha actual de Guatemala. No se permiten fechas anteriores ni futuras.',
-      );
-    }
-
-    // -------------------------------------------------
-    // 4. BLOQUEAR DOCUMENTO
-    // -------------------------------------------------
-
-    const documentoResult =
-      await conn.execute<DocumentoLockRow>(
-        `
-          SELECT
-            ID_DOCUMENTO,
-            ID_CLIENTE,
-            TOTAL,
-            SALDO,
-            ESTADO
-
-          FROM CXC_DOCUMENTOS
-
-          WHERE ID_DOCUMENTO = :idDocumento
-
-          FOR UPDATE
-        `,
-        {
-          idDocumento: input.idDocumento,
-        },
-      );
-
-    const documento = documentoResult.rows?.[0];
-
-    if (!documento) {
-      throw new BadRequestError(
-        'El documento seleccionado no existe',
-      );
-    }
-
-    // -------------------------------------------------
-    // 5. VALIDAR ESTADO DEL DOCUMENTO
-    // -------------------------------------------------
-
-    if (
-      isDocumentoBloqueadoParaAplicacion(
-        documento.ESTADO,
-      ) ||
-      Number(documento.SALDO) <= 0
-    ) {
-      throw new ConflictError(
-        'El documento ya está pagado/anulado o no tiene saldo pendiente.',
-      );
-    }
-
-    // -------------------------------------------------
-    // 6. VALIDAR CLIENTE
-    // -------------------------------------------------
-
-    if (nota.ID_CLIENTE !== documento.ID_CLIENTE) {
-      throw new BadRequestError(
-        'La nota de crédito y el documento deben pertenecer al mismo cliente',
-      );
-    }
-
-    // -------------------------------------------------
-    // 7. CONSULTAR MONTO YA APLICADO
-    // -------------------------------------------------
-
-    const sumResult = await conn.execute<{
-      TOTAL: number;
-    }>(
-      `
-        SELECT
-          NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
-
-        FROM CXC_APLICACION_NOTA_CREDITO
-
-        WHERE ID_NOTA_CREDITO = :idNotaCredito
-          AND ESTADO = 'CONFIRMADA'
-      `,
-      {
-        idNotaCredito: input.idNotaCredito,
-      },
-    );
-
-    const yaAplicado = Number(
-      sumResult.rows?.[0]?.TOTAL ?? 0,
-    );
-
-    const disponibleNota = roundMoney(
-      Number(nota.MONTO) - yaAplicado,
-    );
-
-    const saldoDocumento = roundMoney(
-      Number(documento.SALDO),
-    );
-
-    const montoAplicado = roundMoney(
-      Number(input.montoAplicado),
-    );
-
-    // -------------------------------------------------
-    // 8. VALIDAR MONTO
-    // -------------------------------------------------
-
-    if (!Number.isFinite(montoAplicado) || montoAplicado <= 0) {
-      throw new BadRequestError(
-        'El monto aplicado debe ser mayor a cero',
-      );
-    }
-
-    if (montoAplicado > saldoDocumento + 0.005) {
-      throw new BadRequestError(
-        'El monto aplicado no puede superar el saldo del documento',
-      );
-    }
-
-    if (montoAplicado > disponibleNota + 0.005) {
-      throw new BadRequestError(
-        'El monto aplicado no puede superar el monto disponible de la nota de crédito',
-      );
-    }
-
-    // -------------------------------------------------
-    // 9. INSERTAR APLICACIÓN
-    // -------------------------------------------------
-
-    // Revalidar al insertar, por si cambió el día durante
-    // las consultas y los bloqueos de la transacción.
-    const fechaRegistro = businessTodayIso();
-    if (input.fechaAplicacion !== fechaRegistro) {
-      throw new BadRequestError(
-        'La fecha de Guatemala cambió durante el registro. Vuelve a guardar la aplicación.',
-      );
-    }
-
-    const insert = await conn.execute<{
-      id: number[];
-    }>(
-      `
-        INSERT INTO CXC_APLICACION_NOTA_CREDITO (
-          ID_NOTA_CREDITO,
-          ID_DOCUMENTO,
-          MONTO_APLICADO,
-          FECHA_APLICACION,
-          ID_EMPLEADO
-        )
-        VALUES (
-          :idNotaCredito,
-          :idDocumento,
-          :montoAplicado,
-          TO_DATE(:fechaAplicacion, 'YYYY-MM-DD'),
-          :idEmpleado
-        )
-
-        RETURNING ID_APLICACION_NC INTO :id
-      `,
-      {
-        idNotaCredito: input.idNotaCredito,
-        idDocumento: input.idDocumento,
-        montoAplicado,
-        fechaAplicacion: fechaRegistro,
-        idEmpleado: input.idEmpleado,
-
-        id: {
-          dir: oracledb.BIND_OUT,
-          type: oracledb.NUMBER,
-        },
-      },
-    );
-
-    // -------------------------------------------------
-    // 10. ACTUALIZAR SALDO DEL DOCUMENTO
-    // -------------------------------------------------
-
-    const nuevoSaldo = Math.max(
-      0,
-      roundMoney(saldoDocumento - montoAplicado),
-    );
-
-    const nuevoEstadoDocumento = deriveDocumentoEstado(
-      Number(documento.TOTAL),
-      nuevoSaldo,
-      documento.ESTADO,
-    );
-
-    await conn.execute(
-      `
-        UPDATE CXC_DOCUMENTOS
-
-        SET
-          SALDO = :saldo,
-          ESTADO = :estado
-
-        WHERE ID_DOCUMENTO = :idDocumento
-      `,
-      {
-        saldo: nuevoSaldo,
-        estado: nuevoEstadoDocumento,
-        idDocumento: input.idDocumento,
-      },
-    );
-
-    // -------------------------------------------------
-    // 11. ACTUALIZAR ESTADO DE NOTA
-    // -------------------------------------------------
-
-    const totalAplicado = roundMoney(
-      yaAplicado + montoAplicado,
-    );
-
-    const nuevoEstadoNota =
-      totalAplicado >= Number(nota.MONTO) - 0.005
-        ? 'APLICADA'
-        : 'PENDIENTE';
-
-    await conn.execute(
-      `
-        UPDATE CXC_NOTAS_CREDITO
-
-        SET ESTADO = :estado
-
-        WHERE ID_NOTA_CREDITO = :idNotaCredito
-      `,
-      {
-        estado: nuevoEstadoNota,
-        idNotaCredito: input.idNotaCredito,
-      },
-    );
-
-    // -------------------------------------------------
-    // 12. REGISTRAR HISTORIAL FINANCIERO
-    // -------------------------------------------------
-
-    await registrarEvento(conn, {
-      idDocumento: input.idDocumento,
-      estadoAnterior: documento.ESTADO,
-      estadoNuevo: nuevoEstadoDocumento,
-      idEmpleado: input.idEmpleado,
-      tipoEvento: 'APLICACION_NOTA_CREDITO',
-      monto: montoAplicado,
-      naturaleza: 'ABONO',
-      descripcion:
-        `Nota de crédito #${input.idNotaCredito} aplicada al documento`,
-      fecha: fechaRegistro,
-    });
-
-    // -------------------------------------------------
-    // 13. CONFIRMAR TRANSACCIÓN
-    // -------------------------------------------------
-
+    const id = await aplicarEnConexion(conn, input);
     await conn.commit();
-
-    return insert.outBinds!.id[0];
+    return id;
   } catch (err) {
     await conn.rollback();
     throw err;
   } finally {
     await conn.close();
   }
+}
+
+// =====================================================
+// APROBAR NOTA DE CRÉDITO
+// =====================================================
+
+/**
+ * Aprobación de una nota por aprobar (PENDIENTE sin aprobador): en una sola
+ * transacción registra quién y cuándo aprobó y aplica la nota completa a su
+ * documento de referencia (baja el saldo, cambia estados y deja historial).
+ * Quien aprueba debe ser distinto de quien registró; la base también lo exige
+ * (CK_CXC_NC_APROBADOR_DISTINTO). Que sea ADMIN lo valida el servicio.
+ */
+export async function aprobar(
+  idNotaCredito: number,
+  idEmpleadoAprobacion: number,
+): Promise<number> {
+  const conn = await getConnection();
+
+  try {
+    const result = await conn.execute<{
+      ESTADO: string;
+      ID_DOCUMENTO_REFERENCIA: number | null;
+      MONTO: number;
+      ID_EMPLEADO_REGISTRO: number | null;
+      ID_EMPLEADO_APROBACION: number | null;
+    }>(
+      `SELECT ESTADO, ID_DOCUMENTO_REFERENCIA, MONTO, ID_EMPLEADO_REGISTRO, ID_EMPLEADO_APROBACION
+         FROM CXC_NOTAS_CREDITO
+        WHERE ID_NOTA_CREDITO = :idNotaCredito
+        FOR UPDATE`,
+      { idNotaCredito },
+    );
+
+    const nota = result.rows?.[0];
+
+    if (!nota) {
+      throw new NotFoundError(`Nota de crédito ${idNotaCredito} no encontrada`);
+    }
+
+    if (nota.ID_EMPLEADO_APROBACION) {
+      throw new ConflictError('La nota de crédito ya fue aprobada.');
+    }
+
+    if (!isNotaCreditoAplicable(String(nota.ESTADO ?? '').trim().toUpperCase())) {
+      throw new ConflictError('Solo se aprueban notas de crédito pendientes.');
+    }
+
+    if (nota.ID_EMPLEADO_REGISTRO === idEmpleadoAprobacion) {
+      throw new ConflictError('Quien registró la nota de crédito no puede aprobarla; debe hacerlo otro administrador.');
+    }
+
+    if (!nota.ID_DOCUMENTO_REFERENCIA) {
+      throw new ConflictError('La nota no tiene documento de referencia; corrígela antes de aprobarla.');
+    }
+
+    await conn.execute(
+      `UPDATE CXC_NOTAS_CREDITO
+          SET ID_EMPLEADO_APROBACION = :idEmpleadoAprobacion,
+              FECHA_APROBACION = SYSDATE
+        WHERE ID_NOTA_CREDITO = :idNotaCredito`,
+      { idEmpleadoAprobacion, idNotaCredito },
+    );
+
+    // La aplicación revalida con datos frescos: si el saldo del documento ya es
+    // menor que la nota, se rechaza y no queda aprobada.
+    const yaAplicado = await conn.execute<{ TOTAL: number }>(
+      `SELECT NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
+         FROM CXC_APLICACION_NOTA_CREDITO
+        WHERE ID_NOTA_CREDITO = :idNotaCredito AND ESTADO = 'CONFIRMADA'`,
+      { idNotaCredito },
+    );
+
+    const id = await aplicarEnConexion(conn, {
+      idNotaCredito,
+      idDocumento: nota.ID_DOCUMENTO_REFERENCIA,
+      montoAplicado: roundMoney(Number(nota.MONTO) - Number(yaAplicado.rows?.[0]?.TOTAL ?? 0)),
+      fechaAplicacion: businessTodayIso(),
+      idEmpleado: idEmpleadoAprobacion,
+    });
+
+    await conn.commit();
+    return id;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    await conn.close();
+  }
+}
+
+/**
+ * Cuerpo de la aplicación sobre una conexión ya abierta, sin commit ni rollback:
+ * lo usan create() y aprobar(). Exige que la nota esté aprobada por un ADMIN.
+ */
+async function aplicarEnConexion(
+  conn: oracledb.Connection,
+  input: CreateAplicacionNotaCreditoInput,
+): Promise<number> {
+  // -------------------------------------------------
+  // 1. BLOQUEAR NOTA DE CRÉDITO
+  // -------------------------------------------------
+
+  const notaResult = await conn.execute<NotaLockRow>(
+    `
+      SELECT
+        ID_NOTA_CREDITO,
+        ID_CLIENTE,
+        MONTO,
+        ESTADO,
+        ID_EMPLEADO_APROBACION,
+        ID_DOCUMENTO_REFERENCIA,
+        TO_CHAR(FECHA, 'YYYY-MM-DD') AS FECHA_ISO
+
+      FROM CXC_NOTAS_CREDITO
+
+      WHERE ID_NOTA_CREDITO = :idNotaCredito
+
+      FOR UPDATE
+    `,
+    {
+      idNotaCredito: input.idNotaCredito,
+    },
+  );
+
+  const nota = notaResult.rows?.[0];
+
+  if (!nota) {
+    throw new BadRequestError(
+      'La nota de crédito seleccionada no existe',
+    );
+  }
+
+  // -------------------------------------------------
+  // 2. VALIDAR ESTADO DE NOTA
+  // -------------------------------------------------
+
+  const notaEstado = String(
+    nota.ESTADO ?? '',
+  ).trim().toUpperCase();
+
+  if (notaEstado === 'ANULADA') {
+    throw new ConflictError(
+      'Una nota de crédito anulada no puede aplicarse.',
+    );
+  }
+
+  if (notaEstado === 'APLICADA') {
+    throw new ConflictError(
+      'La nota de crédito ya está totalmente aplicada.',
+    );
+  }
+
+  if (!isNotaCreditoAplicable(notaEstado)) {
+    throw new ConflictError(
+      `La nota de crédito está en un estado no aplicable: ${
+        notaEstado || 'SIN ESTADO'
+      }.`,
+    );
+  }
+
+  // Una nota solo rebaja deuda si un ADMIN distinto de quien la registró la aprobó.
+  if (!nota.ID_EMPLEADO_APROBACION) {
+    throw new ConflictError(
+      'La nota de crédito debe ser aprobada por un administrador antes de aplicarse.',
+    );
+  }
+
+  // Lo aprobado es la nota para su factura de referencia: no se aplica a otra.
+  if (nota.ID_DOCUMENTO_REFERENCIA !== input.idDocumento) {
+    throw new ConflictError(
+      'La nota de crédito solo puede aplicarse a su factura de referencia.',
+    );
+  }
+
+  // -------------------------------------------------
+  // 3. VALIDAR FECHA DE APLICACIÓN
+  // -------------------------------------------------
+
+  const hoy = businessTodayIso();
+
+  if (input.fechaAplicacion < nota.FECHA_ISO) {
+    throw new BadRequestError(
+      'La fecha de aplicación no puede ser anterior a la fecha de emisión de la nota de crédito.',
+    );
+  }
+
+  // Solo se permiten aplicaciones con la fecha actual de Guatemala.
+  // La fecha de emisión de la nota sigue siendo el límite mínimo.
+  if (input.fechaAplicacion !== hoy) {
+    throw new BadRequestError(
+      'La fecha de aplicación debe ser la fecha actual de Guatemala. No se permiten fechas anteriores ni futuras.',
+    );
+  }
+
+  // -------------------------------------------------
+  // 4. BLOQUEAR DOCUMENTO
+  // -------------------------------------------------
+
+  const documentoResult =
+    await conn.execute<DocumentoLockRow>(
+      `
+        SELECT
+          ID_DOCUMENTO,
+          ID_CLIENTE,
+          TOTAL,
+          SALDO,
+          ESTADO
+
+        FROM CXC_DOCUMENTOS
+
+        WHERE ID_DOCUMENTO = :idDocumento
+
+        FOR UPDATE
+      `,
+      {
+        idDocumento: input.idDocumento,
+      },
+    );
+
+  const documento = documentoResult.rows?.[0];
+
+  if (!documento) {
+    throw new BadRequestError(
+      'El documento seleccionado no existe',
+    );
+  }
+
+  // -------------------------------------------------
+  // 5. VALIDAR ESTADO DEL DOCUMENTO
+  // -------------------------------------------------
+
+  if (
+    isDocumentoBloqueadoParaAplicacion(
+      documento.ESTADO,
+    ) ||
+    Number(documento.SALDO) <= 0
+  ) {
+    throw new ConflictError(
+      'El documento ya está pagado/anulado o no tiene saldo pendiente.',
+    );
+  }
+
+  // -------------------------------------------------
+  // 6. VALIDAR CLIENTE
+  // -------------------------------------------------
+
+  if (nota.ID_CLIENTE !== documento.ID_CLIENTE) {
+    throw new BadRequestError(
+      'La nota de crédito y el documento deben pertenecer al mismo cliente',
+    );
+  }
+
+  // -------------------------------------------------
+  // 7. CONSULTAR MONTO YA APLICADO
+  // -------------------------------------------------
+
+  const sumResult = await conn.execute<{
+    TOTAL: number;
+  }>(
+    `
+      SELECT
+        NVL(SUM(MONTO_APLICADO), 0) AS TOTAL
+
+      FROM CXC_APLICACION_NOTA_CREDITO
+
+      WHERE ID_NOTA_CREDITO = :idNotaCredito
+        AND ESTADO = 'CONFIRMADA'
+    `,
+    {
+      idNotaCredito: input.idNotaCredito,
+    },
+  );
+
+  const yaAplicado = Number(
+    sumResult.rows?.[0]?.TOTAL ?? 0,
+  );
+
+  const disponibleNota = roundMoney(
+    Number(nota.MONTO) - yaAplicado,
+  );
+
+  const saldoDocumento = roundMoney(
+    Number(documento.SALDO),
+  );
+
+  const montoAplicado = roundMoney(
+    Number(input.montoAplicado),
+  );
+
+  // -------------------------------------------------
+  // 8. VALIDAR MONTO
+  // -------------------------------------------------
+
+  if (!Number.isFinite(montoAplicado) || montoAplicado <= 0) {
+    throw new BadRequestError(
+      'El monto aplicado debe ser mayor a cero',
+    );
+  }
+
+  if (montoAplicado > saldoDocumento + 0.005) {
+    throw new BadRequestError(
+      'El monto aplicado no puede superar el saldo del documento',
+    );
+  }
+
+  if (montoAplicado > disponibleNota + 0.005) {
+    throw new BadRequestError(
+      'El monto aplicado no puede superar el monto disponible de la nota de crédito',
+    );
+  }
+
+  // -------------------------------------------------
+  // 9. INSERTAR APLICACIÓN
+  // -------------------------------------------------
+
+  // Revalidar al insertar, por si cambió el día durante
+  // las consultas y los bloqueos de la transacción.
+  const fechaRegistro = businessTodayIso();
+  if (input.fechaAplicacion !== fechaRegistro) {
+    throw new BadRequestError(
+      'La fecha de Guatemala cambió durante el registro. Vuelve a guardar la aplicación.',
+    );
+  }
+
+  const insert = await conn.execute<{
+    id: number[];
+  }>(
+    `
+      INSERT INTO CXC_APLICACION_NOTA_CREDITO (
+        ID_NOTA_CREDITO,
+        ID_DOCUMENTO,
+        MONTO_APLICADO,
+        FECHA_APLICACION,
+        ID_EMPLEADO
+      )
+      VALUES (
+        :idNotaCredito,
+        :idDocumento,
+        :montoAplicado,
+        TO_DATE(:fechaAplicacion, 'YYYY-MM-DD'),
+        :idEmpleado
+      )
+
+      RETURNING ID_APLICACION_NC INTO :id
+    `,
+    {
+      idNotaCredito: input.idNotaCredito,
+      idDocumento: input.idDocumento,
+      montoAplicado,
+      fechaAplicacion: fechaRegistro,
+      idEmpleado: input.idEmpleado,
+
+      id: {
+        dir: oracledb.BIND_OUT,
+        type: oracledb.NUMBER,
+      },
+    },
+  );
+
+  // -------------------------------------------------
+  // 10. ACTUALIZAR SALDO DEL DOCUMENTO
+  // -------------------------------------------------
+
+  const nuevoSaldo = Math.max(
+    0,
+    roundMoney(saldoDocumento - montoAplicado),
+  );
+
+  const nuevoEstadoDocumento = deriveDocumentoEstado(
+    Number(documento.TOTAL),
+    nuevoSaldo,
+    documento.ESTADO,
+  );
+
+  await conn.execute(
+    `
+      UPDATE CXC_DOCUMENTOS
+
+      SET
+        SALDO = :saldo,
+        ESTADO = :estado
+
+      WHERE ID_DOCUMENTO = :idDocumento
+    `,
+    {
+      saldo: nuevoSaldo,
+      estado: nuevoEstadoDocumento,
+      idDocumento: input.idDocumento,
+    },
+  );
+
+  // -------------------------------------------------
+  // 11. ACTUALIZAR ESTADO DE NOTA
+  // -------------------------------------------------
+
+  const totalAplicado = roundMoney(
+    yaAplicado + montoAplicado,
+  );
+
+  const nuevoEstadoNota =
+    totalAplicado >= Number(nota.MONTO) - 0.005
+      ? 'APLICADA'
+      : 'PENDIENTE';
+
+  await conn.execute(
+    `
+      UPDATE CXC_NOTAS_CREDITO
+
+      SET ESTADO = :estado
+
+      WHERE ID_NOTA_CREDITO = :idNotaCredito
+    `,
+    {
+      estado: nuevoEstadoNota,
+      idNotaCredito: input.idNotaCredito,
+    },
+  );
+
+  // -------------------------------------------------
+  // 12. REGISTRAR HISTORIAL FINANCIERO
+  // -------------------------------------------------
+
+  await registrarEvento(conn, {
+    idDocumento: input.idDocumento,
+    estadoAnterior: documento.ESTADO,
+    estadoNuevo: nuevoEstadoDocumento,
+    idEmpleado: input.idEmpleado,
+    tipoEvento: 'APLICACION_NOTA_CREDITO',
+    monto: montoAplicado,
+    naturaleza: 'ABONO',
+    descripcion:
+      `Nota de crédito #${input.idNotaCredito} aplicada al documento`,
+    fecha: fechaRegistro,
+  });
+
+  return insert.outBinds!.id[0];
 }
 
 // =====================================================
@@ -913,11 +1043,15 @@ export async function reversar(
           ? 'APLICADA'
           : 'PENDIENTE';
 
+    // Al reversar se pierde la aprobación: para volver a rebajar la factura,
+    // un administrador debe aprobar la nota otra vez.
     await conn.execute(
       `
         UPDATE CXC_NOTAS_CREDITO
 
-        SET ESTADO = :estado
+        SET ESTADO = :estado,
+            ID_EMPLEADO_APROBACION = NULL,
+            FECHA_APROBACION = NULL
 
         WHERE ID_NOTA_CREDITO = :idNotaCredito
       `,

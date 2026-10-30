@@ -42,11 +42,35 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
   const [idTipoDocumento, setIdTipoDocumento] = useState(documento?.idTipoDocumento?.toString() ?? '');
   const [idMoneda, setIdMoneda] = useState(documento?.idMoneda?.toString() ?? '');
   const [idCondicionCredito, setIdCondicionCredito] = useState(documento?.idCondicionCredito?.toString() ?? '');
-  const serie = documento?.serie ?? '';
-  const numeroDocumento = documento?.numeroDocumento ?? '';
+  // Alta: serie y número que tendrá el documento según el tipo elegido (vista previa
+  // calculada en la base; el definitivo se confirma al guardar).
+  const [previa, setPrevia] = useState<{ serie: string; numero: string } | null>(null);
+  const [cargandoPrevia, setCargandoPrevia] = useState(false);
+  useEffect(() => {
+    if (isEditing || !idTipoDocumento) { setPrevia(null); return; }
+    let activo = true;
+    setCargandoPrevia(true);
+    apiClient.get<{ serie: string; numero: string }>(`/cxc/documentos/siguiente-numero?idTipoDocumento=${encodeURIComponent(idTipoDocumento)}`)
+      .then((data) => { if (activo) setPrevia(data); })
+      .catch(() => { if (activo) setPrevia(null); })
+      .finally(() => { if (activo) setCargandoPrevia(false); });
+    return () => { activo = false; };
+  }, [idTipoDocumento, isEditing]);
+  const textoPrevio = !idTipoDocumento ? 'Selecciona el tipo de documento' : cargandoPrevia ? 'Calculando...' : '—';
+  const serie = documento?.serie ?? previa?.serie ?? '';
+  const numeroDocumento = documento?.numeroDocumento ?? previa?.numero ?? '';
   const [fechaDocumento] = useState(documento?.fechaDocumento?.slice(0, 10) ?? todayIso());
-  const [fechaVencimiento, setFechaVencimiento] = useState(documento?.fechaVencimiento?.slice(0, 10) ?? '');
   const [total, setTotal] = useState(documento?.total?.toString() ?? '');
+  // El vencimiento no se escribe: es la fecha del documento más los días de
+  // crédito de la condición (el servidor hace el mismo cálculo al guardar).
+  const condicionSeleccionada = condicionesCredito.find((c) => String(c.id) === idCondicionCredito);
+  const fechaVencimiento = (() => {
+    if (!fechaDocumento || condicionSeleccionada?.diasCredito === undefined) {
+      return documento?.fechaVencimiento?.slice(0, 10) ?? '';
+    }
+    const [anio, mes, dia] = fechaDocumento.split('-').map(Number);
+    return new Date(Date.UTC(anio, mes - 1, dia + condicionSeleccionada.diasCredito)).toISOString().slice(0, 10);
+  })();
 
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -104,12 +128,8 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
       next.fechaDocumento = 'La fecha del documento debe ser la de hoy.';
     }
 
-    const fechaVencimientoErr = validateRequiredDate(fechaVencimiento, 'La fecha de vencimiento', {
-      minDate: BUSINESS_DATE_MIN,
-      maxDate: BUSINESS_DATE_MAX,
-      notBefore: fechaDocumento ? { date: fechaDocumento, label: 'la fecha del documento' } : undefined,
-    });
-    if (fechaVencimientoErr) next.fechaVencimiento = fechaVencimientoErr;
+    // La condición es obligatoria: de ella sale el vencimiento.
+    if (!idCondicionCredito) next.idCondicionCredito = 'Selecciona la condición de crédito; de ella sale la fecha de vencimiento.';
 
     const totalErr = validateMoney(total, 'El total', { required: true, positive: true });
     if (totalErr) next.total = totalErr;
@@ -120,7 +140,7 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
     idTipoDocumento,
     idMoneda,
     fechaDocumento,
-    fechaVencimiento,
+    idCondicionCredito,
     total,
     isEditing,
   ]);
@@ -133,6 +153,8 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
     setIdCliente(value);
     const selected = clientes.find((c) => String(c.id) === value);
     setNitCliente(selected?.nit ?? '');
+    // Se propone la condición de crédito del cliente; puede cambiarse.
+    if (!isEditing) setIdCondicionCredito(selected?.idCondicion ? String(selected.idCondicion) : '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -166,7 +188,6 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
       idMoneda: Number(idMoneda),
       idCondicionCredito: idCondicionCredito ? Number(idCondicionCredito) : null,
       fechaDocumento,
-      fechaVencimiento,
       total: Number(total),
     };
 
@@ -256,15 +277,17 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput
           label="Serie"
-          value={serie || 'Se asigna al guardar'}
+          value={serie || textoPrevio}
           isReadOnly
-          helperText="Automática: es el código del tipo de documento."
+          helperText="Automática según el tipo de documento."
         />
         <TextInput
           label="Número de documento"
-          value={numeroDocumento || 'Se asigna al guardar'}
+          value={numeroDocumento || textoPrevio}
           isReadOnly
-          helperText="Automático: siguiente correlativo de la serie (00000001, 00000002…)."
+          helperText={isEditing
+            ? 'Número asignado al documento.'
+            : 'Siguiente correlativo de la serie. Si otro usuario guarda antes, al guardar se toma el siguiente libre.'}
         />
       </div>
 
@@ -287,25 +310,25 @@ export const DocumentoForm = ({ documento, onSuccess, onCancel }: Props) => {
         <TextInput
           label="Fecha de vencimiento"
           type="date"
-          required
-          min={fechaDocumento || BUSINESS_DATE_MIN}
-          max={BUSINESS_DATE_MAX}
           value={fechaVencimiento}
-          onChange={(e: any) => setFechaVencimiento(e.target.value)}
-          helperText="Debe ser igual o posterior a la fecha del documento."
-          error={errorFor('fechaVencimiento', fechaVencimiento)}
-          isReadOnly={isLocked}
+          isReadOnly
+          placeholder="Selecciona la condición de crédito"
+          helperText={condicionSeleccionada
+            ? `Automática: fecha del documento + ${condicionSeleccionada.diasCredito} día(s) de crédito.`
+            : 'Automática según la condición de crédito.'}
         />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
         <Select
           label="Condición de crédito"
+          required
           value={idCondicionCredito}
           onChange={(e: any) => setIdCondicionCredito(e.target.value)}
           options={condicionesCredito.map((c) => ({ value: c.id, label: c.label }))}
-          placeholder="Sin condición (no genera mora automática)"
-          helperText="Opcional. Si se asigna, el documento entra al recálculo automático de mora al vencerse."
+          placeholder="Seleccionar condición"
+          error={errorFor('idCondicionCredito', idCondicionCredito)}
+          helperText="Se propone la del cliente. Define el vencimiento y la mora del documento."
           isReadOnly={isLocked}
         />
 

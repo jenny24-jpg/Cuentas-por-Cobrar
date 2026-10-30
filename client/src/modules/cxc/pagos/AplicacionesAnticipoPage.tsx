@@ -6,6 +6,7 @@ import { usePaginatedList } from '../../../shared/hooks';
 import { formatDateGT } from '../../../shared/date';
 import type { AplicacionAnticipo } from '@erp/contracts';
 import { AplicacionAnticipoForm } from './components/AplicacionAnticipoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const money = (value: unknown) =>
   `Q ${Number(value ?? 0).toLocaleString('es-GT', {
@@ -15,6 +16,7 @@ const money = (value: unknown) =>
 
 export const AplicacionesAnticipoPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.AplicacionesAnticipoPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const [aReversar, setAReversar] = useState<AplicacionAnticipo | null>(null);
@@ -22,7 +24,7 @@ export const AplicacionesAnticipoPage = () => {
   const { data, meta, isLoading, error, refetch } =
     usePaginatedList<AplicacionAnticipo>('/cxc/aplicaciones-anticipo', {
       page,
-      limit: 10,
+      limit: pageSize,
       search,
     });
 
@@ -32,11 +34,11 @@ export const AplicacionesAnticipoPage = () => {
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Anticipo</h1>
           <p className="text-sm text-slate-500">
-            Aplicar un anticipo reduce el saldo del documento y su propio disponible dentro de una transacción segura.
+            Historial de anticipos usados en facturas (consulta y reversa). Un anticipo es dinero recibido antes de que exista la factura: cuando se emite la factura, aquí se usa ese dinero para pagarla, sin registrar un pago nuevo.
           </p>
         </div>
-        <Button icon={Plus} onClick={() => setModal(true)}>
-          Nueva Aplicación
+        <Button icon={Plus} onClick={() => setModal(true)} className="shrink-0 whitespace-nowrap">
+          Usar anticipo en una factura
         </Button>
       </div>
 
@@ -114,7 +116,7 @@ export const AplicacionesAnticipoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

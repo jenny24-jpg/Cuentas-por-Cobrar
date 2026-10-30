@@ -211,6 +211,17 @@ export function AplicacionAnticipoForm({
       Number.POSITIVE_INFINITY,
   );
 
+  // El monto sale solo: se usa todo lo posible del anticipo en el documento
+  // (el menor entre el disponible del anticipo y el saldo del documento).
+  const montoAutomatico =
+    !isEditing && anticipoSeleccionado && documentoSeleccionado;
+
+  useEffect(() => {
+    if (montoAutomatico && Number.isFinite(maxAplicable)) {
+      setMonto(maxAplicable.toFixed(2));
+    }
+  }, [montoAutomatico, maxAplicable]);
+
   // =====================================================
   // VALIDACIONES
   // =====================================================
@@ -561,10 +572,14 @@ export function AplicacionAnticipoForm({
           onChange={(e: any) =>
             setMonto(e.target.value)
           }
+          isReadOnly={Boolean(montoAutomatico) || isEditing}
+          placeholder="Selecciona el anticipo y el documento"
           helperText={
-            Number.isFinite(maxAplicable) && !isEditing
-              ? `Máximo aplicable: Q ${maxAplicable.toFixed(2)} (menor entre disponible del anticipo y saldo del documento).`
-              : 'Mayor a 0, máximo 2 decimales.'
+            montoAutomatico
+              ? 'Automático: lo que alcanza el anticipo para este documento (ver detalle abajo).'
+              : isEditing
+                ? 'Monto aplicado; para corregirlo, reversa la aplicación.'
+                : 'Se calcula al seleccionar el anticipo y el documento.'
           }
           error={errorFor(
             'montoAplicado',

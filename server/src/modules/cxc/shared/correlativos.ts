@@ -1,35 +1,72 @@
 import type { Connection } from 'oracledb';
 import { BadRequestError, ConflictError } from '../../../shared/errors/AppError';
+import { businessTodayIso } from '../../../shared/date';
 
 /**
- * Numeración interna del ERP (no es FEL/SAT). El correlativo sale del ID identity de la
- * fila recién insertada: lo asigna Oracle, es único y crece con cada registro, sin
- * secuencias ni columnas nuevas. Se llama dentro de la misma transacción del INSERT.
+ * Numeración anual interna del ERP (no es FEL/SAT): último correlativo del año
+ * registrado más uno, con el mismo cálculo para la vista previa del formulario y
+ * para el número definitivo.
  *
- *   PAG-2026-000123   pagos (CXC_PAGOS.NUMERO_REFERENCIA)
- *   REC-2026-000081   recibos (CXC_RECIBOS.NUMERO_RECIBO)
+ *   PAG-2026-000082   pagos (CXC_PAGOS.NUMERO_REFERENCIA)
+ *   REC-2026-000089   recibos (CXC_RECIBOS.NUMERO_RECIBO)
  */
 const CORRELATIVOS = {
-  pago: { tabla: 'CXC_PAGOS', id: 'ID_PAGO', columna: 'NUMERO_REFERENCIA', fecha: 'FECHA_PAGO', prefijo: 'PAG' },
-  recibo: { tabla: 'CXC_RECIBOS', id: 'ID_RECIBO', columna: 'NUMERO_RECIBO', fecha: 'FECHA', prefijo: 'REC' },
+  pago: { tabla: 'CXC_PAGOS', columna: 'NUMERO_REFERENCIA', prefijo: 'PAG', registro: 'un pago' },
+  recibo: { tabla: 'CXC_RECIBOS', columna: 'NUMERO_RECIBO', prefijo: 'REC', registro: 'un recibo' },
 } as const;
 
-export async function asignarCorrelativo(conn: Connection, tipo: keyof typeof CORRELATIVOS, id: number): Promise<void> {
+/** ORA-30006: el recurso sigue tomado por otra transacción al vencer el WAIT. */
+const esEsperaVencida = (err: unknown) => (err as { errorNum?: number })?.errorNum === 30006;
+
+/**
+ * Siguiente correlativo del año para pagos o recibos. Con bloqueo, toma la tabla en modo
+ * exclusivo hasta el commit/rollback de quien llama, para que dos registros simultáneos
+ * no repitan número; debe llamarse antes del INSERT. Sin bloqueo solo sirve como vista
+ * previa. `anio` por defecto es el año de negocio actual.
+ */
+export async function siguienteCorrelativoAnual(
+  conn: Connection,
+  tipo: keyof typeof CORRELATIVOS,
+  { bloquear = true, anio = businessTodayIso().slice(0, 4) }: { bloquear?: boolean; anio?: string } = {},
+): Promise<string> {
   const c = CORRELATIVOS[tipo];
-  await conn.execute(
-    `UPDATE ${c.tabla}
-        SET ${c.columna} = '${c.prefijo}-' || TO_CHAR(${c.fecha}, 'YYYY') || '-' || LPAD(TO_CHAR(:id), 6, '0')
-      WHERE ${c.id} = :id`,
-    { id },
+  if (bloquear) {
+    try {
+      await conn.execute(`LOCK TABLE ${c.tabla} IN EXCLUSIVE MODE WAIT 5`);
+    } catch (err) {
+      if (esEsperaVencida(err)) {
+        throw new ConflictError(`Otro usuario está registrando ${c.registro}. Intenta de nuevo en unos segundos.`);
+      }
+      throw err;
+    }
+  }
+  const prefijo = `${c.prefijo}-${anio}-`;
+  const r = await conn.execute<{ ULTIMO: number | null }>(
+    // El CASE evita convertir números heredados con otro formato.
+    `SELECT MAX(CASE WHEN REGEXP_LIKE(${c.columna}, '^' || :prefijo || '[0-9]{1,9}$')
+                     THEN TO_NUMBER(SUBSTR(${c.columna}, LENGTH(:prefijo) + 1)) END) AS ULTIMO
+       FROM ${c.tabla}`,
+    { prefijo },
   );
+  return `${prefijo}${String(Number(r.rows?.[0]?.ULTIMO ?? 0) + 1).padStart(6, '0')}`;
+}
+
+/** Referencia del siguiente pago del año (PAG-2026-000082). */
+export function siguienteReferenciaPago(conn: Connection, opciones: { bloquear?: boolean } = {}): Promise<string> {
+  return siguienteCorrelativoAnual(conn, 'pago', opciones);
 }
 
 /**
- * La serie de las notas de crédito es el código del tipo de documento activo con
- * naturaleza CREDITO (CXC_TIPOS_DOCUMENTO); el número es el ID con ceros (NC-000006).
- * Si la base no tiene ese tipo, el equipo DBA debe registrarlo.
+ * Serie y número de la siguiente nota de crédito. La serie es el código del tipo de
+ * documento activo con naturaleza CREDITO (CXC_TIPOS_DOCUMENTO); el número es el
+ * último de esa serie más uno (NC-000007). Con bloqueo, toma CXC_NOTAS_CREDITO hasta
+ * el commit de quien llama y debe llamarse antes del INSERT; sin bloqueo solo sirve
+ * como vista previa. Si la base no tiene ese tipo, el equipo DBA debe registrarlo.
  */
-export async function asignarNumeroNotaCredito(conn: Connection, id: number): Promise<void> {
+export async function siguienteNumeroNotaCredito(
+  conn: Connection,
+  { bloquear = true }: { bloquear?: boolean } = {},
+): Promise<{ serie: string; numero: string }> {
   const tipo = await conn.execute<{ CODIGO: string }>(
     `SELECT TRIM(CODIGO) AS CODIGO FROM CXC_TIPOS_DOCUMENTO
       WHERE NATURALEZA = 'CREDITO' AND TRIM(ESTADO) = 'A'
@@ -39,10 +76,24 @@ export async function asignarNumeroNotaCredito(conn: Connection, id: number): Pr
   if (!serie) {
     throw new BadRequestError('No hay un tipo de documento activo con naturaleza CREDITO para numerar la nota de crédito. Solicita al equipo DBA que lo registre.');
   }
-  await conn.execute(
-    `UPDATE CXC_NOTAS_CREDITO SET SERIE = :serie, NUMERO = LPAD(TO_CHAR(:id), 6, '0') WHERE ID_NOTA_CREDITO = :id`,
-    { serie, id },
+  if (bloquear) {
+    try {
+      await conn.execute('LOCK TABLE CXC_NOTAS_CREDITO IN EXCLUSIVE MODE WAIT 5');
+    } catch (err) {
+      if (esEsperaVencida(err)) {
+        throw new ConflictError('Otro usuario está registrando una nota de crédito. Intenta de nuevo en unos segundos.');
+      }
+      throw err;
+    }
+  }
+  const max = await conn.execute<{ ULTIMO: number | null }>(
+    // El CASE evita convertir números heredados con otro formato.
+    `SELECT MAX(CASE WHEN REGEXP_LIKE(NUMERO, '^[0-9]{1,15}$') THEN TO_NUMBER(NUMERO) END) AS ULTIMO
+       FROM CXC_NOTAS_CREDITO
+      WHERE SERIE = :serie`,
+    { serie },
   );
+  return { serie, numero: String(Number(max.rows?.[0]?.ULTIMO ?? 0) + 1).padStart(6, '0') };
 }
 
 /**
@@ -54,16 +105,19 @@ export async function asignarNumeroNotaCredito(conn: Connection, id: number): Pr
 export async function siguienteNumeroDocumento(
   conn: Connection,
   idTipoDocumento: number,
+  // Sin bloqueo solo sirve como vista previa en el formulario: el número definitivo
+  // se calcula de nuevo, bloqueado, al guardar.
+  { bloquear = true }: { bloquear?: boolean } = {},
 ): Promise<{ serie: string; numero: string }> {
   let tipo;
   try {
     tipo = await conn.execute<{ CODIGO: string }>(
-      `SELECT CODIGO FROM CXC_TIPOS_DOCUMENTO WHERE ID_TIPO_DOCUMENTO = :idTipoDocumento FOR UPDATE WAIT 5`,
+      `SELECT CODIGO FROM CXC_TIPOS_DOCUMENTO WHERE ID_TIPO_DOCUMENTO = :idTipoDocumento${bloquear ? ' FOR UPDATE WAIT 5' : ''}`,
       { idTipoDocumento },
     );
   } catch (err) {
-    // ORA-30006: otra transacción tiene tomado el correlativo de este tipo.
-    if ((err as { errorNum?: number }).errorNum === 30006) {
+    // Otra transacción tiene tomado el correlativo de este tipo.
+    if (esEsperaVencida(err)) {
       throw new ConflictError('Otro usuario está registrando un documento de este tipo. Intenta de nuevo en unos segundos.');
     }
     throw err;

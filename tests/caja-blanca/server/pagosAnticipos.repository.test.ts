@@ -73,10 +73,16 @@ describe('anticipo.update — revalida el respaldo excluyéndose a sí mismo', (
     { sql: /COUNT\(\*\) AS TOTAL FROM CXC_ANTICIPOS/, rows: [{ TOTAL: otros }] },
   ];
 
+  it('la fecha de un anticipo registrado no se modifica ni se consulta la base', async () => {
+    const { conn } = crearConexion(reglas());
+    db.getConnection.mockResolvedValue(conn);
+    await expect(anticipos.update(40, { fecha: '2026-10-21' })).rejects.toThrow(/fecha de un anticipo registrado no puede modificarse/);
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
   it('editar otro campo usa el pago y cliente actuales, se excluye del conteo y resincroniza el monto con el pago', async () => {
     const { conn, ejecuto } = crearConexion(reglas());
     db.getConnection.mockResolvedValue(conn);
-    await anticipos.update(40, { fecha: '2026-10-21' });
+    await anticipos.update(40, { idCliente: 10 });
     expect(ejecuto(/COUNT\(\*\) AS TOTAL FROM CXC_ANTICIPOS/)[0].binds).toEqual({ idPago: 1, excluir: 40 });
     const update = ejecuto(/UPDATE CXC_ANTICIPOS/);
     expect(update).toHaveLength(1);
@@ -86,13 +92,13 @@ describe('anticipo.update — revalida el respaldo excluyéndose a sí mismo', (
   it('un anticipo heredado sin pago no puede editarse sin asignarle uno', async () => {
     const { conn, ejecuto } = crearConexion(reglas({ ID_PAGO: null }));
     db.getConnection.mockResolvedValue(conn);
-    await expect(anticipos.update(40, { fecha: '2026-10-21' })).rejects.toThrow(/pago que respalda/);
+    await expect(anticipos.update(40, { idCliente: 10 })).rejects.toThrow(/pago que respalda/);
     expect(ejecuto(/UPDATE CXC_ANTICIPOS/)).toHaveLength(0);
   });
   it('estado distinto de DISPONIBLE no se edita', async () => {
     const { conn } = crearConexion(reglas({ ESTADO: 'AGOTADO' }));
     db.getConnection.mockResolvedValue(conn);
-    await expect(anticipos.update(40, { fecha: '2026-10-21' })).rejects.toThrow(/Solo los anticipos disponibles/);
+    await expect(anticipos.update(40, { idCliente: 10 })).rejects.toThrow(/Solo los anticipos disponibles/);
   });
 });
 
@@ -155,13 +161,17 @@ describe('pago.update / pago.remove', () => {
     db.getConnection.mockResolvedValue(conn);
     await expect(pagos.update(1, { monto: 10 })).rejects.toThrow(/respalda un anticipo/);
   });
+  it('update rechaza cambiar la fecha de un pago registrado sin consultar la base', async () => {
+    await expect(pagos.update(1, { monto: 10, fechaPago: '2026-10-01' })).rejects.toThrow(/fecha de un pago registrado no puede modificarse/);
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
   it('update válido escribe solo los campos enviados', async () => {
     const { conn, ejecuto } = crearConexion(reglas());
     db.getConnection.mockResolvedValue(conn);
-    await pagos.update(1, { monto: 10, fechaPago: '2026-10-01', numeroReferencia: 'A-1' });
+    await pagos.update(1, { monto: 10 });
     const upd = ejecuto(/UPDATE CXC_PAGOS SET/)[0];
-    expect(upd.sql).toContain("MONTO=:monto");
-    expect(upd.sql).toContain("FECHA_PAGO=TO_DATE(:fechaPago,'YYYY-MM-DD')");
+    expect(upd.sql).toContain('MONTO=:monto');
+    expect(upd.sql).not.toContain('FECHA_PAGO');
     expect(upd.sql).not.toContain('ID_CLIENTE');
     expect(conn.commit).toHaveBeenCalledOnce();
   });

@@ -38,10 +38,17 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Segmento A/B/C/D: sale de la base y reduce el porcentaje de mora del cliente.
+  const [idSegmento, setIdSegmento] = useState(cliente?.idSegmento ? String(cliente.idSegmento) : '');
+  const [segmentos, setSegmentos] = useState<Array<{ id: number; codigo: string; nombre: string; reduccionMora: number }>>([]);
+
   useEffect(() => {
     apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/condiciones-credito')
       .then(setCondiciones)
       .catch(() => setFormError('No se pudieron cargar las condiciones de pago.'));
+    apiClient.get<typeof segmentos>('/cxc/catalogos/segmentos')
+      .then(setSegmentos)
+      .catch(() => setSegmentos([]));
   }, []);
 
   // Si la condición actual del cliente ya no está activa, se conserva como opción para no perderla.
@@ -85,7 +92,8 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     nitCambio ||
     direccion.trim() !== (cliente!.direccion ?? '') ||
     idCondicion !== String(cliente!.idCondicion ?? '') ||
-    estado !== (cliente!.estado === 'I' ? 'I' : 'A');
+    estado !== (cliente!.estado === 'I' ? 'I' : 'A') ||
+    idSegmento !== (cliente!.idSegmento ? String(cliente!.idSegmento) : '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +102,7 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     setErrors({});
     setIsSubmitting(true);
     try {
-      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), direccion: direccion.trim(), idCondicion: Number(idCondicion), estado };
+      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), direccion: direccion.trim(), idCondicion: Number(idCondicion), estado, idSegmento: idSegmento ? Number(idSegmento) : null };
       if (isEditing) await apiClient.patch(`/cxc/clientes/${cliente!.idCliente}`, payload);
       else await apiClient.post('/cxc/clientes', payload);
       onSuccess();
@@ -209,6 +217,20 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
         options={opcionesCondicion}
         error={errorFor('idCondicion', idCondicion)}
         helperText={isEditing ? 'Plazo de crédito del cliente; aplica a los documentos nuevos, no a los ya emitidos.' : 'Plazo de crédito con el que se le venderá al cliente.'}
+      />
+
+      <Select
+        label="Segmento del cliente"
+        value={idSegmento}
+        onChange={(e: any) => setIdSegmento(e.target.value)}
+        options={[
+          { value: '', label: 'Sin segmento (sin beneficio)' },
+          ...segmentos.map((s) => ({
+            value: String(s.id),
+            label: `${s.codigo} — ${s.nombre}${s.reduccionMora ? ` · mora −${s.reduccionMora} puntos` : ''}`,
+          })),
+        ]}
+        helperText="El segmento resta puntos al porcentaje de mora del cliente como beneficio."
       />
 
       {formError && (

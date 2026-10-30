@@ -11,12 +11,11 @@ export async function listClientes(search?: string): Promise<DocumentoCatalogoOp
   const conn = await getConnection();
   try {
     const whereClause = search ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search)` : '';
-    const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string; NIT: string | null }>(
-      `SELECT ID_CLIENTE, NOMBRE, NIT
+    const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string; NIT: string | null; ID_CONDICION: number | null }>(
+      `SELECT ID_CLIENTE, NOMBRE, NIT, ID_CONDICION
          FROM CLIENTE
         ${whereClause}
-        ORDER BY NOMBRE ASC
-        FETCH FIRST 50 ROWS ONLY`,
+        ORDER BY NOMBRE ASC`,
       search ? { search: `%${search}%` } : {},
     );
 
@@ -25,6 +24,7 @@ export async function listClientes(search?: string): Promise<DocumentoCatalogoOp
       label: r.NIT ? `${r.NOMBRE} — NIT ${r.NIT}` : r.NOMBRE,
       nit: r.NIT,
       nombre: r.NOMBRE,
+      idCondicion: r.ID_CONDICION,
     }));
   } finally {
     await conn.close();
@@ -54,6 +54,8 @@ export async function listTiposDocumento(): Promise<DocumentoCatalogoOption[]> {
       `SELECT ID_TIPO_DOCUMENTO, CODIGO, NOMBRE
          FROM CXC_TIPOS_DOCUMENTO
         WHERE TRIM(ESTADO) = 'A'
+          -- Las notas de débito por mora las emite el sistema, no se crean a mano.
+          AND NVL(ES_MORA, 'N') = 'N'
         ORDER BY NOMBRE ASC`,
     );
 
@@ -102,6 +104,7 @@ export async function listCondicionesCredito(): Promise<DocumentoCatalogoOption[
     return (result.rows ?? []).map((r) => ({
       id: r.ID_CONDICION,
       label: `${r.DIAS_CREDITO} días crédito · ${Number(r.PORCENTAJE_MORA)}% mora tras ${r.DIAS_GRACIA}d de gracia`,
+      diasCredito: r.DIAS_CREDITO,
     }));
   } finally {
     await conn.close();

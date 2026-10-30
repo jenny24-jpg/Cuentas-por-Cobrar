@@ -130,6 +130,16 @@ export async function findAll(params: {
   }
 }
 
+/** Serie y número que recibiría hoy un documento nuevo de ese tipo (vista previa, sin bloquear). */
+export async function previewNumero(idTipoDocumento: number): Promise<{ serie: string; numero: string }> {
+  const conn = await getConnection();
+  try {
+    return await siguienteNumeroDocumento(conn, idTipoDocumento, { bloquear: false });
+  } finally {
+    await conn.close();
+  }
+}
+
 export async function findById(id: number): Promise<Documento | null> {
   const conn = await getConnection();
   try {

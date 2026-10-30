@@ -8,11 +8,12 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { PromesaPago } from '@erp/contracts';
 import { PromesaPagoForm } from './components/PromesaPagoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const PromesasPagoPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.cobranza.PromesasPagoPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; promesa?: PromesaPago } | null>(null);
   const [promesaAEliminar, setPromesaAEliminar] = useState<PromesaPago | null>(null);
@@ -20,7 +21,7 @@ export const PromesasPagoPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<PromesaPago>(
     '/cxc/promesas-pago',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -116,7 +117,7 @@ export const PromesasPagoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

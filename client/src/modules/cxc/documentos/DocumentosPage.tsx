@@ -9,12 +9,13 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Documento } from '@erp/contracts';
 import { DocumentoForm } from './components/DocumentoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const DocumentosPage = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.documentos.DocumentosPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; documento?: Documento } | null>(null);
   const [documentoAEliminar, setDocumentoAEliminar] = useState<Documento | null>(null);
@@ -23,7 +24,7 @@ export const DocumentosPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Documento>(
     '/cxc/documentos',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -129,7 +130,7 @@ export const DocumentosPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

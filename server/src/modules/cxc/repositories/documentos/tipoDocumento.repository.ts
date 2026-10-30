@@ -187,3 +187,17 @@ export async function remove(id: number): Promise<void> {
     await conn.close();
   }
 }
+
+/** El tipo es la nota de débito por mora (la emite el sistema, no se crea ni edita a mano). */
+export async function esTipoMora(id: number): Promise<boolean> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ES_MORA: string | null }>(
+      `SELECT ES_MORA FROM CXC_TIPOS_DOCUMENTO WHERE ID_TIPO_DOCUMENTO = :id`,
+      { id },
+    );
+    return String(result.rows?.[0]?.ES_MORA ?? 'N').trim() === 'S';
+  } finally {
+    await conn.close();
+  }
+}

@@ -4,3 +4,4 @@ export async function getOne(req:Request,res:Response,next:NextFunction){try{res
 export async function create(req:Request,res:Response,next:NextFunction){try{res.status(201).json(await service.createRecibo(req.body));}catch(e){next(e);}}
 export async function update(req:Request,res:Response,next:NextFunction){try{res.json(await service.updateRecibo(Number(req.params.id),req.body));}catch(e){next(e);}}
 export async function remove(req:Request,res:Response,next:NextFunction){try{await service.deleteRecibo(Number(req.params.id));res.status(204).send();}catch(e){next(e);}}
+export async function siguiente(req:Request,res:Response,next:NextFunction){try{res.json(await service.previewRecibo(req.query.idPago,req.query.fecha));}catch(e){next(e);}}

@@ -9,8 +9,8 @@ import { moneyGT } from '../../../shared/csv';
 import type { FacturaFel, FacturaFelDetalle } from '@erp/contracts';
 import { FacturaForm } from './components/FacturaForm';
 import { downloadFacturaPdf } from '../../../shared/export/facturaPdf';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 const Dato = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div><p className="text-xs text-slate-500">{label}</p><p className="text-sm font-medium text-slate-900 break-all">{value}</p></div>
@@ -18,6 +18,7 @@ const Dato = ({ label, value }: { label: string; value: React.ReactNode }) => (
 
 export const FacturasPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.facturacion.FacturasPage');
   const [search, setSearch] = useState('');
   const [emitirOpen, setEmitirOpen] = useState(false);
   const [detalle, setDetalle] = useState<FacturaFelDetalle | null>(null);
@@ -35,7 +36,7 @@ export const FacturasPage = () => {
     } finally { setGenerandoPdf(false); }
   };
 
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<FacturaFel>('/cxc/facturas', { page, limit: PAGE_SIZE, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<FacturaFel>('/cxc/facturas', { page, limit: pageSize, search });
 
   const verDetalle = async (id: number) => {
     setErrorDetalle(null);
@@ -108,7 +109,7 @@ export const FacturasPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

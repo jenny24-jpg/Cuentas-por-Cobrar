@@ -6,6 +6,7 @@ import { usePaginatedList } from '../../../shared/hooks';
 import { formatDateGT } from '../../../shared/date';
 import type { AplicacionPago } from '@erp/contracts';
 import { AplicacionPagoForm } from './components/AplicacionPagoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const money = (value: unknown) =>
   `Q ${Number(value ?? 0).toLocaleString('es-GT', {
@@ -15,6 +16,7 @@ const money = (value: unknown) =>
 
 export const AplicacionesPagoPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.AplicacionesPagoPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const [aReversar, setAReversar] = useState<AplicacionPago | null>(null);
@@ -22,7 +24,7 @@ export const AplicacionesPagoPage = () => {
   const { data, meta, isLoading, error, refetch } =
     usePaginatedList<AplicacionPago>('/cxc/aplicaciones-pago', {
       page,
-      limit: 10,
+      limit: pageSize,
       search,
     });
 
@@ -32,11 +34,11 @@ export const AplicacionesPagoPage = () => {
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Pago</h1>
           <p className="text-sm text-slate-500">
-            Aplicar un pago reduce el saldo del documento dentro de una transacción segura.
+            Historial de pagos aplicados a facturas (consulta y reversa). Los pagos nuevos se aplican al registrarlos en Pagos; aquí solo se aplica lo que quedó libre: depósitos no identificados o pagos anteriores con saldo disponible.
           </p>
         </div>
-        <Button icon={Plus} onClick={() => setModal(true)}>
-          Nueva Aplicación
+        <Button icon={Plus} onClick={() => setModal(true)} className="shrink-0 whitespace-nowrap">
+          Aplicar pago libre
         </Button>
       </div>
 
@@ -120,7 +122,7 @@ export const AplicacionesPagoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

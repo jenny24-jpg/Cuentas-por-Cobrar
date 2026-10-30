@@ -8,19 +8,21 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Anticipo } from '@erp/contracts';
 import { AnticipoForm } from './components/AnticipoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const money = (value: unknown) =>
   `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const AnticiposPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.AnticiposPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: Anticipo } | null>(null);
   const [del, setDel] = useState<Anticipo | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [aAnular, setAAnular] = useState<Anticipo | null>(null);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<Anticipo>('/cxc/anticipos', { page, limit: 10, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<Anticipo>('/cxc/anticipos', { page, limit: pageSize, search });
 
   const remove = async () => {
     if (!del) return;
@@ -42,9 +44,9 @@ export const AnticiposPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Anticipos</h1>
-          <p className="text-sm text-slate-500">Un anticipo disponible se aplica contra un documento; para corregirlo se reversa la aplicación o se anula con trazabilidad.</p>
+          <p className="text-sm text-slate-500">Dinero que el cliente entregó antes de tener factura. El dinero nuevo se registra en Pagos con la opción Anticipo (crea pago y anticipo juntos); aquí solo se convierte en anticipo un pago libre ya registrado.</p>
         </div>
-        <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo</Button>
+        <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Convertir pago libre</Button>
       </div>
 
       <div className="bg-white p-4 rounded-lg border border-slate-200">
@@ -105,7 +107,7 @@ export const AnticiposPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

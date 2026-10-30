@@ -8,18 +8,20 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Pago } from '@erp/contracts';
 import { PagoForm } from './components/PagoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const PagosPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.PagosPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: Pago } | null>(null);
   const [del, setDel] = useState<Pago | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [aAnular, setAAnular] = useState<Pago | null>(null);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<Pago>('/cxc/pagos', { page, limit: 10, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<Pago>('/cxc/pagos', { page, limit: pageSize, search });
 
   const remove = async () => {
     if (!del) return;
@@ -115,7 +117,7 @@ export const PagosPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

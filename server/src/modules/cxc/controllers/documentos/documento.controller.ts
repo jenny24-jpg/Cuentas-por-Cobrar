@@ -23,6 +23,14 @@ export async function getOne(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function siguienteNumero(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await documentoService.previewNumeroDocumento(req.query.idTipoDocumento));
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
     res.status(201).json(await documentoService.createDocumento(req.body));

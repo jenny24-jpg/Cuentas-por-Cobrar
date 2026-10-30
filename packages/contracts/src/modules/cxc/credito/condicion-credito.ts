@@ -14,9 +14,9 @@ export const condicionCreditoSchema = z.object({
 export type CondicionCredito = z.infer<typeof condicionCreditoSchema>;
 
 export const createCondicionCreditoSchema = z.object({
-  diasCredito: z.number().int().min(1, 'Los días de crédito deben ser mayores a 0').max(3650, 'Los días de crédito exceden el rango permitido'),
+  diasCredito: z.number().int().min(0, 'Los días de crédito no pueden ser negativos (0 = contado)').max(3650, 'Los días de crédito exceden el rango permitido'),
   porcentajeMora: percentageSchema('El porcentaje de mora', 4, true),
-  diasGracia: z.number().int().min(1, 'Los días de gracia deben ser mayores a 0').max(365, 'Los días de gracia exceden el rango permitido'),
+  diasGracia: z.number().int().min(0, 'Los días de gracia no pueden ser negativos').max(365, 'Los días de gracia exceden el rango permitido'),
   estado: z.enum(ESTADOS_CONDICION_CREDITO).default('A'),
 });
 

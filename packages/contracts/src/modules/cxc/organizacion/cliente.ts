@@ -26,6 +26,10 @@ export const clienteSchema = z.object({
   diasGracia: z.number().int().nullable(),
   porcentajeMora: z.number().nullable(),
   estado: z.string().nullable(),
+  // Segmento A/B/C/D (CXC_CLIENTE_SEGMENTO): reduce su porcentaje de mora.
+  idSegmento: z.number().int().nullable().optional(),
+  segmento: z.string().nullable().optional(),
+  reduccionMora: z.number().nullable().optional(),
 });
 export type Cliente = z.infer<typeof clienteSchema>;
 
@@ -62,6 +66,8 @@ export const updateClienteSchema = z.object({
   direccion: z.string().trim().min(5, 'La dirección es obligatoria (mínimo 5 caracteres)').max(250, 'La dirección no puede superar 250 caracteres'),
   idCondicion: z.number({ error: 'Selecciona una condición de pago' }).int().positive('Selecciona una condición de pago'),
   estado: z.enum(ESTADOS_CLIENTE, { error: 'El estado debe ser Activo (A) o Inactivo (I)' }),
+  /** Segmento de los registrados en la base; null = sin segmento (sin beneficio). */
+  idSegmento: z.number().int().positive('Selecciona un segmento válido').nullable().optional(),
 });
 export type UpdateClienteInput = z.infer<typeof updateClienteSchema>;
 

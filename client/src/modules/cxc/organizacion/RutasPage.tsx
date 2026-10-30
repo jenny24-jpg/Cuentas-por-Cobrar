@@ -9,8 +9,8 @@ import { apiClient, ApiError, buildQueryString } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Ruta, RutasPorEmpleado } from '@erp/contracts';
 import { RutaForm } from './components/RutaForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const iniciales = (nombre: string | null) =>
@@ -46,7 +46,8 @@ function RutasDelEmpleado({ idEmpleado, idSucursal, search, version, onEditar, o
 }) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<Ruta>('/cxc/rutas', { page, limit: PAGE_SIZE, search, idEmpleado, idSucursal });
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.organizacion.RutasPage');
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<Ruta>('/cxc/rutas', { page, limit: pageSize, search, idEmpleado, idSucursal });
 
   useEffect(() => { setPage(1); }, [search]);
   useEffect(() => { if (version) refetch(); }, [version, refetch]);
@@ -86,7 +87,7 @@ function RutasDelEmpleado({ idEmpleado, idSucursal, search, version, onEditar, o
         currentPage: meta.page,
         totalPages: meta.totalPages,
         onPageChange: setPage,
-        showingText: `Mostrando ${data.length} de ${meta.total} rutas`,
+        showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="rutas" />,
       } : undefined}
     />
   );

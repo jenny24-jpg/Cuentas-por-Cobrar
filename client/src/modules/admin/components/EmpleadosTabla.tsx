@@ -5,6 +5,7 @@ import { Button, DataTable, Select, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { usePaginatedList, useSucursales } from '../../../shared/hooks';
 import { EmpleadoForm } from './EmpleadoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const Chip = ({ children, className }: { children: React.ReactNode; className: string }) => (
   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${className}`}>{children}</span>
@@ -13,11 +14,12 @@ const Chip = ({ children, className }: { children: React.ReactNode; className: s
 /** Listado de empleados con alta y edición, y el usuario de acceso que tiene cada uno. */
 export function EmpleadosTabla() {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('admin.components.EmpleadosTabla');
   const [search, setSearch] = useState('');
   const [idSucursal, setIdSucursal] = useState('');
   const sucursales = useSucursales(false);
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: EmpleadoAdmin } | null>(null);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<EmpleadoAdmin>('/admin/usuarios/empleados/lista', { page, limit: 10, search, idSucursal: idSucursal || undefined });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<EmpleadoAdmin>('/admin/usuarios/empleados/lista', { page, limit: pageSize, search, idSucursal: idSucursal || undefined });
 
   return (
     <>
@@ -77,7 +79,7 @@ export function EmpleadosTabla() {
             ),
           },
         ]}
-        paginationProps={{ currentPage: meta.page, totalPages: meta.totalPages, onPageChange: setPage, showingText: `Mostrando ${data.length} de ${meta.total} empleados` }}
+        paginationProps={{ currentPage: meta.page, totalPages: meta.totalPages, onPageChange: setPage, showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="empleados" /> }}
       />
 
       <Modal isOpen={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'edit' ? `Editar a ${modal.item?.nombreCompleto}` : 'Nuevo empleado'}

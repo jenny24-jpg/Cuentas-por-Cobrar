@@ -75,7 +75,7 @@ export async function getRecibo(
 async function assertPagoCliente(
   idPago: number,
   idCliente: number,
-  monto: number,
+  monto: number | undefined,
   fechaRecibo: string,
 ): Promise<void> {
   const pago = await pagoRepository.findById(idPago);
@@ -110,18 +110,19 @@ async function assertPagoCliente(
     );
   }
 
-  // Verificar que el monto sea válido.
+  // Verificar que el monto sea válido. Al crear no se recibe: el repositorio
+  // lo calcula con el pago bloqueado (lo que aún no tiene recibo).
 
-  if (
+  if (monto === undefined) {
+    // Sin monto que revisar.
+  } else if (
     !Number.isFinite(monto) ||
     monto <= 0
   ) {
     throw new BadRequestError(
       'El monto del recibo debe ser mayor a cero',
     );
-  }
-
-  if (monto > pago.monto) {
+  } else if (monto > pago.monto) {
     throw new BadRequestError(
       'El monto del recibo no puede superar el monto del pago',
     );
@@ -166,7 +167,7 @@ export async function createRecibo(
   await assertPagoCliente(
     input.idPago,
     input.idCliente,
-    input.monto,
+    undefined,
     input.fecha,
   );
 
@@ -216,7 +217,7 @@ export async function updateRecibo(
     input.idCliente ?? current.idCliente;
 
   const monto =
-    input.monto ?? current.monto;
+    current.monto;
 
   await assertPagoCliente(
     idPago,
@@ -253,4 +254,27 @@ export async function deleteRecibo(
   }
 
   await repository.remove(id);
+}
+
+// =====================================================
+// VISTA PREVIA DEL RECIBO MANUAL
+// =====================================================
+
+/** Número y monto que tendrá el recibo manual del pago indicado. */
+export async function previewRecibo(
+  rawIdPago: unknown,
+  rawFecha: unknown,
+): Promise<{ numeroRecibo: string; monto: number | null }> {
+  const idPago = Number(rawIdPago);
+
+  if (!Number.isInteger(idPago) || idPago <= 0) {
+    throw new BadRequestError('idPago debe ser un entero positivo');
+  }
+
+  const fecha =
+    typeof rawFecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawFecha)
+      ? rawFecha
+      : businessTodayIso();
+
+  return repository.previewRecibo(idPago, fecha);
 }

@@ -36,7 +36,7 @@ function TablaDocumentos({ docs, mostrarCliente }: { docs: CarteraMoraDocumento[
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] text-sm">
+      <table className="w-full min-w-[1040px] text-sm">
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
             {mostrarCliente && <th className="px-3 py-2">Cliente</th>}
@@ -47,6 +47,8 @@ function TablaDocumentos({ docs, mostrarCliente }: { docs: CarteraMoraDocumento[
             <th className="px-3 py-2 text-right">Saldo pendiente</th>
             <th className="px-3 py-2 text-right">% mora</th>
             <th className="px-3 py-2 text-right">Monto mora</th>
+            <th className="px-3 py-2 text-right">Cobrado en ND</th>
+            <th className="px-3 py-2 text-right">Por cobrar</th>
             <th className="px-3 py-2">Estado</th>
           </tr>
         </thead>
@@ -66,8 +68,20 @@ function TablaDocumentos({ docs, mostrarCliente }: { docs: CarteraMoraDocumento[
               </td>
               <td className="px-3 py-2 whitespace-nowrap">{dias(d)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{money(d.saldo)}</td>
-              <td className="px-3 py-2 text-right tabular-nums">{d.porcentajeMora ? `${Number(d.porcentajeMora).toFixed(2)} %` : '—'}</td>
+              <td
+                className="px-3 py-2 text-right tabular-nums"
+                title={d.diasMora > 0
+                  ? `Tramo ${Number(d.porcentajeTramo).toFixed(2)} %${d.reduccionMora ? ` − ${d.reduccionMora} puntos por segmento ${d.segmento}` : ''}`
+                  : undefined}
+              >
+                {d.porcentajeMora ? `${Number(d.porcentajeMora).toFixed(2)} %` : '—'}
+                {d.diasMora > 0 && d.segmento && (
+                  <span className="block text-xs opacity-70">segmento {d.segmento}</span>
+                )}
+              </td>
               <td className="px-3 py-2 text-right tabular-nums font-semibold">{d.montoMora ? money(d.montoMora) : '—'}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{d.montoEmitido ? money(d.montoEmitido) : '—'}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{d.montoPorEmitir ? money(d.montoPorEmitir) : '—'}</td>
               <td className="px-3 py-2"><EstadoBadge estado={d.estado} /></td>
             </tr>
           ))}
@@ -156,8 +170,8 @@ export const MoraPage = () => {
     setGuardando(true);
     setMensaje(null);
     try {
-      const r = await apiClient.post<{ activas: number; cerradas: number }>('/cxc/mora/recalcular', {});
-      setMensaje(`Cálculo guardado: ${plural(r.activas, 'documento en mora actualizado', 'documentos en mora actualizados')}, ${plural(r.cerradas, 'mora cerrada', 'moras cerradas')} por saldo pagado.`);
+      const r = await apiClient.post<{ activas: number; cerradas: number; notasEmitidas: number; montoEmitido: number }>('/cxc/mora/recalcular', {});
+      setMensaje(`Cálculo guardado: ${plural(r.activas, 'documento en mora', 'documentos en mora')}, ${plural(r.notasEmitidas, 'nota de débito emitida', 'notas de débito emitidas')} por Q ${Number(r.montoEmitido).toFixed(2)}, ${plural(r.cerradas, 'mora cerrada', 'moras cerradas')} por saldo pagado.`);
       cargar();
     } catch (err) {
       setMensaje(err instanceof ApiError ? err.message : 'No se pudo guardar el cálculo de mora');
@@ -303,7 +317,7 @@ export const MoraPage = () => {
         onClose={() => setConfirmarGuardar(false)}
         onConfirm={guardarCalculo}
         title="Guardar cálculo de mora"
-        description="Se registrará la mora calculada de hoy para cada documento en mora y se cerrarán las moras de documentos ya pagados. ¿Continuar?"
+        description="Se registrará la mora calculada de hoy y se emitirán las notas de débito por mora que falten (cargos reales al cliente). También se cerrarán las moras de documentos ya pagados. Esto mismo se hace automáticamente una vez al día. ¿Continuar?"
         confirmLabel="Sí, guardar"
         variant="primary"
       />

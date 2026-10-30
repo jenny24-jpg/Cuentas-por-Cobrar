@@ -15,22 +15,14 @@ export async function getOne(req: Request, res: Response, next: NextFunction) {
   try { res.json(await service.getOne(Number(req.params.id))); } catch (error) { next(error); }
 }
 
-export async function create(req: Request, res: Response, next: NextFunction) {
-  try { res.status(201).json(await service.create(req.body)); } catch (error) { next(error); }
-}
-
-export async function update(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await service.update(Number(req.params.id), req.body)); } catch (error) { next(error); }
-}
-
-export async function remove(req: Request, res: Response, next: NextFunction) {
-  try { await service.remove(Number(req.params.id)); res.status(204).send(); } catch (error) { next(error); }
-}
-
 export async function recalcular(_req: Request, res: Response, next: NextFunction) {
   try { res.json(await service.recalcular()); } catch (error) { next(error); }
 }
 
 export async function cartera(_req: Request, res: Response, next: NextFunction) {
   try { res.json(await service.cartera()); } catch (error) { next(error); }
+}
+
+export async function resumenCliente(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await service.resumenCliente(Number(req.params.idCliente))); } catch (error) { next(error); }
 }

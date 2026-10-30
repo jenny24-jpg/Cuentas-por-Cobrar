@@ -8,11 +8,12 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { GestionCobro } from '@erp/contracts';
 import { GestionCobroForm } from './components/GestionCobroForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const GestionesCobroPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.cobranza.GestionesCobroPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; gestion?: GestionCobro } | null>(null);
   const [gestionAEliminar, setGestionAEliminar] = useState<GestionCobro | null>(null);
@@ -21,7 +22,7 @@ export const GestionesCobroPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<GestionCobro>(
     '/cxc/gestiones-cobro',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -112,7 +113,7 @@ export const GestionesCobroPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

@@ -7,11 +7,12 @@ import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import type { TipoDocumento } from '@erp/contracts';
 import { TipoDocumentoForm } from './components/TipoDocumentoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const TiposDocumentoPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.documentos.TiposDocumentoPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; tipo?: TipoDocumento } | null>(null);
   const [tipoAEliminar, setTipoAEliminar] = useState<TipoDocumento | null>(null);
@@ -19,7 +20,7 @@ export const TiposDocumentoPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<TipoDocumento>(
     '/cxc/tipos-documento',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -103,7 +104,7 @@ export const TiposDocumentoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 
