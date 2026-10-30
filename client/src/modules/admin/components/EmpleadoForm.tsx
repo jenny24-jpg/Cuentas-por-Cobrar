@@ -3,6 +3,7 @@ import { empleadoSchema, type EmpleadoAdmin } from '@erp/contracts';
 import { TextInput, Select } from '../../../shared/ui-kit';
 import { FormActionButtons } from '../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../shared/api';
+import { useSucursales } from '../../../shared/hooks';
 import { hasErrors, type ValidationErrors } from '../../../shared/validation';
 
 /**
@@ -19,7 +20,8 @@ export function EmpleadoForm({ item, onSaved, onCancel }: {
   const [nombre, setNombre] = useState(item?.nombre ?? '');
   const [apellido, setApellido] = useState(item?.apellido ?? '');
   const [puesto, setPuesto] = useState(item?.puesto ?? '');
-  const [codigo, setCodigo] = useState(item?.codigo ?? '');
+  const sucursales = useSucursales();
+  const [idSucursal, setIdSucursal] = useState(item?.idSucursal ? String(item.idSucursal) : '');
   const [email, setEmail] = useState(item?.email ?? '');
   const [telefono, setTelefono] = useState(item?.telefono ?? '');
   const [estado, setEstado] = useState<string>(item?.estado ?? 'A');
@@ -29,12 +31,12 @@ export function EmpleadoForm({ item, onSaved, onCancel }: {
   const [tocados, setTocados] = useState<Record<string, boolean>>({});
 
   const validationErrors = useMemo<ValidationErrors>(() => {
-    const parsed = empleadoSchema.safeParse({ nombre, apellido, puesto, codigo, email, telefono, estado });
+    const parsed = empleadoSchema.safeParse({ nombre, apellido, puesto, idSucursal: idSucursal ? Number(idSucursal) : undefined, email, telefono, estado });
     const next: ValidationErrors = {};
     if (!parsed.success) parsed.error.issues.forEach((i) => { const k = String(i.path[0]); if (!next[k]) next[k] = i.message; });
     if (!nombre.trim()) next.nombre = 'El nombre es obligatorio.';
     return next;
-  }, [nombre, apellido, puesto, codigo, email, telefono, estado]);
+  }, [nombre, apellido, puesto, idSucursal, email, telefono, estado]);
 
   const isFormValid = !hasErrors(validationErrors);
   const marcar = (campo: string) => setTocados((t) => ({ ...t, [campo]: true }));
@@ -45,12 +47,12 @@ export function EmpleadoForm({ item, onSaved, onCancel }: {
     e.preventDefault();
     setFormError(null);
     if (!isFormValid) {
-      setTocados({ nombre: true, apellido: true, puesto: true, codigo: true, email: true, telefono: true });
+      setTocados({ nombre: true, apellido: true, puesto: true, idSucursal: true, email: true, telefono: true });
       return;
     }
     setServerErrors({});
     setBusy(true);
-    const payload = { nombre: nombre.trim(), apellido: apellido.trim(), puesto: puesto.trim(), codigo: codigo.trim(), email: email.trim(), telefono: telefono.trim(), estado };
+    const payload = { nombre: nombre.trim(), apellido: apellido.trim(), puesto: puesto.trim(), idSucursal: Number(idSucursal), email: email.trim(), telefono: telefono.trim(), estado };
     try {
       if (isEditing) await apiClient.patch(`/admin/usuarios/empleados/${item!.idEmpleado}`, payload, { successMessage: 'Empleado actualizado correctamente.' });
       else await apiClient.post('/admin/usuarios/empleados', payload, { successMessage: 'Empleado creado correctamente.' });
@@ -82,9 +84,11 @@ export function EmpleadoForm({ item, onSaved, onCancel }: {
         <TextInput label="Puesto" maxLength={100} value={puesto}
           onChange={(e: any) => { setPuesto(e.target.value); limpiar('puesto'); }} onBlur={() => marcar('puesto')} error={errorDe('puesto')}
           helperText="Cargo, por ejemplo: Cobrador." />
-        <TextInput label="Código" maxLength={30} value={codigo}
-          onChange={(e: any) => { setCodigo(e.target.value.replace(/\s/g, '')); limpiar('codigo'); }} onBlur={() => marcar('codigo')} error={errorDe('codigo')}
-          helperText={isEditing ? 'Código único del empleado.' : 'Déjalo vacío y el sistema asigna el siguiente (CXC-EMP-###).'} />
+        <Select label="Sucursal" required value={idSucursal}
+          onChange={(e: any) => { setIdSucursal(e.target.value); limpiar('idSucursal'); }}
+          options={sucursales.map((s) => ({ value: s.id, label: s.nombre }))} placeholder="Selecciona una sucursal"
+          error={errorDe('idSucursal')}
+          helperText="Sucursal a la que pertenece. Solo podrá tener rutas de esta sucursal." />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <TextInput label="Correo electrónico" type="email" maxLength={150} value={email}
@@ -92,6 +96,8 @@ export function EmpleadoForm({ item, onSaved, onCancel }: {
         <TextInput label="Teléfono" maxLength={30} value={telefono}
           onChange={(e: any) => { setTelefono(e.target.value); limpiar('telefono'); }} onBlur={() => marcar('telefono')} error={errorDe('telefono')} />
       </div>
+      <TextInput label="Código" isReadOnly disabled value={item?.codigo ?? ''} placeholder="Se asigna automáticamente (EMP-###)"
+        helperText="Lo genera el sistema y no se puede cambiar." />
       {isEditing && (
         <Select label="Estado" required value={estado} onChange={(e: any) => { setEstado(e.target.value); limpiar('estado'); }}
           options={[{ value: 'A', label: 'Activo' }, { value: 'I', label: 'Inactivo' }]}

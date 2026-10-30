@@ -22,6 +22,7 @@ export async function list(
       limit: req.query.limit as string | undefined,
       search: req.query.search as string | undefined,
       idEmpleado: req.query.idEmpleado as string | undefined,
+      idSucursal: req.query.idSucursal as string | undefined,
       fecha: req.query.fecha as string | undefined,
       excluirId: req.query.excluirId as string | undefined,
     });
@@ -44,9 +45,36 @@ export async function porEmpleado(
   try {
     const result = await rutaService.listRutasPorEmpleado({
       search: req.query.search as string | undefined,
+      idSucursal: req.query.idSucursal as string | undefined,
     });
 
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// =====================================================
+// SUCURSAL SUGERIDA
+// =====================================================
+
+/**
+ * Conserva la funcionalidad incorporada en develop.
+ *
+ * Consulta la sucursal sugerida para una ruta
+ * según las reglas del servicio.
+ */
+export async function sucursalSugerida(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const resultado = await rutaService.sugerirSucursal(
+      Number(req.params.id),
+    );
+
+    res.json(resultado);
   } catch (err) {
     next(err);
   }
@@ -118,20 +146,20 @@ export async function update(
 // =====================================================
 
 /**
+ * Funcionalidad de galeano:
+ *
  * Finaliza formalmente una ruta de cobranza.
  *
- * Endpoint previsto:
  * POST /cxc/rutas/:id/finalizar
  *
- * El servicio y el repositorio validan:
+ * El servicio y el repositorio verifican:
  *
- * - Que la ruta esté EN_PROCESO.
- * - Que tenga paradas asignadas.
- * - Que todas tengan resultados definitivos.
- * - Que no existan visitas pendientes.
- * - Que la ruta no esté ya completada o cancelada.
+ * - Ruta en estado EN_PROCESO.
+ * - Existencia de paradas.
+ * - Resultados definitivos de cobranza.
+ * - Ausencia de visitas pendientes.
  *
- * No modifica montos ni genera pagos.
+ * Esta operación no genera pagos ni recibos.
  */
 export async function finalizar(
   req: Request,
