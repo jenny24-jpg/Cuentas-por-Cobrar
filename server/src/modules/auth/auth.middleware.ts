@@ -58,6 +58,26 @@ export function enforceReadOnlyRole(req: Request, _res: Response, next: NextFunc
   next();
 }
 
+/**
+ * Lo único que un COBRADOR puede registrar (trabajo de campo). Las rutas son relativas al
+ * montaje de /api/cxc. Todo lo demás que escriba datos se rechaza; la lectura queda libre.
+ */
+const ESCRITURA_COBRADOR: Array<{ metodo: string; ruta: RegExp }> = [
+  { metodo: 'POST', ruta: /^\/gestiones-cobro\/?$/ },
+  { metodo: 'PATCH', ruta: /^\/gestiones-cobro\/\d+\/?$/ },
+  { metodo: 'POST', ruta: /^\/promesas-pago\/?$/ },
+  { metodo: 'PATCH', ruta: /^\/promesas-pago\/\d+\/?$/ },
+  { metodo: 'POST', ruta: /^\/rutas\/\d+\/cobros\/?$/ },
+  { metodo: 'POST', ruta: /^\/rutas\/\d+\/bitacora\/?$/ },
+];
+
+/** Rol "cobrador": consulta todo y solo registra gestiones, promesas, cobros de ruta y visitas. */
+export function enforceCobradorScope(req: Request, _res: Response, next: NextFunction) {
+  if (req.auth?.rol !== 'COBRADOR' || LECTURA.has(req.method)) return next();
+  if (ESCRITURA_COBRADOR.some((p) => p.metodo === req.method && p.ruta.test(req.path))) return next();
+  next(new ForbiddenError('Tu usuario es de cobrador: solo puede registrar gestiones de cobro, promesas de pago, cobros de ruta y visitas.'));
+}
+
 export const requireRole = (...roles: Rol[]) => (req: Request, _res: Response, next: NextFunction) => {
   if (!req.auth || !roles.includes(req.auth.rol)) return next(new ForbiddenError('No tienes permiso para realizar esta acción.'));
   next();

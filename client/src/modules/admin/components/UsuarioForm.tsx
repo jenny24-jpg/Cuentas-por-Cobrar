@@ -11,6 +11,7 @@ import { hasErrors, type ValidationErrors } from '../../../shared/validation';
 const AYUDA_ROL: Record<string, string> = {
   ADMIN: 'Acceso total, incluida la administración de usuarios.',
   OPERADOR: 'Puede consultar y registrar información en Cuentas por Cobrar.',
+  COBRADOR: 'Consulta todo y solo registra trabajo de campo: gestiones de cobro, promesas de pago, cobros de ruta y visitas.',
   CONSULTA: 'Solo puede consultar: el sistema rechaza cualquier alta, cambio o baja.',
 };
 

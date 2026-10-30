@@ -17,6 +17,7 @@ type Accion = { tipo: 'restablecer' | 'sesiones' | 'desbloquear'; usuario: Usuar
 const ROL_ESTILO: Record<string, string> = {
   ADMIN: 'bg-violet-50 text-violet-700 ring-violet-200',
   OPERADOR: 'bg-blue-50 text-blue-700 ring-blue-200',
+  COBRADOR: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   CONSULTA: 'bg-slate-100 text-slate-700 ring-slate-200',
 };
 

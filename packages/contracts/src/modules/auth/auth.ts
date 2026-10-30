@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
-export const ROLES = ['ADMIN', 'OPERADOR', 'CONSULTA'] as const;
+export const ROLES = ['ADMIN', 'OPERADOR', 'COBRADOR', 'CONSULTA'] as const;
 export type Rol = (typeof ROLES)[number];
 
 export const ROL_LABEL: Record<Rol, string> = {
   ADMIN: 'Administrador',
   OPERADOR: 'Operador',
+  COBRADOR: 'Cobrador',
   CONSULTA: 'Solo consulta',
 };
 

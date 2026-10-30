@@ -27,7 +27,7 @@ export const ClientesPage = () => {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [creando, setCreando] = useState(false);
   const { usuario } = useAuth();
-  const puedeEditar = usuario?.rol !== 'CONSULTA';
+  const puedeEditar = usuario?.rol !== 'CONSULTA' && usuario?.rol !== 'COBRADOR';
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Cliente>(
     '/cxc/clientes',
