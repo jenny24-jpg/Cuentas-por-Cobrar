@@ -9,12 +9,13 @@ import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { ConvenioPago } from '@erp/contracts';
 import { ConvenioPagoForm } from './components/ConvenioPagoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const ConveniosPagoPage = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.cobranza.ConveniosPagoPage');
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [convenioAEliminar, setConvenioAEliminar] = useState<ConvenioPago | null>(null);
@@ -26,7 +27,7 @@ export const ConveniosPagoPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<ConvenioPago>(
     '/cxc/convenios-pago',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -135,7 +136,7 @@ export const ConveniosPagoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

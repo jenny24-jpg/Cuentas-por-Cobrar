@@ -5,16 +5,19 @@ import {
   createNotaCreditoSchema,
   updateNotaCreditoSchema,
   anularNotaCreditoSchema,
+  rechazarNotaCreditoSchema,
   type NotaCredito,
 } from '@erp/contracts';
 
 import * as repository from '../../repositories/credito/notaCredito.repository';
+import * as aplicacionRepository from '../../repositories/credito/aplicacionNotaCredito.repository';
 import * as documentoRepository from '../../repositories/documentos/documento.repository';
 import * as catalogosRepository from '../../repositories/catalogos.repository';
 
 import {
   BadRequestError,
   ConflictError,
+  ForbiddenError,
   NotFoundError,
 } from '../../../../shared/errors/AppError';
 
@@ -126,6 +129,7 @@ export async function getOne(
 
 export async function create(
   rawInput: unknown,
+  idEmpleadoRegistro: number,
 ): Promise<NotaCredito> {
   const input = createNotaCreditoSchema.parse(rawInput);
 
@@ -157,10 +161,14 @@ export async function create(
   // La fecha se fija nuevamente en el servidor
   // para no depender del valor del navegador.
 
-  const id = await repository.create({
-    ...input,
-    fecha: hoy,
-  });
+  // Queda PENDIENTE (por aprobar) con quien la registró; un ADMIN distinto la aprueba.
+  const id = await repository.create(
+    {
+      ...input,
+      fecha: hoy,
+    },
+    idEmpleadoRegistro,
+  );
 
   return getOne(id);
 }
@@ -245,16 +253,18 @@ export async function update(
 // ELIMINAR NOTA DE CRÉDITO
 // =====================================================
 
+/**
+ * Las notas de crédito no se borran: se anulan o se rechazan, para que quede
+ * quién, cuándo y por qué (y no queden huecos en la numeración).
+ */
 export async function remove(
   id: number,
 ): Promise<void> {
   await getOne(id);
 
-  // El repositorio protege la eliminación
-  // mediante FOR UPDATE y las reglas
-  // de aplicaciones y estados.
-
-  await repository.remove(id);
+  throw new ConflictError(
+    'Las notas de crédito no se eliminan; anúlala o recházala para conservar el registro.',
+  );
 }
 
 // =====================================================
@@ -264,6 +274,7 @@ export async function remove(
 export async function anular(
   id: number,
   rawInput: unknown,
+  rol?: string,
 ): Promise<NotaCredito> {
   if (!Number.isInteger(id) || id <= 0) {
     throw new BadRequestError(
@@ -273,6 +284,18 @@ export async function anular(
 
   const input =
     anularNotaCreditoSchema.parse(rawInput);
+
+  // Solo quien registró la nota o un administrador puede anularla.
+  const nota = await getOne(id);
+
+  if (
+    rol !== 'ADMIN' &&
+    nota.idEmpleadoRegistro !== input.idEmpleadoAnulacion
+  ) {
+    throw new ForbiddenError(
+      'Solo quien registró la nota de crédito o un administrador puede anularla.',
+    );
+  }
 
   // Se conserva la política original:
   // la fecha de anulación no puede ser futura.
@@ -306,6 +329,63 @@ export async function anular(
   // las aplicaciones y las reglas financieras.
 
   await repository.anular(id, input);
+
+  return getOne(id);
+}
+
+/** Serie y número que se asignarán a la próxima nota de crédito. */
+export async function previewNumero(): Promise<{ serie: string; numero: string }> {
+  return repository.previewNumero();
+}
+
+// =====================================================
+// APROBACIÓN DE NOTAS DE CRÉDITO (SOLO ADMIN)
+// =====================================================
+
+/** Una nota está por aprobar si sigue pendiente y nadie la ha aprobado. */
+function assertPorAprobar(nota: NotaCredito) {
+  const estado = String(nota.estado ?? '').trim().toUpperCase();
+  if (nota.idEmpleadoAprobacion || !['PENDIENTE', 'ACTIVA'].includes(estado)) {
+    throw new ConflictError('La nota de crédito ya no está por aprobar.');
+  }
+}
+
+/**
+ * Aprueba la nota y la aplica a su documento de referencia en la misma
+ * transacción. Solo un ADMIN distinto de quien la registró.
+ */
+export async function aprobar(
+  id: number,
+  idEmpleadoAprobacion: number,
+): Promise<NotaCredito> {
+  const nota = await getOne(id);
+  assertPorAprobar(nota);
+
+  if (nota.idEmpleadoRegistro === idEmpleadoAprobacion) {
+    throw new ConflictError(
+      'Quien registró la nota de crédito no puede aprobarla; debe hacerlo otro administrador.',
+    );
+  }
+
+  await aplicacionRepository.aprobar(id, idEmpleadoAprobacion);
+
+  return getOne(id);
+}
+
+/** Rechaza la nota por aprobar: queda ANULADA con el motivo y sin tocar saldos. */
+export async function rechazar(
+  id: number,
+  rawInput: unknown,
+  idEmpleado: number,
+): Promise<NotaCredito> {
+  const input = rechazarNotaCreditoSchema.parse(rawInput);
+  const nota = await getOne(id);
+  assertPorAprobar(nota);
+
+  await repository.anular(id, {
+    idEmpleadoAnulacion: idEmpleado,
+    motivoAnulacion: `Rechazada: ${input.motivoRechazo}`,
+  });
 
   return getOne(id);
 }

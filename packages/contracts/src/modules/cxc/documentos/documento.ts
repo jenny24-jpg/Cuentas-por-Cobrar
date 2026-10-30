@@ -54,12 +54,13 @@ const documentoEditableBaseSchema = z.object({
   // Sin serie/numeroDocumento: los asigna el sistema al crear (serie = código del tipo,
   // número = siguiente correlativo de esa serie) y no se editan.
   fechaDocumento: isoDateSchema('La fecha del documento'),
-  fechaVencimiento: isoDateSchema('La fecha de vencimiento'),
+  // Lo calcula el servidor: fecha del documento + días de la condición de crédito.
+  fechaVencimiento: isoDateSchema('La fecha de vencimiento').optional(),
   total: moneySchema('El total', true),
 });
 
 export const createDocumentoSchema = documentoEditableBaseSchema.superRefine((data, ctx) => {
-  if (data.fechaVencimiento < data.fechaDocumento) {
+  if (data.fechaVencimiento && data.fechaVencimiento < data.fechaDocumento) {
     ctx.addIssue({
       code: 'custom',
       path: ['fechaVencimiento'],

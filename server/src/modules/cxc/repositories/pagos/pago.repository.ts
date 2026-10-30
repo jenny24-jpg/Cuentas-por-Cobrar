@@ -8,6 +8,7 @@ import type {
   CreatePagoInput,
   UpdatePagoInput,
   AnularPagoInput,
+  AplicacionNuevoPago,
 } from '@erp/contracts';
 
 import {
@@ -16,7 +17,9 @@ import {
   NotFoundError,
 } from '../../../../shared/errors/AppError';
 
-import { asignarCorrelativo } from '../../shared/correlativos';
+import { siguienteReferenciaPago } from '../../shared/correlativos';
+import { aplicarEnConexion } from './aplicacionPago.repository';
+import { crearEnConexion as crearAnticipoEnConexion } from './anticipo.repository';
 
 // =====================================================
 // INTERFAZ DE RESULTADOS ORACLE
@@ -263,8 +266,29 @@ export async function findById(id: number) {
 // CREAR PAGO
 // =====================================================
 
+/** Referencia que tendría hoy el próximo pago (vista previa, sin bloquear). */
+export async function previewReferencia(): Promise<string> {
+  const c = await getConnection();
+  try {
+    return await siguienteReferenciaPago(c, { bloquear: false });
+  } finally {
+    await c.close();
+  }
+}
+
+/**
+ * Registra el pago con su referencia automática y, en la misma transacción, su
+ * destino: lo reparte entre las facturas indicadas (cada aplicación baja el
+ * saldo, cambia estados, registra historial y emite su recibo) o crea el anticipo
+ * que respalda. Si algo falla no queda nada: ni pago suelto ni aplicación a medias.
+ */
 export async function create(
   i: CreatePagoInput,
+  destino: {
+    aplicaciones?: AplicacionNuevoPago[];
+    idEmpleado?: number;
+    comoAnticipo?: boolean;
+  } = {},
 ) {
   const c = await getConnection();
 
@@ -284,6 +308,9 @@ export async function create(
       );
     }
 
+    // Correlativo automático (bloquea CXC_PAGOS hasta el commit).
+    const numeroReferencia = await siguienteReferenciaPago(c);
+
     const r = await c.execute<{
       id: number[];
     }>(
@@ -295,6 +322,7 @@ export async function create(
           ID_BANCO,
           FECHA_PAGO,
           MONTO,
+          NUMERO_REFERENCIA,
           ESTADO
         )
         VALUES (
@@ -304,6 +332,7 @@ export async function create(
           :idBanco,
           TO_DATE(:fechaPago, 'YYYY-MM-DD'),
           :monto,
+          :numeroReferencia,
           :estado
         )
 
@@ -319,6 +348,7 @@ export async function create(
         fechaPago: hoy,
 
         monto: i.monto,
+        numeroReferencia,
         estado: i.estado ?? 'NO_APLICADO',
 
         id: {
@@ -330,12 +360,27 @@ export async function create(
 
     const id = r.outBinds!.id[0];
 
-    // Mantener el correlativo automático.
-    await asignarCorrelativo(
-      c,
-      'pago',
-      id,
-    );
+    // Siempre en el mismo orden (por documento) para que dos pagos simultáneos
+    // del mismo cliente no se bloqueen entre sí.
+    const aplicaciones = [...(destino.aplicaciones ?? [])]
+      .sort((a, b) => a.idDocumento - b.idDocumento);
+
+    for (const aplicacion of aplicaciones) {
+      await aplicarEnConexion(c, {
+        idPago: id,
+        idDocumento: aplicacion.idDocumento,
+        fechaAplicacion: hoy,
+        montoAplicado: aplicacion.montoAplicado,
+        idEmpleado: destino.idEmpleado!,
+      });
+    }
+
+    if (destino.comoAnticipo) {
+      await crearAnticipoEnConexion(c, {
+        idCliente: i.idCliente,
+        idPago: id,
+      });
+    }
 
     await c.commit();
 
@@ -663,6 +708,9 @@ export async function listOptions(
   idCliente?: number,
   opciones: {
     paraAnticipo?: boolean;
+    // Solo pagos libres para aplicar a facturas: sin anticipo vigente
+    // (ese dinero se usa desde Aplicación de anticipo, no dos veces).
+    libres?: boolean;
   } = {},
 ) {
   const c = await getConnection();
@@ -671,6 +719,17 @@ export async function listOptions(
     const condiciones = [
       ...(idCliente
         ? ['p.ID_CLIENTE = :idCliente']
+        : []),
+
+      ...(opciones.libres && !opciones.paraAnticipo
+        ? [
+            `NOT EXISTS (
+              SELECT 1
+              FROM CXC_ANTICIPOS ant
+              WHERE ant.ID_PAGO = p.ID_PAGO
+                AND ant.ESTADO <> 'CANCELADO'
+            )`,
+          ]
         : []),
 
       ...(opciones.paraAnticipo

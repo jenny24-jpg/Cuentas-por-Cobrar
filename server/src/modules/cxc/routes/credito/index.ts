@@ -15,11 +15,15 @@ router.patch('/condiciones-credito/:id', condicionCreditoController.update);
 router.delete('/condiciones-credito/:id', condicionCreditoController.remove);
 
 router.get('/notas-credito', notaCreditoController.list);
+// Antes de /notas-credito/:id para que "siguiente-numero" no se tome como id.
+router.get('/notas-credito/siguiente-numero', notaCreditoController.siguienteNumero);
 router.get('/notas-credito/:id', notaCreditoController.getOne);
 router.post('/notas-credito', notaCreditoController.create);
 router.patch('/notas-credito/:id', notaCreditoController.update);
 router.delete('/notas-credito/:id', notaCreditoController.remove);
 router.post('/notas-credito/:id/anular', notaCreditoController.anular);
+router.post('/notas-credito/:id/aprobar', notaCreditoController.aprobar);
+router.post('/notas-credito/:id/rechazar', notaCreditoController.rechazar);
 
 router.get(
   '/aplicaciones-nota-credito',
@@ -55,11 +59,9 @@ router.post(
 
 router.post('/mora/recalcular', moraController.recalcular);
 router.get('/mora/cartera', moraController.cartera);
+router.get('/mora/cliente/:idCliente', moraController.resumenCliente);
 router.get('/mora', moraController.list);
 router.get('/mora/:id', moraController.getOne);
-router.post('/mora', moraController.create);
-router.patch('/mora/:id', moraController.update);
-router.delete('/mora/:id', moraController.remove);
 
 
 export default router;  

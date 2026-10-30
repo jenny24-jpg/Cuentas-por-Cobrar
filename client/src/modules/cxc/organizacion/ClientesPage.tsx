@@ -7,8 +7,8 @@ import { useAuth } from '../../../shared/auth/AuthContext';
 import type { Cliente } from '@erp/contracts';
 import { ClienteForm } from './components/ClienteForm';
 import { ClienteDetalle } from './components/ClienteDetalle';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 const ESTADO_FILTRO = [
   { value: '', label: 'Todos los estados' },
@@ -21,6 +21,7 @@ const etiquetaEstado = (estado: string | null) => (estado === 'A' ? 'Activo' : e
 /** Alta, consulta y edición de clientes. */
 export const ClientesPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.organizacion.ClientesPage');
   const [search, setSearch] = useState('');
   const [estado, setEstado] = useState('');
   const [verId, setVerId] = useState<number | null>(null);
@@ -31,7 +32,7 @@ export const ClientesPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Cliente>(
     '/cxc/clientes',
-    { page, limit: PAGE_SIZE, search, ...(estado ? { estado } : {}) },
+    { page, limit: pageSize, search, ...(estado ? { estado } : {}) },
   );
 
   return (
@@ -90,6 +91,19 @@ export const ClientesPage = () => {
             cell: ({ value }: any) => value
               ? <span className="block max-w-xs truncate" title={value}>{value}</span>
               : <span className="text-amber-700">Sin dirección</span>,
+          },
+          {
+            header: 'Segmento',
+            cell: ({ row }: { row: Cliente }) => row.segmento
+              ? (
+                <span
+                  className="inline-flex min-w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800"
+                  title={row.reduccionMora ? `Mora −${row.reduccionMora} puntos` : 'Sin reducción de mora'}
+                >
+                  {row.segmento}
+                </span>
+              )
+              : <span className="text-slate-400">—</span>,
           },
           {
             header: 'Condición de pago',
@@ -156,7 +170,7 @@ export const ClientesPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} clientes`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="clientes" />,
         }}
       />
 

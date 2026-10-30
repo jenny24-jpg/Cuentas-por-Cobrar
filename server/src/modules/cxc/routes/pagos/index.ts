@@ -11,6 +11,9 @@ import * as catalogosRepository from '../../repositories/catalogos.repository';
 import { validarIdsDeRuta } from '../../../../shared/idParams';
 import { BadRequestError } from '../../../../shared/errors/AppError';
 const router = validarIdsDeRuta(Router());
+// Antes de /pagos/:id para que "siguiente-referencia" no se tome como id.
+router.get('/pagos/siguiente-referencia', pago.siguienteReferencia);
+router.get('/recibos/siguiente', recibo.siguiente);
 for (const [path,c] of [['/pagos',pago],['/aplicaciones-pago',aplicacion],['/anticipos',anticipo],['/aplicaciones-anticipo',aplicacionAnticipo],['/recibos',recibo],['/formas-pago',forma]] as const){router.get(path,c.list);router.get(`${path}/:id`,c.getOne);router.post(path,c.create);router.patch(`${path}/:id`,c.update);router.delete(`${path}/:id`,c.remove);}
 router.post('/pagos/:id/anular', pago.anular);
 router.post('/anticipos/:id/anular', anticipo.anular);
@@ -23,7 +26,10 @@ router.get('/catalogos/pagos', async (req, res, next) => {
     if (rawIdCliente && (!Number.isInteger(idCliente) || (idCliente as number) <= 0)) {
       throw new BadRequestError('idCliente debe ser un entero positivo');
     }
-    res.json(await pagoRepo.listOptions(idCliente, { paraAnticipo: req.query.paraAnticipo === '1' }));
+    res.json(await pagoRepo.listOptions(idCliente, {
+      paraAnticipo: req.query.paraAnticipo === '1',
+      libres: req.query.libres === '1',
+    }));
   } catch (e) {
     next(e);
   }

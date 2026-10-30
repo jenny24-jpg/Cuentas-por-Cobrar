@@ -7,11 +7,12 @@ import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import type { Empresa } from '@erp/contracts';
 import { EmpresaForm } from './components/EmpresaForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const EmpresasPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.organizacion.EmpresasPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; empresa?: Empresa } | null>(null);
   const [empresaAEliminar, setEmpresaAEliminar] = useState<Empresa | null>(null);
@@ -20,7 +21,7 @@ export const EmpresasPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Empresa>(
     '/cxc/empresas',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -114,7 +115,7 @@ export const EmpresasPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

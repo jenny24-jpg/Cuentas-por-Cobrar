@@ -68,6 +68,21 @@ export const NotaCreditoForm = ({
 
   const serie = nota?.serie ?? '';
   const numero = nota?.numero ?? '';
+  // Alta: serie y número que tendrá la nota (vista previa calculada en la base).
+  // Si falta el tipo de documento CREDITO, se muestra el aviso que devuelve el servidor.
+  const [numeroPrevio, setNumeroPrevio] = useState('');
+  const [avisoNumero, setAvisoNumero] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isEditing) return;
+    apiClient
+      .get<{ serie: string; numero: string }>('/cxc/notas-credito/siguiente-numero')
+      .then((data) => { setNumeroPrevio(`${data.serie}-${data.numero}`); setAvisoNumero(null); })
+      .catch((err) => {
+        setNumeroPrevio('');
+        setAvisoNumero(err instanceof ApiError ? err.message : 'No se pudo calcular el número de la nota.');
+      });
+  }, [isEditing]);
 
   // Fecha de solo lectura: hoy en Guatemala al crear y original al editar.
   // No hay setter: el usuario no puede modificarla desde el formulario.
@@ -403,9 +418,10 @@ export const NotaCreditoForm = ({
 
       <TextInput
         label="Serie y número"
-        value={serie && numero ? `${serie}-${numero}` : 'Se asigna al guardar'}
+        value={serie && numero ? `${serie}-${numero}` : numeroPrevio || (avisoNumero ? 'Sin número disponible' : 'Calculando...')}
         isReadOnly
-        helperText="Correlativo automático del sistema; no se edita."
+        error={!isEditing ? avisoNumero ?? undefined : undefined}
+        helperText={isEditing ? "Correlativo asignado a la nota; no se edita." : "Siguiente correlativo del sistema. Si otro usuario guarda antes, al guardar se toma el siguiente libre."}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

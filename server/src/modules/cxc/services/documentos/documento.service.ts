@@ -16,6 +16,8 @@ export { NotFoundError };
 import * as documentoRepository from '../../repositories/documentos/documento.repository';
 import * as catalogosRepository from '../../repositories/documentos/catalogosDocumentos.repository';
 import * as condicionCreditoRepository from '../../repositories/credito/condicionCredito.repository';
+import * as clienteRepository from '../../repositories/organizacion/cliente.repository';
+import * as tipoDocumentoRepository from '../../repositories/documentos/tipoDocumento.repository';
 import * as sharedCatalogosRepository from '../../repositories/catalogos.repository';
 
 import {
@@ -25,6 +27,43 @@ import {
 
 const hasFinancialMovement = (documento: Documento) =>
   hasMovement(documento.total, documento.saldo);
+
+/** Suma días a una fecha AAAA-MM-DD sin pasar por zonas horarias. */
+function sumarDias(fechaIso: string, dias: number): string {
+  const [anio, mes, dia] = fechaIso.split('-').map(Number);
+  return new Date(Date.UTC(anio, mes - 1, dia + dias)).toISOString().slice(0, 10);
+}
+
+/**
+ * Condición de crédito del documento (la indicada o, si no hay, la del cliente)
+ * y su vencimiento: fecha del documento + días de crédito (0 = contado).
+ */
+async function resolverPlazo(
+  idCliente: number,
+  idCondicionCredito: number | null | undefined,
+  fechaDocumento: string,
+): Promise<{ idCondicionCredito: number; fechaVencimiento: string }> {
+  let idCondicion = idCondicionCredito ?? null;
+
+  if (!idCondicion) {
+    const cliente = await clienteRepository.findById(idCliente);
+    idCondicion = cliente?.idCondicion ?? null;
+  }
+
+  if (!idCondicion) {
+    throw new BadRequestError(
+      'El cliente no tiene condición de crédito asignada; asígnala en Clientes o selecciona una para el documento.',
+    );
+  }
+
+  await assertCondicionCreditoActiva(idCondicion);
+  const condicion = await condicionCreditoRepository.findById(idCondicion);
+
+  return {
+    idCondicionCredito: idCondicion,
+    fechaVencimiento: sumarDias(fechaDocumento, Number(condicion!.diasCredito)),
+  };
+}
 
 async function assertCondicionCreditoActiva(
   idCondicionCredito: number | null | undefined,
@@ -113,21 +152,42 @@ export async function getDocumento(id: number): Promise<Documento> {
 // CREAR DOCUMENTO
 // =====================================================
 
+/** Serie y número que se asignarán al guardar un documento del tipo indicado. */
+export async function previewNumeroDocumento(rawIdTipo: unknown): Promise<{ serie: string; numero: string }> {
+  const idTipoDocumento = Number(rawIdTipo);
+  if (!Number.isInteger(idTipoDocumento) || idTipoDocumento <= 0) {
+    throw new BadRequestError('idTipoDocumento debe ser un entero positivo');
+  }
+  try {
+    return await documentoRepository.previewNumero(idTipoDocumento);
+  } catch (err) {
+    if (err instanceof Error && /no encontrado/.test(err.message)) {
+      throw new NotFoundError(`Tipo de documento ${idTipoDocumento} no encontrado`);
+    }
+    throw err;
+  }
+}
+
 export async function createDocumento(
   rawInput: unknown,
 ): Promise<Documento> {
-  const input = createDocumentoSchema.parse(rawInput);
+  const parsed = createDocumentoSchema.parse(rawInput);
+
+  if (await tipoDocumentoRepository.esTipoMora(parsed.idTipoDocumento)) {
+    throw new BadRequestError('Las notas de débito por mora las emite el sistema automáticamente; no se registran a mano.');
+  }
 
   // La fecha de creación debe ser la fecha actual.
-  validarFechaCreacion(input.fechaDocumento);
+  validarFechaCreacion(parsed.fechaDocumento);
 
-  // El vencimiento debe ser igual o posterior a la creación.
-  validarFechaVencimiento(
-    input.fechaDocumento,
-    input.fechaVencimiento,
+  // Condición: la indicada o la del cliente. El vencimiento es la fecha del
+  // documento más los días de crédito; lo calcula el servidor.
+  const plazo = await resolverPlazo(
+    parsed.idCliente,
+    parsed.idCondicionCredito,
+    parsed.fechaDocumento,
   );
-
-  await assertCondicionCreditoActiva(input.idCondicionCredito);
+  const input = { ...parsed, ...plazo };
 
   // NIT_CLIENTE es una fotografía del dato maestro
   // al momento de crear el documento.
@@ -154,6 +214,10 @@ export async function updateDocumento(
 ): Promise<Documento> {
   const current = await getDocumento(id);
   const input = updateDocumentoSchema.parse(rawInput);
+
+  if (await tipoDocumentoRepository.esTipoMora(current.idTipoDocumento)) {
+    throw new ConflictError('Una nota de débito por mora no se edita: la emite el sistema. Si no corresponde cobrarla, anúlala.');
+  }
 
   await assertCondicionCreditoActiva(input.idCondicionCredito);
 
@@ -194,15 +258,23 @@ export async function updateDocumento(
     );
   }
 
+  // El vencimiento siempre sale de la condición de crédito (la indicada o la
+  // del cliente): no se escribe a mano.
+  const plazo = await resolverPlazo(
+    input.idCliente ?? current.idCliente,
+    input.idCondicionCredito !== undefined
+      ? input.idCondicionCredito
+      : current.idCondicionCredito,
+    fechaOriginal,
+  );
+
   const finalInput = {
     idCliente: input.idCliente ?? current.idCliente,
     idTipoDocumento:
       input.idTipoDocumento ?? current.idTipoDocumento,
     idMoneda: input.idMoneda ?? current.idMoneda,
     fechaDocumento: fechaOriginal,
-    fechaVencimiento:
-      input.fechaVencimiento ??
-      current.fechaVencimiento.slice(0, 10),
+    fechaVencimiento: plazo.fechaVencimiento,
     total: input.total ?? current.total,
   };
 
@@ -217,6 +289,8 @@ export async function updateDocumento(
 
   const nextInput: documentoRepository.DocumentoInternalUpdate = {
     ...input,
+    idCondicionCredito: plazo.idCondicionCredito,
+    fechaVencimiento: plazo.fechaVencimiento,
   };
 
   // Impide cambiar la fecha original en el repositorio.

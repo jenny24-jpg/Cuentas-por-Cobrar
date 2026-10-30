@@ -42,7 +42,11 @@ export type UpdateMoraInput = z.infer<typeof updateMoraSchema>;
  *
  *   inicio de mora = fecha de vencimiento + días de gracia
  *   días de mora   = hoy - inicio de mora
+ *   % de mora      = % del tramo (CXC_TRAMOS_MORA) - reducción del segmento del cliente
  *   monto de mora  = saldo * % mora / 100   (misma regla que el recálculo guardado)
+ *
+ * La mora se cobra con notas de débito (tipo con ES_MORA = 'S'); cuando sube de
+ * tramo se emite otra nota solo por la diferencia.
  */
 export const ESTADOS_CARTERA_MORA = ['EN_MORA', 'EN_GRACIA', 'POR_VENCER', 'AL_DIA'] as const;
 export type EstadoCarteraMora = (typeof ESTADOS_CARTERA_MORA)[number];
@@ -65,7 +69,33 @@ export interface CarteraMoraDocumento {
   diasVencido: number;
   diasMora: number;
   saldo: number;
+  /** Segmento del cliente (A, B, C, D) o null si no tiene. */
+  segmento: string | null;
+  /** % del tramo según los días de mora. */
+  porcentajeTramo: number;
+  /** Puntos que el segmento resta al tramo. */
+  reduccionMora: number;
+  /** % aplicado: tramo - reducción (nunca menor que 0). */
   porcentajeMora: number;
+  /** Recargo total calculado a hoy. */
   montoMora: number;
+  /** Ya cobrado en notas de débito por mora. */
+  montoEmitido: number;
+  /** Falta cobrar: se emite en la próxima nota de débito. */
+  montoPorEmitir: number;
   estado: EstadoCarteraMora;
+}
+
+/** Mora de un cliente para el aviso al registrar un pago. */
+export interface ResumenMoraCliente {
+  idCliente: number;
+  documentosEnMora: number;
+  /** Mayor atraso (días de mora) entre sus documentos. */
+  diasMaxMora: number;
+  /** Notas de débito por mora con saldo pendiente. */
+  notasPendientes: number;
+  /** Lo que debe en notas de débito por mora. */
+  moraPendiente: number;
+  /** Recargo calculado que todavía no se ha emitido como nota. */
+  moraPorEmitir: number;
 }

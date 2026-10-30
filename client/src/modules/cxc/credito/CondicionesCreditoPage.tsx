@@ -10,13 +10,14 @@ import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
-import type { CondicionCredito } from '@erp/contracts';
+import { describirCondicionPago, type CondicionCredito } from '@erp/contracts';
 import { CondicionCreditoForm } from './components/CondicionCreditoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const CondicionesCreditoPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.credito.CondicionesCreditoPage');
   const [search, setSearch] = useState('');
 
   const [modalState, setModalState] = useState<{
@@ -34,7 +35,7 @@ export const CondicionesCreditoPage = () => {
       '/cxc/condiciones-credito',
       {
         page,
-        limit: PAGE_SIZE,
+        limit: pageSize,
         search,
       },
     );
@@ -115,6 +116,18 @@ export const CondicionesCreditoPage = () => {
             accessorKey: 'idCondicion',
           },
           {
+            // Sin columna de nombre en la base: se describe con sus propios términos.
+            header: 'Condición',
+            cell: ({ row }: any) => (
+              <span className="font-medium text-slate-900">
+                {describirCondicionPago(row.diasCredito)}
+                <span className="block text-xs font-normal text-slate-500">
+                  {row.diasGracia} día(s) de gracia · mora {Number(row.porcentajeMora).toFixed(2)}%
+                </span>
+              </span>
+            ),
+          },
+          {
             header: 'Días de crédito',
             accessorKey: 'diasCredito',
           },
@@ -167,7 +180,7 @@ export const CondicionesCreditoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

@@ -19,6 +19,8 @@ router.get('/documentos/catalogos/clientes/:idCliente/documentos', catalogosCont
 
 // --- CXC_DOCUMENTOS ---
 router.get('/documentos', documentoController.list);
+// Antes de /documentos/:id para que "siguiente-numero" no se tome como id.
+router.get('/documentos/siguiente-numero', documentoController.siguienteNumero);
 router.get('/documentos/:id', documentoController.getOne);
 router.post('/documentos', documentoController.create);
 router.patch('/documentos/:id', documentoController.update);

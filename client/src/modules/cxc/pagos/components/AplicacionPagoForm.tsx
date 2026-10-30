@@ -64,7 +64,7 @@ export function AplicacionPagoForm({
 
   useEffect(() => {
     apiClient
-      .get<CatalogoOption[]>('/cxc/catalogos/pagos')
+      .get<CatalogoOption[]>('/cxc/catalogos/pagos?libres=1')
       .then(setPagos)
       .catch(() => setPagos([]));
   }, []);

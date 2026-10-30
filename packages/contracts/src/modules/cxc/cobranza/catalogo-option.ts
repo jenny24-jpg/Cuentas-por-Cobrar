@@ -8,6 +8,8 @@ export interface CatalogoOption {
   /** Código y nombre del cliente dueño de la opción (p. ej. pagos): "CR-00012 Juan Pérez". */
   cliente?: string;
   monto?: number;
+  /** Moneda de la opción (p. ej. documentos pendientes). */
+  idMoneda?: number;
   saldo?: number;
   nit?: string | null;
 }

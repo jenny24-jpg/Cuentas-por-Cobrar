@@ -222,3 +222,40 @@ export async function remove(id: number): Promise<void> {
     await conn.close();
   }
 }
+/** Clientes y documentos que usan la condición (los documentos ya emitidos fijan sus términos). */
+export async function contarUso(id: number): Promise<{ clientes: number; documentos: number }> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ CLIENTES: number; DOCUMENTOS: number }>(
+      `SELECT (SELECT COUNT(*) FROM CLIENTE WHERE ID_CONDICION = :id) AS CLIENTES,
+              (SELECT COUNT(*) FROM CXC_DOCUMENTOS WHERE ID_CONDICION_CREDITO = :id) AS DOCUMENTOS
+         FROM DUAL`,
+      { id },
+    );
+    return {
+      clientes: Number(result.rows?.[0]?.CLIENTES ?? 0),
+      documentos: Number(result.rows?.[0]?.DOCUMENTOS ?? 0),
+    };
+  } finally {
+    await conn.close();
+  }
+}
+
+/** Otra condición con exactamente los mismos días de crédito, días de gracia y % de mora. */
+export async function existeIgual(
+  terminos: { diasCredito: number; diasGracia: number; porcentajeMora: number },
+  excluirId: number | null,
+): Promise<boolean> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute(
+      `SELECT 1 FROM CXC_CONDICIONES_CREDITO
+        WHERE DIAS_CREDITO = :diasCredito AND DIAS_GRACIA = :diasGracia AND PORCENTAJE_MORA = :porcentajeMora
+          AND (:excluirId IS NULL OR ID_CONDICION <> :excluirId)`,
+      { diasCredito: terminos.diasCredito, diasGracia: terminos.diasGracia, porcentajeMora: terminos.porcentajeMora, excluirId },
+    );
+    return Boolean(result.rows?.length);
+  } finally {
+    await conn.close();
+  }
+}

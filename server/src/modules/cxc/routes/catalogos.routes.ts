@@ -1,13 +1,26 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as catalogosRepository from '../repositories/catalogos.repository';
+import { listSegmentos } from '../repositories/organizacion/cliente.repository';
 import { validarIdsDeRuta } from '../../../shared/idParams';
 
 const router = validarIdsDeRuta(Router());
 
 router.get('/clientes', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const clientes = await catalogosRepository.listClientesActivos(req.query.search as string | undefined);
+    // ?conSaldo=1: solo clientes con documentos pendientes de pago (formulario de pagos).
+    const clientes = await catalogosRepository.listClientesActivos(req.query.search as string | undefined, {
+      conSaldo: req.query.conSaldo === '1',
+    });
     res.json(clientes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Segmentos de cliente (A/B/C/D) con su reducción de mora, desde la base.
+router.get('/segmentos', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(await listSegmentos());
   } catch (err) {
     next(err);
   }

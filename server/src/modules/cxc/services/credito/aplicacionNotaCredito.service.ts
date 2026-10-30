@@ -2,7 +2,6 @@
 import { businessTodayIso } from '../../../../shared/date';
 
 import {
-  createAplicacionNotaCreditoSchema,
   reversarAplicacionNotaCreditoSchema,
   type AplicacionNotaCredito,
 } from '@erp/contracts';
@@ -63,52 +62,18 @@ export async function getOne(
 // CREAR APLICACIÓN DE NOTA DE CRÉDITO
 // =====================================================
 
+/**
+ * No hay aplicación manual de notas de crédito: la nota se aplica a su factura
+ * de referencia en el momento en que un ADMIN distinto de quien la registró la
+ * aprueba (notaCredito.service.ts::aprobar). Aplicarla a mano sería rebajar
+ * deuda sin esa aprobación.
+ */
 export async function create(
-  rawInput: unknown,
+  _rawInput: unknown,
 ): Promise<AplicacionNotaCredito> {
-  const input =
-    createAplicacionNotaCreditoSchema.parse(rawInput);
-
-  // CORRECCIÓN:
-  // Toda aplicación nueva debe utilizar
-  // la fecha actual de Guatemala.
-  //
-  // Se rechazan fechas anteriores y futuras,
-  // incluso si se envían directamente a la API.
-
-  const hoy = businessTodayIso();
-
-  if (input.fechaAplicacion !== hoy) {
-    throw new BadRequestError(
-      'La fecha de aplicación debe ser la fecha actual del sistema (Guatemala). No se permiten fechas anteriores ni futuras.',
-    );
-  }
-
-  // Conservar la validación del empleado
-  // responsable de la operación.
-
-  if (
-    !(await catalogosRepository.empleadoExiste(
-      input.idEmpleado,
-    ))
-  ) {
-    throw new BadRequestError(
-      'El empleado seleccionado no existe',
-    );
-  }
-
-  // Se utiliza la fecha calculada
-  // por el servidor.
-  //
-  // El repositorio conserva sus propias
-  // validaciones y transacciones financieras.
-
-  const id = await repository.create({
-    ...input,
-    fechaAplicacion: hoy,
-  });
-
-  return getOne(id);
+  throw new ConflictError(
+    'Las notas de crédito se aplican automáticamente al aprobarlas en Notas de crédito; no hay aplicación manual.',
+  );
 }
 
 // =====================================================

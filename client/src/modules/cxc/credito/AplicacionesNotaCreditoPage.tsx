@@ -1,24 +1,23 @@
 import { useState } from 'react';
-import { Plus, Search, Undo2 } from 'lucide-react';
-import { DataTable, Button, TextInput, StatusBadge } from '../../../shared/ui-kit';
-import { Modal, TrazabilidadActionModal } from '../../../shared/components';
+import { Search, Undo2 } from 'lucide-react';
+import { DataTable, TextInput, StatusBadge } from '../../../shared/ui-kit';
+import { TrazabilidadActionModal } from '../../../shared/components';
 import { usePaginatedList } from '../../../shared/hooks';
 import { formatDateGT } from '../../../shared/date';
 import type { AplicacionNotaCredito } from '@erp/contracts';
-import { AplicacionNotaCreditoForm } from './components/AplicacionNotaCreditoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const AplicacionesNotaCreditoPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.credito.AplicacionesNotaCreditoPage');
   const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
   const [aReversar, setAReversar] = useState<AplicacionNotaCredito | null>(null);
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<AplicacionNotaCredito>(
     '/cxc/aplicaciones-nota-credito',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   return (
@@ -26,9 +25,8 @@ export const AplicacionesNotaCreditoPage = () => {
       <div className="flex justify-between items-center gap-4">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Nota de Crédito</h1>
-          <p className="text-sm text-slate-500">La NC reduce el saldo únicamente cuando se aplica al documento.</p>
+          <p className="text-sm text-slate-500">Historial de notas de crédito aplicadas (consulta y reversa). Una nota se aplica a su factura automáticamente cuando un administrador la aprueba en Notas de crédito; al reversarla vuelve a quedar por aprobar.</p>
         </div>
-        <Button icon={Plus} onClick={() => setOpen(true)}>Nueva Aplicación</Button>
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -53,8 +51,8 @@ export const AplicacionesNotaCreditoPage = () => {
         emptyText="No hay aplicaciones de notas de crédito registradas"
         columns={[
           { header: 'ID', accessorKey: 'idAplicacionNc' },
-          { header: 'Nota de Crédito', cell: ({ row }: any) => `NC #${row.idNotaCredito}` },
-          { header: 'Documento', cell: ({ row }: any) => `Documento #${row.idDocumento}` },
+          { header: 'Nota de Crédito', cell: ({ row }: any) => row.referenciaNota ?? `Nota #${row.idNotaCredito}` },
+          { header: 'Documento', cell: ({ row }: any) => row.referenciaDocumento ?? `Documento #${row.idDocumento}` },
           { header: 'Monto Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
           { header: 'Fecha de Aplicación', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'Empleado', cell: ({ row }: any) => row.nombreEmpleado || (row.idEmpleado ? `#${row.idEmpleado}` : '—') },
@@ -87,22 +85,14 @@ export const AplicacionesNotaCreditoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
-
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Nueva Aplicación de Nota de Crédito">
-        <AplicacionNotaCreditoForm
-          aplicacion={null}
-          onCancel={() => setOpen(false)}
-          onSuccess={() => { setOpen(false); refetch(); }}
-        />
-      </Modal>
 
       {aReversar && (
         <TrazabilidadActionModal
           title={`Reversar aplicación #${aReversar.idAplicacionNc}`}
-          description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y al disponible de la nota de crédito.`}
+          description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y la nota volverá a quedar por aprobar: para aplicarla otra vez, un administrador debe aprobarla de nuevo.`}
           endpoint={`/cxc/aplicaciones-nota-credito/${aReversar.idAplicacionNc}/reversar`}
           actionLabel="Reversar"
           motivoLabel="Motivo de la reversa"
