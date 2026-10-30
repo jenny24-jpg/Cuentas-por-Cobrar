@@ -8,6 +8,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
       limit: req.query.limit as string | undefined,
       search: req.query.search as string | undefined,
       idEmpleado: req.query.idEmpleado as string | undefined,
+      idSucursal: req.query.idSucursal as string | undefined,
       fecha: req.query.fecha as string | undefined,
       excluirId: req.query.excluirId as string | undefined,
     });
@@ -19,7 +20,18 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 
 export async function porEmpleado(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await rutaService.listRutasPorEmpleado({ search: req.query.search as string | undefined }));
+    res.json(await rutaService.listRutasPorEmpleado({
+      search: req.query.search as string | undefined,
+      idSucursal: req.query.idSucursal as string | undefined,
+    }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function sucursalSugerida(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await rutaService.sugerirSucursal(Number(req.params.id)));
   } catch (err) {
     next(err);
   }

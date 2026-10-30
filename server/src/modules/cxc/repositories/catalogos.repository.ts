@@ -34,14 +34,16 @@ export async function listEmpleadosActivos(): Promise<CatalogoOption[]> {
     // Sin filtro de ESTADO por ahora.
     // EMPLEADO.ESTADO existe, pero todavía no está confirmado
     // qué valor representa "activo".
-    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string | null }>(
-      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO FROM EMPLEADO
+    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string | null; ID_SUCURSAL: number | null }>(
+      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO, ID_SUCURSAL FROM EMPLEADO
        ORDER BY NOMBRE ASC`,
     );
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_EMPLEADO,
       label: `${r.NOMBRE} ${r.APELLIDO ?? ''}`.trim(),
+      // Sucursal del empleado: el formulario de rutas muestra solo los de la sucursal elegida.
+      idSucursal: r.ID_SUCURSAL,
     }));
   } finally {
     await conn.close();

@@ -9,6 +9,8 @@ interface SucursalRow {
   NOMBRE_EMPRESA: string | null;
   NOMBRE: string;
   DIRECCION: string | null;
+  LATITUD: number | null;
+  LONGITUD: number | null;
   ESTADO: string;
 }
 
@@ -19,6 +21,8 @@ function mapRow(row: SucursalRow): Sucursal {
     nombreEmpresa: row.NOMBRE_EMPRESA,
     nombre: row.NOMBRE,
     direccion: row.DIRECCION,
+    latitud: row.LATITUD === null ? null : Number(row.LATITUD),
+    longitud: row.LONGITUD === null ? null : Number(row.LONGITUD),
     estado: row.ESTADO?.trim(),
   };
 }
@@ -28,7 +32,7 @@ function mapRow(row: SucursalRow): Sucursal {
 // sucursal del listado ni causar un falso 404 en findById.
 const SELECT_BASE = `
   SELECT s.ID_SUCURSAL, s.ID_EMPRESA, e.NOMBRE AS NOMBRE_EMPRESA,
-         s.NOMBRE, s.DIRECCION, s.ESTADO
+         s.NOMBRE, s.DIRECCION, s.LATITUD, s.LONGITUD, s.ESTADO
   FROM CXC_SUCURSALES s
   LEFT JOIN CXC_EMPRESAS e ON e.ID_EMPRESA = s.ID_EMPRESA
 `;
@@ -80,13 +84,15 @@ export async function create(input: CreateSucursalInput): Promise<number> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<{ id: number[] }>(
-      `INSERT INTO CXC_SUCURSALES (ID_EMPRESA, NOMBRE, DIRECCION, ESTADO)
-       VALUES (:idEmpresa, :nombre, :direccion, :estado)
+      `INSERT INTO CXC_SUCURSALES (ID_EMPRESA, NOMBRE, DIRECCION, LATITUD, LONGITUD, ESTADO)
+       VALUES (:idEmpresa, :nombre, :direccion, :latitud, :longitud, :estado)
        RETURNING ID_SUCURSAL INTO :id`,
       {
         idEmpresa: input.idEmpresa,
         nombre: input.nombre,
         direccion: input.direccion ?? null,
+        latitud: input.latitud ?? null,
+        longitud: input.longitud ?? null,
         estado: input.estado ?? 'A',
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
@@ -108,6 +114,8 @@ export async function update(id: number, input: UpdateSucursalInput): Promise<vo
   if (input.idEmpresa !== undefined) { fields.push('ID_EMPRESA = :idEmpresa'); binds.idEmpresa = input.idEmpresa; }
   if (input.nombre !== undefined) { fields.push('NOMBRE = :nombre'); binds.nombre = input.nombre; }
   if (input.direccion !== undefined) { fields.push('DIRECCION = :direccion'); binds.direccion = input.direccion; }
+  if (input.latitud !== undefined) { fields.push('LATITUD = :latitud'); binds.latitud = input.latitud; }
+  if (input.longitud !== undefined) { fields.push('LONGITUD = :longitud'); binds.longitud = input.longitud; }
   if (input.estado !== undefined) { fields.push('ESTADO = :estado'); binds.estado = input.estado; }
 
   if (fields.length === 0) {

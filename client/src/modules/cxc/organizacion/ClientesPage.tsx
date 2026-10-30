@@ -80,6 +80,7 @@ export const ClientesPage = () => {
         data={data}
         emptyText={search || estado ? 'Ningún cliente coincide con la búsqueda' : 'No hay clientes registrados'}
         columns={[
+          { header: 'Código', accessorKey: 'codigoCliente', cell: ({ value }: any) => <span className="font-semibold tabular-nums text-slate-800">{value ?? '—'}</span> },
           { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Nombre del cliente', accessorKey: 'nombre', cell: ({ value }: any) => <span className="font-medium text-slate-900">{value}</span> },
           { header: 'Código cobro', accessorKey: 'codigoCobro', cell: ({ value }: any) => <span className="tabular-nums font-medium text-blue-800">{value}</span> },

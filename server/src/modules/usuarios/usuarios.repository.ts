@@ -201,6 +201,8 @@ export interface EmpleadoAdminRow {
   APELLIDO: string | null;
   NOMBRE_COMPLETO: string;
   PUESTO: string | null;
+  ID_SUCURSAL: number | null;
+  NOMBRE_SUCURSAL: string | null;
   EMAIL: string | null;
   TELEFONO: string | null;
   ESTADO: 'A' | 'I';
@@ -209,17 +211,25 @@ export interface EmpleadoAdminRow {
 
 const SELECT_EMPLEADO = `
   SELECT e.ID_EMPLEADO, e.CODIGO_EMPLEADO, e.NOMBRE, e.APELLIDO, TRIM(e.NOMBRE || ' ' || NVL(e.APELLIDO, '')) AS NOMBRE_COMPLETO,
-         e.PUESTO, e.EMAIL, e.TELEFONO, e.ESTADO,
+         e.PUESTO, e.ID_SUCURSAL, s.NOMBRE AS NOMBRE_SUCURSAL, e.EMAIL, e.TELEFONO, e.ESTADO,
          (SELECT MIN(u.USERNAME) FROM SEG_USUARIOS u WHERE u.ID_EMPLEADO = e.ID_EMPLEADO) AS USUARIO_VINCULADO
-    FROM EMPLEADO e`;
+    FROM EMPLEADO e
+    LEFT JOIN CXC_SUCURSALES s ON s.ID_SUCURSAL = e.ID_SUCURSAL`;
 
-export async function listarEmpleados(p: { search: string; offset: number; limit: number }): Promise<{ rows: EmpleadoAdminRow[]; total: number }> {
+export async function listarEmpleados(p: { search: string; idSucursal?: number; offset: number; limit: number }): Promise<{ rows: EmpleadoAdminRow[]; total: number }> {
   const conn = await getConnection();
   try {
-    const filtro = p.search
-      ? `WHERE UPPER(e.NOMBRE || ' ' || NVL(e.APELLIDO, '')) LIKE :q OR UPPER(NVL(e.CODIGO_EMPLEADO, ' ')) LIKE :q OR UPPER(NVL(e.PUESTO, ' ')) LIKE :q`
-      : '';
-    const binds: Record<string, string> = p.search ? { q: `%${p.search.toUpperCase()}%` } : {};
+    const condiciones: string[] = [];
+    const binds: Record<string, string | number> = {};
+    if (p.search) {
+      condiciones.push(`(UPPER(e.NOMBRE || ' ' || NVL(e.APELLIDO, '')) LIKE :q OR UPPER(NVL(e.CODIGO_EMPLEADO, ' ')) LIKE :q OR UPPER(NVL(e.PUESTO, ' ')) LIKE :q)`);
+      binds.q = `%${p.search.toUpperCase()}%`;
+    }
+    if (p.idSucursal) {
+      condiciones.push('e.ID_SUCURSAL = :idSucursal');
+      binds.idSucursal = p.idSucursal;
+    }
+    const filtro = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
     const total = await conn.execute<{ N: number }>(`SELECT COUNT(*) AS N FROM EMPLEADO e ${filtro}`, binds);
     const r = await conn.execute<EmpleadoAdminRow>(
       `${SELECT_EMPLEADO} ${filtro} ORDER BY e.ESTADO ASC, e.NOMBRE ASC, e.APELLIDO ASC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
@@ -241,7 +251,34 @@ export async function obtenerEmpleado(id: number): Promise<EmpleadoAdminRow | nu
   }
 }
 
-/** Todos los códigos existentes, para calcular el siguiente CXC-EMP-### y detectar repetidos. */
+/** Sucursal activa: debe existir y estar activa para poder asignarse a un empleado. */
+export async function sucursalActiva(idSucursal: number): Promise<boolean | null> {
+  const conn = await getConnection();
+  try {
+    const r = await conn.execute<{ ESTADO: string }>('SELECT ESTADO FROM CXC_SUCURSALES WHERE ID_SUCURSAL = :id', { id: idSucursal });
+    return r.rows?.length ? String(r.rows[0].ESTADO).trim() === 'A' : null;
+  } finally {
+    await conn.close();
+  }
+}
+
+/** Rutas abiertas del empleado que pertenecen a una sucursal distinta de la indicada. */
+export async function rutasAbiertasDeOtraSucursal(idEmpleado: number, idSucursal: number): Promise<number> {
+  const conn = await getConnection();
+  try {
+    const r = await conn.execute<{ N: number }>(
+      `SELECT COUNT(*) AS N FROM CXC_RUTAS
+        WHERE ID_EMPLEADO = :idEmpleado AND TRIM(ESTADO) IN ('PLANIFICADA', 'EN_PROCESO')
+          AND (ID_SUCURSAL IS NULL OR ID_SUCURSAL <> :idSucursal)`,
+      { idEmpleado, idSucursal },
+    );
+    return Number(r.rows?.[0]?.N ?? 0);
+  } finally {
+    await conn.close();
+  }
+}
+
+/** Todos los códigos existentes, para calcular el siguiente EMP-###. */
 export async function codigosEmpleado(): Promise<string[]> {
   const conn = await getConnection();
   try {
@@ -269,7 +306,7 @@ export async function existeEmpleadoConNombre(nombre: string, apellido: string, 
 }
 
 export interface EmpleadoDatos {
-  codigo: string; nombre: string; apellido: string | null; puesto: string | null;
+  codigo: string; nombre: string; apellido: string | null; puesto: string | null; idSucursal: number;
   email: string | null; telefono: string | null; estado: 'A' | 'I';
 }
 
@@ -277,8 +314,8 @@ export async function crearEmpleado(d: EmpleadoDatos): Promise<number> {
   const conn = await getConnection();
   try {
     const r = await conn.execute<{ id: number[] }>(
-      `INSERT INTO EMPLEADO (CODIGO_EMPLEADO, NOMBRE, APELLIDO, PUESTO, EMAIL, TELEFONO, ESTADO)
-       VALUES (:codigo, :nombre, :apellido, :puesto, :email, :telefono, :estado)
+      `INSERT INTO EMPLEADO (CODIGO_EMPLEADO, NOMBRE, APELLIDO, PUESTO, ID_SUCURSAL, EMAIL, TELEFONO, ESTADO)
+       VALUES (:codigo, :nombre, :apellido, :puesto, :idSucursal, :email, :telefono, :estado)
        RETURNING ID_EMPLEADO INTO :id`,
       { ...d, id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER } },
     );
@@ -297,7 +334,7 @@ export async function actualizarEmpleado(id: number, d: EmpleadoDatos): Promise<
   try {
     await conn.execute(
       `UPDATE EMPLEADO SET CODIGO_EMPLEADO = :codigo, NOMBRE = :nombre, APELLIDO = :apellido, PUESTO = :puesto,
-              EMAIL = :email, TELEFONO = :telefono, ESTADO = :estado WHERE ID_EMPLEADO = :id`,
+              ID_SUCURSAL = :idSucursal, EMAIL = :email, TELEFONO = :telefono, ESTADO = :estado WHERE ID_EMPLEADO = :id`,
       { ...d, id },
     );
     await conn.commit();

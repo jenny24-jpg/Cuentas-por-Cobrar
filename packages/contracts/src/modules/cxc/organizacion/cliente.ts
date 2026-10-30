@@ -15,6 +15,8 @@ export function codigoCobroCliente(idCliente: number): string {
 /** Cliente con su condición de pago (CLIENTE.ID_CONDICION → CXC_CONDICIONES_CREDITO). */
 export const clienteSchema = z.object({
   idCliente: z.number().int(),
+  /** Código propio (CLI-00001): lo genera el servidor y no se edita. */
+  codigoCliente: z.string().nullable(),
   nombre: z.string(),
   nit: z.string().nullable(),
   direccion: z.string().nullable(),
