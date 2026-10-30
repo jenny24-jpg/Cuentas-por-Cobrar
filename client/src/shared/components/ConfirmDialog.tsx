@@ -11,14 +11,11 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   variant?: 'danger' | 'primary';
   isLoading?: boolean;
+  /** Mensaje opcional que se muestra dentro del modal si falla la operación. */
+  errorMessage?: string | null;
 }
 
-/**
- * Confirmación estandarizada para acciones irreversibles (eliminar empresa,
- * eliminar ruta, eliminar gestión, eliminar convenio, etc.). Reutilizar en
- * vez de un window.confirm() nativo o un modal de confirmación distinto
- * por pantalla.
- */
+/** Confirmación reutilizable para operaciones sensibles. */
 export const ConfirmDialog = ({
   isOpen,
   onClose,
@@ -28,8 +25,9 @@ export const ConfirmDialog = ({
   confirmLabel = 'Confirmar',
   variant = 'danger',
   isLoading = false,
+  errorMessage,
 }: ConfirmDialogProps) => {
-  // Escape cierra solo esta confirmación, no el modal de formulario que esté debajo.
+  // Escape cierra solo esta confirmación, no el formulario de fondo.
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -45,7 +43,19 @@ export const ConfirmDialog = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <p className="text-sm text-slate-600">{description}</p>
-      <div className="flex justify-end gap-2 mt-6">
+
+      {errorMessage && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mt-4 max-h-56 overflow-y-auto whitespace-pre-line wrap-break-word rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800"
+        >
+          <p className="mb-1 font-semibold">No se pudo completar la operación</p>
+          {errorMessage}
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose} disabled={isLoading}>
           Cancelar
         </Button>

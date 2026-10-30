@@ -12,4 +12,6 @@ export interface CatalogoOption {
   idMoneda?: number;
   saldo?: number;
   nit?: string | null;
+  /** Sucursal a la que pertenece (empleados). */
+  idSucursal?: number | null;
 }

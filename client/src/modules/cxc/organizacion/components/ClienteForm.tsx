@@ -145,6 +145,15 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
       )}
 
       <TextInput
+        label="Código de cliente"
+        isReadOnly
+        disabled
+        value={cliente?.codigoCliente ?? ''}
+        placeholder="Se asigna automáticamente (CLI-00000)"
+        helperText="Lo genera el sistema y no se puede cambiar."
+      />
+
+      <TextInput
         label="Nombre del cliente"
         required
         maxLength={200}

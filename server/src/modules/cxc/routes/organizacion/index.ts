@@ -43,10 +43,13 @@ router.delete('/sucursales/:id', sucursalController.remove);
 // --- Rutas ---
 router.get('/rutas', rutaController.list);
 router.get('/rutas-por-empleado', rutaController.porEmpleado);
+router.get('/rutas/:id/sucursal-sugerida', rutaController.sucursalSugerida);
 router.get('/rutas/:id', rutaController.getOne);
 router.post('/rutas', rutaController.create);
 router.patch('/rutas/:id', rutaController.update);
+router.post('/rutas/:id/finalizar', rutaController.finalizar);
 router.delete('/rutas/:id', rutaController.remove);
+
 
 // --- Paradas (detalle) de una ruta, anidadas bajo la ruta ---
 router.get('/rutas/:id/detalle', rutaDetalleController.listByRuta);

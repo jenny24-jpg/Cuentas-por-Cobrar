@@ -178,18 +178,20 @@ export async function bitacora(q: { page?: unknown; limit?: unknown; search?: un
 
 const aEmpleado = (r: repo.EmpleadoAdminRow): EmpleadoAdmin => ({
   idEmpleado: r.ID_EMPLEADO, codigo: r.CODIGO_EMPLEADO, nombre: r.NOMBRE, apellido: r.APELLIDO, nombreCompleto: r.NOMBRE_COMPLETO,
-  puesto: r.PUESTO, email: r.EMAIL, telefono: r.TELEFONO, estado: r.ESTADO, usuarioVinculado: r.USUARIO_VINCULADO,
+  puesto: r.PUESTO, idSucursal: r.ID_SUCURSAL, nombreSucursal: r.NOMBRE_SUCURSAL,
+  email: r.EMAIL, telefono: r.TELEFONO, estado: r.ESTADO, usuarioVinculado: r.USUARIO_VINCULADO,
 });
 
-/** Siguiente código libre con el formato CXC-EMP-###. */
+/** Siguiente código libre con el formato EMP-### (reconoce también el formato anterior CXC-EMP-###). */
 function siguienteCodigo(codigos: string[]): string {
-  const max = codigos.reduce((m, c) => { const n = /^CXC-EMP-(\d+)$/.exec(c); return n ? Math.max(m, Number(n[1])) : m; }, 0);
-  return `CXC-EMP-${String(max + 1).padStart(3, '0')}`;
+  const max = codigos.reduce((m, c) => { const n = /^(?:CXC-)?EMP-(\d+)$/.exec(c); return n ? Math.max(m, Number(n[1])) : m; }, 0);
+  return `EMP-${String(max + 1).padStart(3, '0')}`;
 }
 
-export async function listarEmpleados(q: { page?: unknown; limit?: unknown; search?: unknown }): Promise<PaginatedResponse<EmpleadoAdmin>> {
+export async function listarEmpleados(q: { page?: unknown; limit?: unknown; search?: unknown; idSucursal?: unknown }): Promise<PaginatedResponse<EmpleadoAdmin>> {
   const { page, limit, offset } = paginar(q.page, q.limit);
-  const { rows, total } = await repo.listarEmpleados({ search: String(q.search ?? '').trim().slice(0, 60), offset, limit });
+  const idSucursal = Number(q.idSucursal) > 0 ? Number(q.idSucursal) : undefined;
+  const { rows, total } = await repo.listarEmpleados({ search: String(q.search ?? '').trim().slice(0, 60), idSucursal, offset, limit });
   return { data: rows.map(aEmpleado), meta: buildPaginationMeta(total, page, limit) };
 }
 
@@ -204,19 +206,17 @@ async function validarEmpleadoDatos(body: unknown, idActual: number): Promise<re
     throw campoInvalido('nombre', 'Ya existe un empleado con ese nombre completo. Agrega el segundo apellido u otro dato para distinguirlos.');
   }
 
+  // La sucursal es obligatoria, debe existir y estar activa.
+  const activa = await repo.sucursalActiva(d.idSucursal);
+  if (activa === null) throw campoInvalido('idSucursal', 'La sucursal seleccionada no existe.');
+  if (!activa) throw campoInvalido('idSucursal', 'La sucursal seleccionada está inactiva.');
+
+  // El código (EMP-###) lo asigna el sistema y no se edita: se conserva el que ya tenía.
   const codigos = await repo.codigosEmpleado();
-  let codigo = d.codigo?.trim() || '';
-  if (codigo) {
-    const actual = idActual ? (await repo.obtenerEmpleado(idActual))?.CODIGO_EMPLEADO : null;
-    if (codigo.toUpperCase() !== (actual ?? '').toUpperCase() && codigos.some((c) => c.toUpperCase() === codigo.toUpperCase())) {
-      throw campoInvalido('codigo', `El código "${codigo}" ya lo tiene otro empleado.`);
-    }
-  } else {
-    codigo = idActual ? ((await repo.obtenerEmpleado(idActual))?.CODIGO_EMPLEADO ?? siguienteCodigo(codigos)) : siguienteCodigo(codigos);
-  }
+  const codigo = idActual ? ((await repo.obtenerEmpleado(idActual))?.CODIGO_EMPLEADO ?? siguienteCodigo(codigos)) : siguienteCodigo(codigos);
 
   return {
-    codigo, nombre: d.nombre, apellido, puesto: d.puesto?.trim() || null,
+    codigo, nombre: d.nombre, apellido, puesto: d.puesto?.trim() || null, idSucursal: d.idSucursal,
     email: d.email?.trim() || null, telefono: d.telefono?.trim() || null, estado: d.estado ?? 'A',
   };
 }
@@ -234,6 +234,13 @@ export async function editarEmpleado(id: number, body: unknown): Promise<Emplead
   const datos = await validarEmpleadoDatos(body, id);
   if (datos.estado === 'I' && actual.ESTADO === 'A' && actual.USUARIO_VINCULADO) {
     throw campoInvalido('estado', `No se puede inactivar: está vinculado al usuario "${actual.USUARIO_VINCULADO}". Desvincúlalo primero desde Usuarios.`);
+  }
+  // Si cambia de sucursal, sus rutas abiertas deben seguir siendo de su sucursal.
+  if (datos.idSucursal !== actual.ID_SUCURSAL) {
+    const abiertas = await repo.rutasAbiertasDeOtraSucursal(id, datos.idSucursal);
+    if (abiertas > 0) {
+      throw campoInvalido('idSucursal', `No se puede cambiar de sucursal: tiene ${abiertas} ruta(s) abierta(s) de otra sucursal. Ciérralas o reasígnalas primero.`);
+    }
   }
   await repo.actualizarEmpleado(id, datos);
   return aEmpleado((await repo.obtenerEmpleado(id))!);

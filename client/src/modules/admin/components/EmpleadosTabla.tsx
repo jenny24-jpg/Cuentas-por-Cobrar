@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Pencil, Plus, Search } from 'lucide-react';
 import type { EmpleadoAdmin } from '@erp/contracts';
-import { Button, DataTable, TextInput } from '../../../shared/ui-kit';
+import { Button, DataTable, Select, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSucursales } from '../../../shared/hooks';
 import { EmpleadoForm } from './EmpleadoForm';
 import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
@@ -16,8 +16,10 @@ export function EmpleadosTabla() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useTamanoPagina('admin.components.EmpleadosTabla');
   const [search, setSearch] = useState('');
+  const [idSucursal, setIdSucursal] = useState('');
+  const sucursales = useSucursales(false);
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: EmpleadoAdmin } | null>(null);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<EmpleadoAdmin>('/admin/usuarios/empleados/lista', { page, limit: pageSize, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<EmpleadoAdmin>('/admin/usuarios/empleados/lista', { page, limit: pageSize, search, idSucursal: idSucursal || undefined });
 
   return (
     <>
@@ -25,6 +27,9 @@ export function EmpleadosTabla() {
         <div className="bg-white p-4 rounded-lg border border-slate-200 flex-1 min-w-[260px]">
           <TextInput icon={Search} maxLength={100} placeholder="Buscar por nombre, código o puesto..." value={search}
             onChange={(e: any) => { setSearch(e.target.value); setPage(1); }} className="max-w-sm" />
+          <Select label="Sucursal" value={idSucursal} helperText="" className="mt-3 max-w-sm"
+            onChange={(e: any) => { setIdSucursal(e.target.value); setPage(1); }}
+            options={[{ value: '', label: 'Todas las sucursales' }, ...sucursales.map((s) => ({ value: s.id, label: s.nombre }))]} />
         </div>
         <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo empleado</Button>
       </div>
@@ -45,6 +50,12 @@ export function EmpleadosTabla() {
                 <p className="text-xs text-slate-500">{[row.puesto, row.email, row.telefono].filter(Boolean).join(' · ') || 'Sin más datos'}</p>
               </div>
             ),
+          },
+          {
+            header: 'Sucursal',
+            cell: ({ row }: { row: EmpleadoAdmin }) => row.nombreSucursal
+              ? <span className="text-sm text-slate-700">{row.nombreSucursal}</span>
+              : <Chip className="bg-amber-50 text-amber-800 ring-amber-200">Sin sucursal</Chip>,
           },
           {
             header: 'Usuario de acceso',
