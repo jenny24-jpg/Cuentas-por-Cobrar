@@ -67,6 +67,21 @@ export const asignarDocumentoRutaSchema = z.object({
     error:
       'Confirma que la ubicación del mapa corresponde a la dirección',
   }),
+
+  /**
+   * Excepción: asignar un documento de un cliente fuera de la zona de la ruta.
+   * Exige un motivo, que queda en la bitácora.
+   */
+  fueraZona: z.boolean().optional(),
+  motivoFueraZona: z.string().trim().max(250, 'El motivo no puede superar 250 caracteres').optional(),
+}).superRefine((data, ctx) => {
+  if (data.fueraZona && (data.motivoFueraZona ?? '').length < 10) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['motivoFueraZona'],
+      message: 'Indica por qué se asigna un cliente fuera de la zona (mínimo 10 caracteres)',
+    });
+  }
 });
 
 // =====================================================
@@ -352,6 +367,9 @@ export interface RutaPlanificacion {
   ESTADO: string;
   RADIO_KM: number;
 
+  /** Zona de cobro de la ruta (null en rutas anteriores a las zonas). */
+  ZONA: { ID_ZONA: number; NOMBRE: string } | null;
+
   /**
    * Primera parada con ubicación,
    * utilizada como referencia del radio.
@@ -425,6 +443,21 @@ export interface RutaDocumentoPendiente {
    * Ejemplo: CR-00012.
    */
   CODIGO_COBRO: string;
+
+  ID_CLIENTE: number;
+
+  /** Zona del cliente (CXC_CLIENTE_UBICACION); null si no tiene. */
+  ZONA_CLIENTE: string | null;
+
+  /** 1 si el cliente pertenece a la zona de la ruta (o la ruta no tiene zona). */
+  EN_ZONA: number;
+
+  /** Días desde el vencimiento (negativo: aún no vence). */
+  DIAS_VENCIDO: number;
+
+  /** Punto del cliente ya registrado, para ubicarlo en el mapa sin buscarlo. */
+  LATITUD_CLIENTE: number | null;
+  LONGITUD_CLIENTE: number | null;
 }
 
 // =====================================================

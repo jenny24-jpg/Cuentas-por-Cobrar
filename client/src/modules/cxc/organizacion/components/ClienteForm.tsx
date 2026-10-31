@@ -9,7 +9,7 @@ import {
   validateRequiredSelect,
   type ValidationErrors,
 } from '../../../../shared/validation';
-import { esNitValido, normalizarNit, type Cliente, type DocumentoCatalogoOption } from '@erp/contracts';
+import { esNitValido, normalizarNit, type Cliente, type DocumentoCatalogoOption, type ZonaCobro } from '@erp/contracts';
 
 const ESTADOS_CLIENTE = [
   { value: 'A', label: 'Activo' },
@@ -42,6 +42,11 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
   const [idSegmento, setIdSegmento] = useState(cliente?.idSegmento ? String(cliente.idSegmento) : '');
   const [segmentos, setSegmentos] = useState<Array<{ id: number; codigo: string; nombre: string; reduccionMora: number }>>([]);
 
+  // Zona de cobro: define en qué rutas aparece el cliente. Al guardar queda confirmada.
+  const [idZona, setIdZona] = useState(cliente?.idZona ? String(cliente.idZona) : '');
+  const [zonas, setZonas] = useState<ZonaCobro[]>([]);
+  const zonaPorConfirmar = Boolean(isEditing && cliente?.idZona && !cliente?.zonaConfirmada);
+
   useEffect(() => {
     apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/condiciones-credito')
       .then(setCondiciones)
@@ -49,6 +54,9 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     apiClient.get<typeof segmentos>('/cxc/catalogos/segmentos')
       .then(setSegmentos)
       .catch(() => setSegmentos([]));
+    apiClient.get<ZonaCobro[]>('/cxc/catalogos/zonas-cobro')
+      .then(setZonas)
+      .catch(() => setZonas([]));
   }, []);
 
   // Si la condición actual del cliente ya no está activa, se conserva como opción para no perderla.
@@ -84,8 +92,11 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
 
     const condErr = validateRequiredSelect(idCondicion, 'una condición de pago');
     if (condErr) next.idCondicion = condErr;
+
+    const zonaErr = validateRequiredSelect(idZona, 'la zona de cobro');
+    if (zonaErr) next.idZona = zonaErr;
     return next;
-  }, [nombre, nit, nitCambio, direccion, idCondicion]);
+  }, [nombre, nit, nitCambio, direccion, idCondicion, idZona]);
 
   const huboCambios = !isEditing ||
     nombre.trim() !== cliente!.nombre ||
@@ -93,7 +104,9 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     direccion.trim() !== (cliente!.direccion ?? '') ||
     idCondicion !== String(cliente!.idCondicion ?? '') ||
     estado !== (cliente!.estado === 'I' ? 'I' : 'A') ||
-    idSegmento !== (cliente!.idSegmento ? String(cliente!.idSegmento) : '');
+    idSegmento !== (cliente!.idSegmento ? String(cliente!.idSegmento) : '') ||
+    idZona !== (cliente!.idZona ? String(cliente!.idZona) : '') ||
+    zonaPorConfirmar;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +115,7 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     setErrors({});
     setIsSubmitting(true);
     try {
-      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), direccion: direccion.trim(), idCondicion: Number(idCondicion), estado, idSegmento: idSegmento ? Number(idSegmento) : null };
+      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), direccion: direccion.trim(), idCondicion: Number(idCondicion), estado, idSegmento: idSegmento ? Number(idSegmento) : null, idZona: idZona ? Number(idZona) : null };
       if (isEditing) await apiClient.patch(`/cxc/clientes/${cliente!.idCliente}`, payload);
       else await apiClient.post('/cxc/clientes', payload);
       onSuccess();
@@ -232,6 +245,25 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
         ]}
         helperText="El segmento resta puntos al porcentaje de mora del cliente como beneficio."
       />
+
+      <Select
+        label="Zona de cobro"
+        required
+        value={idZona}
+        onChange={(e: any) => setIdZona(e.target.value)}
+        options={zonas.map((z) => ({ value: String(z.id), label: z.zona ? z.nombre : `${z.nombre} (todo el municipio)` }))}
+        placeholder="Selecciona la zona"
+        error={errorFor('idZona', idZona)}
+        helperText={zonas.length === 0
+          ? 'No hay zonas de cobro registradas en la base. Solicita al equipo DBA que las cargue.'
+          : 'Define en qué rutas de cobro aparece el cliente. Elige la zona más específica de su dirección.'}
+      />
+      {zonaPorConfirmar && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+          La zona se propuso automáticamente a partir de la dirección. Revísala y guarda para confirmarla.
+        </p>
+      )}
 
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>

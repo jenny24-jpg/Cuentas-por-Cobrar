@@ -18,6 +18,9 @@ export const rutaSchema = z.object({
   observaciones: z.string(),
   /** Radio máximo (km) de las paradas respecto a la primera parada. */
   radioKm: z.number(),
+  /** Zona de cobro de la ruta (null en rutas anteriores a las zonas). */
+  idZona: z.number().int().nullable().optional(),
+  nombreZona: z.string().nullable().optional(),
 });
 export type Ruta = z.infer<typeof rutaSchema>;
 
@@ -38,6 +41,8 @@ export const createRutaSchema = z.object({
   estado: z.enum(ESTADOS_RUTA).default('PLANIFICADA'),
   observaciones: optionalTrimmedText('Las observaciones', 500),
   radioKm: radioKmSchema.default(REGLAS_RUTA.radioKmDefecto),
+  /** Territorio de la ruta: limita los documentos que se pueden asignar. */
+  idZona: z.number({ error: 'Selecciona la zona de cobro' }).int().positive('Selecciona la zona de cobro'),
 });
 export type CreateRutaInput = z.infer<typeof createRutaSchema>;
 
@@ -77,5 +82,6 @@ export const updateRutaSchema = z.object({
   estado: z.enum(ESTADOS_RUTA).optional(),
   observaciones: optionalTrimmedText('Las observaciones', 500),
   radioKm: radioKmSchema.optional(),
+  idZona: z.number().int().positive('Selecciona la zona de cobro').optional(),
 });
 export type UpdateRutaInput = z.infer<typeof updateRutaSchema>;

@@ -19,6 +19,9 @@ interface Row {
   ID_SEGMENTO: number | null;
   SEGMENTO: string | null;
   REDUCCION_MORA: number | null;
+  ID_ZONA: number | null;
+  ZONA: string | null;
+  ZONA_CONFIRMADA: string | null;
 }
 
 const mapRow = (r: Row): Cliente => ({
@@ -36,6 +39,9 @@ const mapRow = (r: Row): Cliente => ({
   idSegmento: r.ID_SEGMENTO,
   segmento: r.SEGMENTO,
   reduccionMora: r.REDUCCION_MORA,
+  idZona: r.ID_ZONA,
+  zona: r.ZONA,
+  zonaConfirmada: r.ZONA_CONFIRMADA === 'S',
 });
 
 const SELECT_BASE = `
@@ -43,12 +49,45 @@ const SELECT_BASE = `
          'CR-' || LPAD(c.ID_CLIENTE, 5, '0') AS CODIGO_COBRO, c.ID_CONDICION,
          cc.DIAS_CREDITO, cc.DIAS_GRACIA, cc.PORCENTAJE_MORA,
          c.ESTADO,
-         cs.ID_SEGMENTO, sg.CODIGO AS SEGMENTO, sg.REDUCCION_MORA
+         cs.ID_SEGMENTO, sg.CODIGO AS SEGMENTO, sg.REDUCCION_MORA,
+         cu.ID_ZONA, zc.NOMBRE AS ZONA, cu.CONFIRMADA AS ZONA_CONFIRMADA
     FROM CLIENTE c
     LEFT JOIN CXC_CONDICIONES_CREDITO cc ON cc.ID_CONDICION = c.ID_CONDICION
     LEFT JOIN CXC_CLIENTE_SEGMENTO cs ON cs.ID_CLIENTE = c.ID_CLIENTE
     LEFT JOIN CXC_SEGMENTOS_CLIENTE sg ON sg.ID_SEGMENTO = cs.ID_SEGMENTO
+    LEFT JOIN CXC_CLIENTE_UBICACION cu ON cu.ID_CLIENTE = c.ID_CLIENTE
+    LEFT JOIN CXC_ZONAS_COBRO zc ON zc.ID_ZONA = cu.ID_ZONA
 `;
+
+/**
+ * Guarda la zona de cobro del cliente en CXC_CLIENTE_UBICACION. Elegida por un usuario,
+ * queda confirmada (CONFIRMADA = 'S'). null la quita; si tampoco hay punto en el mapa,
+ * se borra la fila (la tabla exige zona o punto). Sin commit.
+ */
+async function guardarZona(conn: Connection, idCliente: number, idZona: number | null | undefined, idUsuario?: number) {
+  if (idZona === undefined) return;
+  if (idZona === null) {
+    await conn.execute(`DELETE FROM CXC_CLIENTE_UBICACION WHERE ID_CLIENTE = :idCliente AND LATITUD IS NULL`, { idCliente });
+    await conn.execute(
+      `UPDATE CXC_CLIENTE_UBICACION SET ID_ZONA = NULL, FECHA_ACTUALIZACION = SYSDATE WHERE ID_CLIENTE = :idCliente`,
+      { idCliente });
+    return;
+  }
+  const zona = await conn.execute<{ ESTADO: string }>(
+    `SELECT ESTADO FROM CXC_ZONAS_COBRO WHERE ID_ZONA = :idZona`, { idZona });
+  if (!zona.rows?.length) throw new BadRequestError('La zona de cobro seleccionada no existe.');
+  if (String(zona.rows[0].ESTADO).trim() !== 'A') throw new BadRequestError('La zona de cobro seleccionada está inactiva.');
+  await conn.execute(
+    `MERGE INTO CXC_CLIENTE_UBICACION u
+     USING (SELECT :idCliente AS ID_CLIENTE, :idZona AS ID_ZONA, :idUsuario AS ID_USUARIO FROM DUAL) n
+        ON (u.ID_CLIENTE = n.ID_CLIENTE)
+      WHEN MATCHED THEN UPDATE SET u.ID_ZONA = n.ID_ZONA, u.CONFIRMADA = 'S',
+           u.ID_USUARIO_ACTUALIZA = n.ID_USUARIO, u.FECHA_ACTUALIZACION = SYSDATE
+      WHEN NOT MATCHED THEN INSERT (ID_CLIENTE, ID_ZONA, CONFIRMADA, ID_USUARIO_ACTUALIZA)
+           VALUES (n.ID_CLIENTE, n.ID_ZONA, 'S', n.ID_USUARIO)`,
+    { idCliente, idZona, idUsuario: idUsuario ?? null },
+  );
+}
 
 /**
  * Guarda el segmento del cliente en CXC_CLIENTE_SEGMENTO (no se altera CLIENTE,
@@ -213,7 +252,7 @@ async function siguienteCodigoCliente(conn: Connection): Promise<string> {
 }
 
 /** Crea el cliente; el ID lo asigna la columna identity y el código (CLI-00001) lo genera el servidor. */
-export async function create(input: CreateClienteInput): Promise<number> {
+export async function create(input: CreateClienteInput, idUsuario?: number): Promise<number> {
   const conn = await getConnection();
   try {
     await validarCondicion(conn, input.idCondicion, null);
@@ -233,6 +272,7 @@ export async function create(input: CreateClienteInput): Promise<number> {
         const idCliente = result.outBinds!.id[0];
         // El segmento va en la misma transacción que el alta del cliente.
         await guardarSegmento(conn, idCliente, input.idSegmento);
+        await guardarZona(conn, idCliente, input.idZona, idUsuario);
         await conn.commit();
         return idCliente;
       } catch (err) {
@@ -254,7 +294,7 @@ export async function create(input: CreateClienteInput): Promise<number> {
  * Bloquea el cliente, exige una condición existente (activa, salvo que sea la que ya
  * tenía) y rechaza un NIT que ya use otro cliente (la base no admite NIT repetidos, ni CF).
  */
-export async function update(id: number, input: UpdateClienteInput & { nit: string }): Promise<void> {
+export async function update(id: number, input: UpdateClienteInput & { nit: string }, idUsuario?: number): Promise<void> {
   const conn = await getConnection();
   try {
     const actual = await conn.execute<{ ID_CONDICION: number | null }>(
@@ -271,6 +311,7 @@ export async function update(id: number, input: UpdateClienteInput & { nit: stri
       { nombre: input.nombre, nit: input.nit, direccion: input.direccion, idCondicion: input.idCondicion, estado: input.estado, id },
     );
     await guardarSegmento(conn, id, input.idSegmento);
+    await guardarZona(conn, id, input.idZona, idUsuario);
     await conn.commit();
   } catch (err) {
     await conn.rollback();

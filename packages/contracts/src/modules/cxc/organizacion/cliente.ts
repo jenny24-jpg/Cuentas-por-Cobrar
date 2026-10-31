@@ -30,6 +30,11 @@ export const clienteSchema = z.object({
   idSegmento: z.number().int().nullable().optional(),
   segmento: z.string().nullable().optional(),
   reduccionMora: z.number().nullable().optional(),
+  // Zona de cobro (CXC_CLIENTE_UBICACION): define en qué rutas aparece.
+  idZona: z.number().int().nullable().optional(),
+  zona: z.string().nullable().optional(),
+  /** false = zona propuesta automáticamente a partir de la dirección; falta confirmarla. */
+  zonaConfirmada: z.boolean().optional(),
 });
 export type Cliente = z.infer<typeof clienteSchema>;
 
@@ -68,6 +73,8 @@ export const updateClienteSchema = z.object({
   estado: z.enum(ESTADOS_CLIENTE, { error: 'El estado debe ser Activo (A) o Inactivo (I)' }),
   /** Segmento de los registrados en la base; null = sin segmento (sin beneficio). */
   idSegmento: z.number().int().positive('Selecciona un segmento válido').nullable().optional(),
+  /** Zona de cobro de las registradas en la base; al guardarla queda confirmada. */
+  idZona: z.number().int().positive('Selecciona una zona válida').nullable().optional(),
 });
 export type UpdateClienteInput = z.infer<typeof updateClienteSchema>;
 

@@ -12,6 +12,7 @@ const operacionRepo = vi.hoisted(() => ({ resumen: vi.fn(), pendientes: vi.fn(),
 const aplicacionService = vi.hoisted(() => ({ createAplicacionPago: vi.fn(), getAplicacionPago: vi.fn() }));
 const pagoRepo = vi.hoisted(() => ({ cobrarEnRuta: vi.fn() }));
 const catalogos = vi.hoisted(() => ({ listFormasPagoActivas: vi.fn() }));
+const zonaRepo = vi.hoisted(() => ({ findActiva: vi.fn(), listActivas: vi.fn() }));
 vi.mock('../../../server/src/modules/cxc/repositories/organizacion/cliente.repository', () => clienteRepo);
 vi.mock('../../../server/src/modules/cxc/repositories/organizacion/empresa.repository', () => empresaRepo);
 vi.mock('../../../server/src/modules/cxc/repositories/organizacion/sucursal.repository', () => sucursalRepo);
@@ -21,6 +22,7 @@ vi.mock('../../../server/src/modules/cxc/repositories/organizacion/rutaOperacion
 vi.mock('../../../server/src/modules/cxc/services/pagos/aplicacionPago.service', () => aplicacionService);
 vi.mock('../../../server/src/modules/cxc/repositories/pagos/pago.repository', () => pagoRepo);
 vi.mock('../../../server/src/modules/cxc/repositories/catalogos.repository', () => catalogos);
+vi.mock('../../../server/src/modules/cxc/repositories/organizacion/zonaCobro.repository', () => zonaRepo);
 
 import * as clientes from '../../../server/src/modules/cxc/services/organizacion/cliente.service';
 import * as empresas from '../../../server/src/modules/cxc/services/organizacion/empresa.service';
@@ -62,15 +64,21 @@ describe('cliente.service', () => {
   });
   it('crear: NIT válido se guarda con formato; CF se guarda como CF', async () => {
     await clientes.createCliente(datos({ nit: '12345679' }));
-    expect(clienteRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ nit: '1234567-9' }));
+    expect(clienteRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ nit: '1234567-9' }), undefined);
     await clientes.createCliente(datos({ nit: 'c f' }));
-    expect(clienteRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ nit: 'CF' }));
+    expect(clienteRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ nit: 'CF' }), undefined);
+  });
+  it('la zona viaja con el usuario que la confirma', async () => {
+    await clientes.updateCliente(1, datos({ idZona: 71 }), 4);
+    expect(clienteRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ idZona: 71 }), 4);
+    await clientes.createCliente(datos({ idZona: 71 }), 4);
+    expect(clienteRepo.create).toHaveBeenLastCalledWith(expect.objectContaining({ idZona: 71 }), 4);
   });
   it('crear: nombre sin letras → error de validación', () => expect(clientes.createCliente(datos({ nombre: '12345' }))).rejects.toThrow(/letras/));
   it('editar: un NIT heredado inválido se conserva si no se cambia', async () => {
     clienteRepo.findById.mockResolvedValue({ ...cliente, nit: '111-1' });
     await clientes.updateCliente(1, datos({ nit: '1111' }));
-    expect(clienteRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ nit: '111-1' }));
+    expect(clienteRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ nit: '111-1' }), undefined);
   });
   it('editar: cambiar a un NIT inválido → 400', async () => {
     await expect(clientes.updateCliente(1, datos({ nit: '1234567-1' }))).rejects.toMatchObject({ statusCode: 400 });
@@ -78,7 +86,7 @@ describe('cliente.service', () => {
   });
   it('editar: cambiar a un NIT válido lo formatea', async () => {
     await clientes.updateCliente(1, datos());
-    expect(clienteRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ nit: '1234567-9' }));
+    expect(clienteRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ nit: '1234567-9' }), undefined);
   });
 });
 
@@ -137,11 +145,36 @@ describe('sucursal.service', () => {
 // ---------------------------------------------------------------------------
 describe('ruta.service', () => {
   const ruta = { idRuta: 4, idSucursal: 2, idEmpleado: 7, fecha: `${HOY}T00:00:00`, estado: 'PLANIFICADA' };
-  const datos = (extra: Record<string, unknown> = {}) => ({ nombre: 'Ruta Centro', idSucursal: 2, idEmpleado: 7, fecha: HOY, ...extra });
+  const datos = (extra: Record<string, unknown> = {}) => ({ nombre: 'Ruta Centro', idSucursal: 2, idEmpleado: 7, fecha: HOY, idZona: 51, ...extra });
   beforeEach(() => {
     rutaRepo.findById.mockResolvedValue(ruta);
     rutaRepo.create.mockResolvedValue(4);
     rutaRepo.findAll.mockResolvedValue({ data: [], total: 0 });
+    zonaRepo.findActiva.mockResolvedValue({ id: 51, nombre: 'Villa Canales', idSucursal: null });
+  });
+
+  describe('zona de cobro', () => {
+    it('una ruta nueva exige zona', () => expect(rutas.createRuta(datos({ idZona: undefined }))).rejects.toThrow(/zona de cobro/));
+    it('zona inexistente o inactiva → 400 en el campo', async () => {
+      zonaRepo.findActiva.mockResolvedValue(null);
+      await expect(rutas.createRuta(datos())).rejects.toMatchObject({ statusCode: 400, details: [{ campo: 'idZona' }] });
+      expect(rutaRepo.create).not.toHaveBeenCalled();
+    });
+    it('zona de otra sucursal → 400', async () => {
+      zonaRepo.findActiva.mockResolvedValue({ id: 51, nombre: 'Villa Canales', idSucursal: 9 });
+      await expect(rutas.createRuta(datos())).rejects.toThrow(/otra sucursal/);
+    });
+    it('zona sin sucursal sirve a cualquiera; se guarda con la ruta', async () => {
+      await rutas.createRuta(datos());
+      expect(rutaRepo.create).toHaveBeenCalledWith(expect.objectContaining({ idZona: 51 }));
+    });
+    it('cambiar la zona al editar la valida contra la sucursal actual', async () => {
+      zonaRepo.findActiva.mockResolvedValue({ id: 52, nombre: 'Villa Nueva', idSucursal: 3 });
+      await expect(rutas.updateRuta(4, { idZona: 52 })).rejects.toThrow(/otra sucursal/);
+      zonaRepo.findActiva.mockResolvedValue({ id: 52, nombre: 'Villa Nueva', idSucursal: 2 });
+      await rutas.updateRuta(4, { idZona: 52 });
+      expect(rutaRepo.update).toHaveBeenCalledWith(4, { idZona: 52 });
+    });
   });
 
   it('list: filtros válidos e inválidos', async () => {
@@ -244,7 +277,8 @@ describe('rutaOperacion.service', () => {
     expect(() => operacion.resumen('x')).toThrow();
     await operacion.resumen('4');
     expect(operacionRepo.resumen).toHaveBeenCalledWith(4);
-    await operacion.pendientes();
+    await operacion.pendientes('4', '1');
+    expect(operacionRepo.pendientes).toHaveBeenCalledWith(4, { fueraZona: true });
     await operacion.pagosDisponibles();
     expect(operacionRepo.pendientes).toHaveBeenCalled();
   });

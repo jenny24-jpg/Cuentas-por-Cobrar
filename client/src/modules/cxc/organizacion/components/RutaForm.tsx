@@ -30,6 +30,7 @@ import {
   type PaginatedResponse,
   type Ruta,
   type SugerenciaSucursalRuta,
+  type ZonaCobro,
 } from '@erp/contracts';
 
 const ETIQUETA_ESTADO: Record<string, string> = {
@@ -56,6 +57,8 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
   const fechaOriginal = ruta?.fecha?.slice(0, 10) ?? '';
   const [fecha, setFecha] = useState(fechaOriginal);
   const [radioKm, setRadioKm] = useState(String(ruta?.radioKm ?? REGLAS_RUTA.radioKmDefecto));
+  const [idZona, setIdZona] = useState(ruta?.idZona?.toString() ?? '');
+  const [zonas, setZonas] = useState<ZonaCobro[]>([]);
   const [otrasRutas, setOtrasRutas] = useState<Ruta[]>([]);
   const [observaciones, setObservaciones] = useState(ruta?.observaciones ?? '');
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -70,7 +73,13 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
     apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados')
       .then(setEmpleados)
       .catch(() => setEmpleados([]));
+    apiClient.get<ZonaCobro[]>('/cxc/catalogos/zonas-cobro')
+      .then(setZonas)
+      .catch(() => setZonas([]));
   }, []);
+
+  // Zonas que puede atender la sucursal elegida (las que no tienen sucursal sirven a cualquiera).
+  const zonasDeLaSucursal = zonas.filter((z) => !z.idSucursal || !idSucursal || String(z.idSucursal) === idSucursal);
 
   useEffect(() => {
     if (!ruta) {
@@ -121,6 +130,10 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
     const sucErr = validateRequiredSelect(idSucursal, 'una sucursal');
     if (sucErr) next.idSucursal = sucErr;
 
+    // Obligatoria en rutas nuevas; una ruta anterior a las zonas puede guardarse sin ella.
+    const zonaErr = isEditing && !ruta?.idZona && !idZona ? null : validateRequiredSelect(idZona, 'la zona de cobro');
+    if (zonaErr) next.idZona = zonaErr;
+
     const nameErr = validateRequired(nombre, 'El nombre')
       ?? validateMaxLength(nombre, 'El nombre', 120)
       ?? validateSoloLetras(nombre, 'El nombre');
@@ -147,7 +160,7 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
     const obsErr = validateTextOnly(observaciones, 'Las observaciones', { required: true, minLength: 1, maxLength: 500 });
     if (obsErr) next.observaciones = obsErr;
     return next;
-  }, [idSucursal, idEmpleado, empleados, nombre, fecha, fechaOriginal, radioKm, observaciones]);
+  }, [idSucursal, idZona, idEmpleado, empleados, nombre, fecha, fechaOriginal, radioKm, observaciones]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -168,6 +181,7 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
       fecha,
       radioKm: Number(radioKm),
       observaciones: observaciones.trim() || undefined,
+      ...(idZona ? { idZona: Number(idZona) } : {}),
     };
     try {
       if (isEditing && ruta) {
@@ -212,6 +226,9 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
           if (idEmpleado && !empleados.some((x) => String(x.id) === idEmpleado && String(x.idSucursal ?? '') === nueva)) {
             setIdEmpleado('');
           }
+          if (idZona && zonas.some((z) => String(z.id) === idZona && z.idSucursal && String(z.idSucursal) !== nueva)) {
+            setIdZona('');
+          }
         }} options={sucursales.map((s) => ({ value: String(s.id), label: s.nombre }))}
           placeholder="Selecciona una sucursal"
           helperText={textoSugerencia ?? 'Sucursal que se encarga del cobro de esta ruta.'}
@@ -225,6 +242,13 @@ export const RutaForm = ({ ruta, onSuccess, onCancel }: RutaFormProps) => {
             ? (empleadosDeLaSucursal.length ? 'Solo se muestran los empleados de la sucursal elegida.' : 'Esta sucursal no tiene empleados. Asígnalos en Usuarios y accesos → Empleados.')
             : 'Selecciona primero la sucursal.'}
           error={errors.idEmpleado ?? validationErrors.idEmpleado} />
+        <Select label="Zona de cobro" required value={idZona} onChange={(e: any) => setIdZona(e.target.value)}
+          options={zonasDeLaSucursal.map((z) => ({ value: String(z.id), label: z.zona ? z.nombre : `${z.nombre} (todo el municipio)` }))}
+          placeholder="Selecciona la zona"
+          helperText={zonas.length === 0
+            ? 'No hay zonas de cobro registradas en la base. Solicita al equipo DBA que las cargue.'
+            : 'Territorio de la ruta: al asignar documentos solo aparecen los clientes de esta zona.'}
+          error={errors.idZona ?? validationErrors.idZona} />
         <TextInput label="Fecha planificada" type="date" required
           min={fecha && fecha === fechaOriginal && fechaOriginal < todayIso() ? fechaOriginal : todayIso()}
           max={BUSINESS_DATE_MAX} value={fecha}
