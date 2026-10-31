@@ -177,6 +177,15 @@ export async function finalizar(
   }
 }
 
+export async function cancelar(req: Request, res: Response, next: NextFunction) {
+  try {
+    const ruta = await rutaService.cancelarRuta(Number(req.params.id));
+    res.json(ruta);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // =====================================================
 // ELIMINAR RUTA
 // =====================================================

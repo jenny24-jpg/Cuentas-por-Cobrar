@@ -47,6 +47,15 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function cancelar(req: Request, res: Response, next: NextFunction) {
+  try {
+    const convenio = await convenioPagoService.cancelarConvenio(Number(req.params.id));
+    res.json(convenio);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function remove(req: Request, res: Response, next: NextFunction) {
   try {
     await convenioPagoService.deleteConvenio(Number(req.params.id));

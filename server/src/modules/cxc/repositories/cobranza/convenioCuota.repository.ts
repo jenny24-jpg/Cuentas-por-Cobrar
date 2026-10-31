@@ -174,6 +174,13 @@ export async function registrarPago(
     if (documentos.length === 0) {
       throw new ConflictError('Los documentos que cubre este convenio ya no tienen saldo pendiente (se pagaron por otro medio); no hay nada que aplicar.');
     }
+    const saldoDocumentos = roundMoney(documentos.reduce((sum, doc) => sum + Number(doc.SALDO), 0));
+    if (montoPagado > saldoDocumentos + EPSILON) {
+      throw new ConflictError(`Solo se pueden registrar Q ${saldoDocumentos.toFixed(2)}: ese es el saldo que todavia puede aplicarse a los documentos del convenio.`);
+    }
+    if (documentos.some((doc) => doc.ID_MONEDA !== documentos[0].ID_MONEDA)) {
+      throw new ConflictError('Los documentos del convenio ya no tienen una moneda uniforme; no se puede registrar el pago.');
+    }
 
     const fechaHoy = businessTodayIso();
     const pagoInsert = await conn.execute<{ id: number[] }>(
@@ -236,11 +243,16 @@ export async function registrarPago(
       totalAplicado = roundMoney(totalAplicado + montoAplicar);
     }
 
+    if (Math.abs(totalAplicado - montoPagado) > EPSILON) {
+      throw new ConflictError('No se pudo aplicar el monto completo a los documentos del convenio; el pago fue revertido.');
+    }
+
     const nuevoEstadoPago =
       totalAplicado <= EPSILON ? 'NO_APLICADO' : totalAplicado >= montoPagado - EPSILON ? 'APLICADO' : 'EN_CUENTA';
     await conn.execute(`UPDATE CXC_PAGOS SET ESTADO = :estado WHERE ID_PAGO = :idPago`, { estado: nuevoEstadoPago, idPago });
 
-    const nuevoSaldoCuota = Math.max(0, roundMoney(saldoActual - montoPagado));
+    // La cuota solo baja por el dinero efectivamente aplicado a documentos.
+    const nuevoSaldoCuota = Math.max(0, roundMoney(saldoActual - totalAplicado));
     const nuevoEstadoCuota = nuevoSaldoCuota <= EPSILON ? 'PAGADA' : row.ESTADO;
     await conn.execute(
       `UPDATE CXC_CONVENIO_CUOTAS

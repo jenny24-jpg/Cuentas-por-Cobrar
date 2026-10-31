@@ -62,7 +62,10 @@ export function moneySchema(fieldLabel: string, positive = false) {
     ? base.positive(`${fieldLabel} debe ser mayor a 0`)
     : base.nonnegative(`${fieldLabel} no puede ser negativo`);
 
-  return signed.refine(
+  // El límite común de las columnas monetarias CxC es NUMBER(12,2).
+  // Validarlo aquí produce un error de negocio entendible antes de que Oracle
+  // rechace el bind y convierta la operación en un 500.
+  return signed.max(9_999_999_999.99, `${fieldLabel} no puede superar Q 9,999,999,999.99`).refine(
     (value) => hasAtMostDecimals(value, 2),
     `${fieldLabel} admite como máximo 2 decimales`,
   );

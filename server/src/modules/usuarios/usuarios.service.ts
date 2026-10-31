@@ -85,6 +85,10 @@ export async function crear(body: unknown, actor: AccessClaims, ctx: ClientConte
   const email = parsed.data.email?.trim() || null;
   const idEmpleado = parsed.data.idEmpleado ?? null;
 
+  if (rol === 'ADMIN' && !idEmpleado) {
+    throw campoInvalido('idEmpleado', 'Vincula un empleado a cada usuario administrador para registrar sus aprobaciones y acciones.');
+  }
+
   if (await authRepo.findUsuarioByUsername(username)) {
     throw campoInvalido('username', `Ya existe un usuario "${username}". Elige otro nombre de usuario.`);
   }
@@ -104,6 +108,9 @@ export async function editar(id: number, body: unknown, actor: AccessClaims, ctx
   const email = parsed.data.email?.trim() || null;
   // Si no viene idEmpleado se conserva el actual; null lo desvincula.
   const idEmpleado = parsed.data.idEmpleado === undefined ? actual.ID_EMPLEADO : parsed.data.idEmpleado;
+  if (rol === 'ADMIN' && !idEmpleado) {
+    throw campoInvalido('idEmpleado', 'Vincula un empleado a cada usuario administrador para registrar sus aprobaciones y acciones.');
+  }
   if (idEmpleado !== actual.ID_EMPLEADO) await validarEmpleado(idEmpleado, id);
 
   const pierdeAdmin = actual.ROL === 'ADMIN' && actual.ESTADO === 'ACTIVO' && (rol !== 'ADMIN' || estado !== 'ACTIVO');

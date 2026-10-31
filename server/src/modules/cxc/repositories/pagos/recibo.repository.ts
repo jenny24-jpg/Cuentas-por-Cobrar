@@ -199,7 +199,6 @@ export async function update(id: number, input: UpdateReciboInput): Promise<void
   const columnas = [
     ['idCliente', 'ID_CLIENTE'],
     ['idPago', 'ID_PAGO'],
-    ['estado', 'ESTADO'],
   ] as const;
 
   for (const [key, columna] of columnas) {

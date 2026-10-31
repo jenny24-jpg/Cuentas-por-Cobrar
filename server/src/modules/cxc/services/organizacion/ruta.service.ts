@@ -201,6 +201,12 @@ export async function finalizarRuta(id: number): Promise<Ruta> {
   return getRuta(id);
 }
 
+export async function cancelarRuta(id: number): Promise<Ruta> {
+  validarIdRuta(id);
+  await rutaRepository.cancelar(id);
+  return getRuta(id);
+}
+
 export async function deleteRuta(id: number): Promise<void> {
   validarIdRuta(id);
   await rutaRepository.remove(id);

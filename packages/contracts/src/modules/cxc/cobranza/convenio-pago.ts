@@ -46,8 +46,13 @@ const convenioPagoBaseSchema = z.object({
 // .partial() se aplica igual: un PATCH {observaciones} devolvía el convenio a ACTIVO
 // aunque estuviera INCUMPLIDO o CANCELADO.
 export const createConvenioPagoSchema = convenioPagoBaseSchema.extend({
-  estado: z.enum(ESTADOS_CONVENIO_PAGO).default('ACTIVO'),
+  estado: z.literal('ACTIVO').default('ACTIVO'),
 });
 export type CreateConvenioPagoInput = z.infer<typeof createConvenioPagoSchema>;
-export const updateConvenioPagoSchema = convenioPagoBaseSchema.partial();
+// El estado se cambia solo mediante las transiciones del servicio, nunca con
+// un PATCH genérico de edición.
+export const updateConvenioPagoSchema = convenioPagoBaseSchema
+  .omit({ estado: true, documentos: true, idCliente: true, fechaConvenio: true, montoDeuda: true, numeroCuotas: true })
+  .partial()
+  .strict();
 export type UpdateConvenioPagoInput = z.infer<typeof updateConvenioPagoSchema>;

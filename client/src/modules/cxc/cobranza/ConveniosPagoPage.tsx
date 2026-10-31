@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Search, Eye, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Search, Eye, RefreshCw, Ban } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
@@ -19,11 +19,14 @@ export const ConveniosPagoPage = () => {
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [convenioAEliminar, setConvenioAEliminar] = useState<ConvenioPago | null>(null);
+  const [convenioACancelar, setConvenioACancelar] = useState<ConvenioPago | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRecalculando, setIsRecalculando] = useState(false);
   const [confirmRecalcularOpen, setConfirmRecalcularOpen] = useState(false);
   const [recalculoMensaje, setRecalculoMensaje] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [isCancelando, setIsCancelando] = useState(false);
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<ConvenioPago>(
     '/cxc/convenios-pago',
@@ -42,6 +45,21 @@ export const ConveniosPagoPage = () => {
       setDeleteError(err instanceof ApiError ? err.message : 'No se pudo eliminar el convenio');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!convenioACancelar) return;
+    setIsCancelando(true);
+    setCancelError(null);
+    try {
+      await apiClient.post(`/cxc/convenios-pago/${convenioACancelar.idConvenio}/cancelar`, {});
+      setConvenioACancelar(null);
+      refetch();
+    } catch (err) {
+      setCancelError(err instanceof ApiError ? err.message : 'No se pudo cancelar el convenio');
+    } finally {
+      setIsCancelando(false);
     }
   };
 
@@ -129,6 +147,15 @@ export const ConveniosPagoPage = () => {
                 >
                   <Eye size={15} />
                 </button>
+                {['ACTIVO', 'INCUMPLIDO'].includes(row.estado) && (
+                  <button
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); setCancelError(null); setConvenioACancelar(row); }}
+                    className="p-1.5 text-slate-400 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-colors"
+                    title="Cancelar convenio"
+                  >
+                    <Ban size={15} />
+                  </button>
+                )}
                 <button
                   onClick={(e: React.MouseEvent) => { e.stopPropagation(); setConvenioAEliminar(row); }}
                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
@@ -176,6 +203,18 @@ export const ConveniosPagoPage = () => {
         }
         confirmLabel="Eliminar"
         isLoading={isDeleting}
+      />
+
+      <ConfirmDialog
+        isOpen={!!convenioACancelar}
+        onClose={() => { if (!isCancelando) { setConvenioACancelar(null); setCancelError(null); } }}
+        onConfirm={handleCancel}
+        title="Cancelar convenio de pago"
+        description={`¿Cancelar el convenio de ${convenioACancelar?.nombreCliente}? Los pagos ya aplicados se conservan, pero no se podran registrar nuevos pagos a sus cuotas.`}
+        confirmLabel={isCancelando ? 'Cancelando...' : 'Sí, cancelar convenio'}
+        variant="danger"
+        isLoading={isCancelando}
+        errorMessage={cancelError}
       />
     </div>
   );

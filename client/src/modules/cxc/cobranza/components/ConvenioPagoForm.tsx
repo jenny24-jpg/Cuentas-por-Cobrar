@@ -32,7 +32,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
   const [montoDeuda, setMontoDeuda] = useState(convenio?.montoDeuda?.toString() ?? '');
   const [montoTocado, setMontoTocado] = useState(false);
   const [numeroCuotas, setNumeroCuotas] = useState(convenio?.numeroCuotas?.toString() ?? '');
-  const [estado, setEstado] = useState(convenio?.estado ?? 'ACTIVO');
+  const estado = convenio?.estado ?? 'ACTIVO';
   const [observaciones, setObservaciones] = useState(convenio?.observaciones ?? '');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -153,7 +153,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
     setErrors({}); setIsSubmitting(true);
     // Al editar, "sin observaciones" se envía como null para poder borrar el texto guardado.
     const payload = isEditing
-      ? { estado, ...(observacionesCambiaron ? { observaciones: observaciones.trim() || null } : {}) }
+      ? { ...(observacionesCambiaron ? { observaciones: observaciones.trim() || null } : {}) }
       : {
           idCliente: Number(idCliente),
           fechaConvenio,
@@ -203,7 +203,7 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
           helperText={isEditing ? 'El monto queda fijo porque ya generó las cuotas.' : (totalSeleccionado > 0 ? `Puedes bajarlo para negociar una parte. Máximo: ${formatQ(totalSeleccionado)} (lo que se debe en los documentos seleccionados).` : 'Primero selecciona los documentos que cubre el convenio.')}
         />
         <TextInput label="Número de cuotas" type="number" restriction="integer" min="1" max={String(MAX_CUOTAS)} step="1" required value={numeroCuotas} onChange={(e: any) => setNumeroCuotas(e.target.value)} error={vivo('numeroCuotas', !!numeroCuotas)} isReadOnly={isEditing} helperText={isEditing ? 'No se modifica porque el plan de cuotas ya existe.' : (resumenCuotas ? `Estimado: ${resumenCuotas}.` : `Solo enteros entre 1 y ${MAX_CUOTAS}; las cuotas se generan automáticamente.`)} />
-        <Select label="Estado" required value={isEditing ? estado : 'ACTIVO'} onChange={(e: any) => setEstado(e.target.value)} options={isEditing ? ESTADO_OPTIONS : ESTADO_NUEVO_OPTIONS} isReadOnly={!isEditing} helperText={isEditing ? 'El sistema también lo cambia solo: CUMPLIDO al pagar todas las cuotas, INCUMPLIDO al recalcular con cuotas vencidas.' : 'Un convenio nuevo siempre inicia ACTIVO.'} />
+        <Select label="Estado" required value={isEditing ? estado : 'ACTIVO'} options={isEditing ? ESTADO_OPTIONS : ESTADO_NUEVO_OPTIONS} isReadOnly helperText={isEditing ? 'CUMPLIDO e INCUMPLIDO los determina el sistema. Para cerrar el convenio, usa la accion Cancelar.' : 'Un convenio nuevo siempre inicia ACTIVO.'} />
       </div>
 
       {!isEditing && (
