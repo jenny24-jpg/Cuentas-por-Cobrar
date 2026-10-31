@@ -11,6 +11,7 @@ import { deriveDocumentoCondicion } from '../shared/financialRules';
 interface AntiguedadRow {
   ID_CLIENTE: number;
   NOMBRE_CLIENTE: string;
+  SEGMENTO: string | null;
   CORRIENTE: number;
   DIAS_1_30: number;
   DIAS_31_60: number;
@@ -23,7 +24,7 @@ export async function getAntiguedadSaldos(): Promise<AntiguedadSaldosReporte> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<AntiguedadRow>(`
-      SELECT d.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE,
+      SELECT d.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE, sg.CODIGO AS SEGMENTO,
              NVL(SUM(CASE WHEN d.FECHA_VENCIMIENTO >= TRUNC(SYSDATE) THEN d.SALDO ELSE 0 END), 0) AS CORRIENTE,
              NVL(SUM(CASE WHEN TRUNC(SYSDATE) - d.FECHA_VENCIMIENTO BETWEEN 1 AND 30 THEN d.SALDO ELSE 0 END), 0) AS DIAS_1_30,
              NVL(SUM(CASE WHEN TRUNC(SYSDATE) - d.FECHA_VENCIMIENTO BETWEEN 31 AND 60 THEN d.SALDO ELSE 0 END), 0) AS DIAS_31_60,
@@ -32,15 +33,18 @@ export async function getAntiguedadSaldos(): Promise<AntiguedadSaldosReporte> {
              NVL(SUM(d.SALDO), 0) AS TOTAL
         FROM CXC_DOCUMENTOS d
         JOIN CLIENTE c ON c.ID_CLIENTE = d.ID_CLIENTE
+        LEFT JOIN CXC_CLIENTE_SEGMENTO cs ON cs.ID_CLIENTE = d.ID_CLIENTE
+        LEFT JOIN CXC_SEGMENTOS_CLIENTE sg ON sg.ID_SEGMENTO = cs.ID_SEGMENTO
        WHERE d.SALDO > 0
          AND UPPER(NVL(d.ESTADO, 'PENDIENTE')) NOT IN ('ANULADO', 'ANULADA', 'PAGADO', 'PAGADA')
-       GROUP BY d.ID_CLIENTE, c.NOMBRE
+       GROUP BY d.ID_CLIENTE, c.NOMBRE, sg.CODIGO
        ORDER BY TOTAL DESC
     `);
 
     const clientes = (result.rows ?? []).map((r) => ({
       idCliente: r.ID_CLIENTE,
       nombreCliente: r.NOMBRE_CLIENTE,
+      segmento: r.SEGMENTO?.trim() || null,
       corriente: Number(r.CORRIENTE),
       dias1a30: Number(r.DIAS_1_30),
       dias31a60: Number(r.DIAS_31_60),

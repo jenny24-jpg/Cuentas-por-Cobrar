@@ -5,7 +5,7 @@ import {
   Tooltip, XAxis, YAxis, ZAxis,
 } from 'recharts';
 import type { CeldaCalor, ClienteRiesgo } from '@erp/contracts';
-import { COLOR, Qc, RIESGO, Q, entero } from '../format';
+import { COLOR, Qc, RIESGO, Q, entero, pct } from '../format';
 
 /**
  * Gráficos del módulo de análisis. Reglas de la guía de visualización: líneas de 2 px,
@@ -109,6 +109,85 @@ export function ColumnasChart({ datos, color = COLOR.azul, destacada, alto = 220
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Columnas agrupadas por categoría (p. ej. facturado y cobrado por mes); `extra` agrega filas al tooltip. */
+export function ColumnasAgrupadasChart({ datos, series, alto = 260, formato = Q, extra, onSeleccionar }: {
+  datos: Array<Record<string, number | string>>;
+  series: SerieDef[];
+  alto?: number;
+  formato?: (n: number) => string;
+  extra?: (d: Record<string, number | string>) => Array<{ etiqueta: string; valor: string }>;
+  onSeleccionar?: (d: Record<string, number | string>) => void;
+}) {
+  return (
+    <div style={{ height: alto }} role="img" aria-label={`Columnas agrupadas: ${series.map((s) => s.etiqueta).join(' y ')}`}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={datos} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap="24%" barGap={3}
+          onClick={onSeleccionar ? (s: { activeTooltipIndex?: number }) => {
+            const d = s?.activeTooltipIndex !== undefined ? datos[s.activeTooltipIndex] : undefined;
+            if (d) onSeleccionar(d);
+          } : undefined}
+          style={onSeleccionar ? { cursor: 'pointer' } : undefined}>
+          <CartesianGrid vertical={false} stroke={COLOR.rejilla} />
+          <XAxis dataKey="etiqueta" tick={EJE} tickLine={false} axisLine={{ stroke: COLOR.eje }} minTickGap={8} />
+          <YAxis tick={EJE} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => Qc(v as number).replace('Q ', '')} />
+          <Tooltip cursor={{ fill: 'rgba(15,23,42,0.04)' }} content={({ active, payload, label }) => {
+            if (!active || !payload?.length) return null;
+            const d = payload[0].payload as Record<string, number | string>;
+            return <TooltipCaja titulo={String(label)} filas={[
+              ...payload.map((p) => ({ color: p.color, etiqueta: String(p.name), valor: formato(Number(p.value)) })),
+              ...(extra ? extra(d) : []),
+            ]} />;
+          }} />
+          <Legend verticalAlign="top" align="right" iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} />
+          {series.map((s) => (
+            <Bar isAnimationActive={false} key={s.clave} dataKey={s.clave} name={s.etiqueta} fill={s.color} maxBarSize={22} radius={[4, 4, 0, 0]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export interface SegmentoBarra { clave: string; etiqueta: string; valor: number; color: string; detalle?: string }
+
+/**
+ * Una sola barra de 100 % partida por segmentos (tramos, estados…), con la leyenda
+ * debajo: color, nombre, valor y porcentaje. El texto nunca depende solo del color.
+ */
+export function BarraApilada({ segmentos, formato = Q, etiqueta, vacio = 'Sin datos.' }: {
+  segmentos: SegmentoBarra[]; formato?: (n: number) => string; etiqueta: string; vacio?: string;
+}) {
+  const total = segmentos.reduce((a, s) => a + Math.max(0, s.valor), 0);
+  if (total <= 0) return <p className="py-8 text-center text-sm text-slate-500">{vacio}</p>;
+  const parte = (v: number) => (Math.max(0, v) / total) * 100;
+  return (
+    <div>
+      <div className="flex h-7 w-full overflow-hidden rounded-md bg-slate-100" role="img"
+        aria-label={`${etiqueta}: ${segmentos.map((s) => `${s.etiqueta} ${pct(parte(s.valor))}`).join(', ')}`}>
+        {segmentos.filter((s) => s.valor > 0).map((s) => (
+          <span key={s.clave} className="h-full border-r-2 border-white last:border-r-0" title={`${s.etiqueta}: ${formato(s.valor)} (${pct(parte(s.valor))})`}
+            style={{ width: `${parte(s.valor)}%`, backgroundColor: s.color }} />
+        ))}
+      </div>
+      <ul className="mt-4 space-y-2">
+        {segmentos.map((s) => (
+          <li key={s.clave} className="flex items-center justify-between gap-3 text-[13px]">
+            <span className="flex min-w-0 items-center gap-2 text-slate-700">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: s.color }} aria-hidden="true" />
+              <span className="truncate">{s.etiqueta}</span>
+              {s.detalle && <span className="shrink-0 text-[11.5px] text-slate-500">{s.detalle}</span>}
+            </span>
+            <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+              <span className="font-semibold text-slate-900">{formato(s.valor)}</span>
+              <span className="w-12 text-right text-[12px] text-slate-500">{pct(parte(s.valor))}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

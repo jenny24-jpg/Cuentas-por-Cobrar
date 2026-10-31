@@ -63,6 +63,8 @@ export interface SugerenciaSucursalRuta {
 export interface RutasPorEmpleado {
   idEmpleado: number;
   nombreEmpleado: string | null;
+  /** Foto registrada del empleado (EMPLEADO.FOTO_URL, solo https), o null. */
+  fotoUrl: string | null;
   totalRutas: number;
   planificadas: number;
   enProceso: number;
