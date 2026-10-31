@@ -8,7 +8,8 @@ import { BadRequestError, ConflictError } from '../../../../shared/errors/AppErr
 import { businessTodayIso } from '../../../../shared/date';
 const id = (value: unknown) => z.coerce.number().int().positive().parse(value);
 export const resumen = (ruta: unknown) => repo.resumen(id(ruta));
-export const pendientes = () => repo.pendientes();
+export const pendientes = (ruta: unknown, fueraZona?: unknown) =>
+  repo.pendientes(id(ruta), { fueraZona: fueraZona === '1' || fueraZona === 'true' });
 export const pagosDisponibles = () => repo.pagosDisponibles();
 export const asignar = (ruta: unknown, body: unknown) => repo.asignar(id(ruta), asignarDocumentoRutaSchema.parse(body));
 export const registrar = (ruta: unknown, body: unknown) => repo.registrar(id(ruta), registrarBitacoraRutaSchema.parse(body));

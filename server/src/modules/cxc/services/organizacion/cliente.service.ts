@@ -52,15 +52,15 @@ const errorNit = () => new AppError(
 );
 
 /** Alta de cliente: el NIT siempre debe ser válido (no hay dato heredado que conservar). */
-export async function createCliente(raw: unknown): Promise<ClienteDetalle> {
+export async function createCliente(raw: unknown, idUsuario?: number): Promise<ClienteDetalle> {
   const input = createClienteSchema.parse(raw);
   const nit = normalizarNit(input.nit);
   if (!esNitValido(nit)) throw errorNit();
-  const id = await clienteRepository.create({ ...input, nit: nit === 'CF' ? 'CF' : formatearNit(nit) });
+  const id = await clienteRepository.create({ ...input, nit: nit === 'CF' ? 'CF' : formatearNit(nit) }, idUsuario);
   return getClienteDetalle(id);
 }
 
-export async function updateCliente(id: number, raw: unknown): Promise<ClienteDetalle> {
+export async function updateCliente(id: number, raw: unknown, idUsuario?: number): Promise<ClienteDetalle> {
   const input = updateClienteSchema.parse(raw);
   const actual = await getCliente(id);
 
@@ -73,6 +73,6 @@ export async function updateCliente(id: number, raw: unknown): Promise<ClienteDe
   await clienteRepository.update(id, {
     ...input,
     nit: nitCambio ? (nitNuevo === 'CF' ? 'CF' : formatearNit(nitNuevo)) : (actual.nit ?? input.nit),
-  });
+  }, idUsuario);
   return getClienteDetalle(id);
 }

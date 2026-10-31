@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as catalogosRepository from '../repositories/catalogos.repository';
 import { listSegmentos } from '../repositories/organizacion/cliente.repository';
+import * as zonaCobroRepository from '../repositories/organizacion/zonaCobro.repository';
 import { validarIdsDeRuta } from '../../../shared/idParams';
 
 const router = validarIdsDeRuta(Router());
@@ -21,6 +22,15 @@ router.get('/clientes', async (req: Request, res: Response, next: NextFunction) 
 router.get('/segmentos', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     res.json(await listSegmentos());
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Zonas de cobro (territorio de rutas y ubicación de clientes), desde la base.
+router.get('/zonas-cobro', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(await zonaCobroRepository.listActivas());
   } catch (err) {
     next(err);
   }

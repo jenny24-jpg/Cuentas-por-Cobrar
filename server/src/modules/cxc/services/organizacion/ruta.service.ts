@@ -19,6 +19,7 @@ import {
 
 import { businessTodayIso } from '../../../../shared/date';
 import * as rutaRepository from '../../repositories/organizacion/ruta.repository';
+import * as zonaCobroRepository from '../../repositories/organizacion/zonaCobro.repository';
 
 /** Error 400 asociado al campo fecha, para presentarlo en el formulario. */
 const errorFecha = (mensaje: string) =>
@@ -31,6 +32,22 @@ function validarFechaPlanificada(fecha: string): void {
   }
   if (!esDiaDeVisita(fecha)) {
     throw errorFecha(mensajeDiaDescanso(fecha));
+  }
+}
+
+/**
+ * La zona debe existir y estar activa; si la zona tiene sucursal asignada,
+ * debe ser la misma sucursal de la ruta.
+ */
+async function validarZona(idZona: number, idSucursal: number | null | undefined): Promise<void> {
+  const zona = await zonaCobroRepository.findActiva(idZona);
+  if (!zona) {
+    throw new AppError('La zona de cobro no existe o está inactiva.', 400, 'BAD_REQUEST', true,
+      [{ campo: 'idZona', mensaje: 'Selecciona una zona activa' }]);
+  }
+  if (zona.idSucursal && idSucursal && zona.idSucursal !== idSucursal) {
+    throw new AppError(`La zona ${zona.nombre} la atiende otra sucursal.`, 400, 'BAD_REQUEST', true,
+      [{ campo: 'idZona', mensaje: 'La zona pertenece a otra sucursal' }]);
   }
 }
 
@@ -123,6 +140,7 @@ export async function createRuta(rawInput: unknown): Promise<Ruta> {
 
   validarFechaPlanificada(input.fecha);
   await rutaRepository.validarSucursalYEmpleado(input.idSucursal, input.idEmpleado);
+  await validarZona(input.idZona, input.idSucursal);
 
   const id = await rutaRepository.create(input);
   return getRuta(id);
@@ -168,6 +186,10 @@ export async function updateRuta(id: number, rawInput: unknown): Promise<Ruta> {
   }
 
   // El repositorio valida bajo bloqueo los cambios de responsable, radio y estado.
+  if (input.idZona !== undefined) {
+    const actual = await getRuta(id);
+    await validarZona(input.idZona, input.idSucursal ?? actual.idSucursal);
+  }
   await rutaRepository.update(id, input);
   return getRuta(id);
 }

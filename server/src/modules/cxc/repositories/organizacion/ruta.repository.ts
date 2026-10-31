@@ -18,6 +18,8 @@ interface RutaRow {
   ESTADO: string;
   OBSERVACIONES: string;
   RADIO_KM: number | null;
+  ID_ZONA: number | null;
+  NOMBRE_ZONA: string | null;
 }
 
 function mapRow(row: RutaRow): Ruta {
@@ -33,6 +35,8 @@ function mapRow(row: RutaRow): Ruta {
     estado: row.ESTADO?.trim(),
     observaciones: row.OBSERVACIONES,
     radioKm: Number(row.RADIO_KM ?? 5),
+    idZona: row.ID_ZONA,
+    nombreZona: row.NOMBRE_ZONA,
   };
 }
 
@@ -44,10 +48,12 @@ const SELECT_BASE = `
          (e.NOMBRE || ' ' || e.APELLIDO) AS NOMBRE_EMPLEADO,
          r.ID_SUCURSAL, s.NOMBRE AS NOMBRE_SUCURSAL,
          TO_CHAR(r.FECHA, 'YYYY-MM-DD') AS FECHA_ISO,
-         r.ESTADO, r.OBSERVACIONES, r.RADIO_KM
+         r.ESTADO, r.OBSERVACIONES, r.RADIO_KM,
+         r.ID_ZONA, z.NOMBRE AS NOMBRE_ZONA
   FROM CXC_RUTAS r
   LEFT JOIN EMPLEADO e ON e.ID_EMPLEADO = r.ID_EMPLEADO
   LEFT JOIN CXC_SUCURSALES s ON s.ID_SUCURSAL = r.ID_SUCURSAL
+  LEFT JOIN CXC_ZONAS_COBRO z ON z.ID_ZONA = r.ID_ZONA
 `;
 
 /** Búsqueda por nombre o código de ruta, estado o nombre del empleado; filtro opcional por empleado. */
@@ -163,45 +169,54 @@ export async function findById(id: number): Promise<Ruta | null> {
   }
 }
 
-/** Siguiente código de ruta libre con el formato RUT-001 (el índice único protege contra repetidos). */
-async function siguienteCodigoRuta(conn: Connection): Promise<string> {
-  const r = await conn.execute<{ C: string }>(`SELECT CODIGO_RUTA AS C FROM CXC_RUTAS WHERE REGEXP_LIKE(CODIGO_RUTA, '^RUT-[0-9]+$')`);
-  const max = (r.rows ?? []).reduce((m, x) => Math.max(m, Number(x.C.slice(4))), 0);
-  return `RUT-${String(max + 1).padStart(3, '0')}`;
-}
+/** ORA-30006: otra transacción tiene la tabla bloqueada y se agotó la espera. */
+const esEsperaVencida = (err: unknown) => (err as { errorNum?: number })?.errorNum === 30006;
 
-/** ORA-00001 sobre el código de ruta: otra ruta tomó el mismo número entre el cálculo y el guardado. */
-const esCodigoRutaRepetido = (err: unknown) =>
-  (err as { errorNum?: number })?.errorNum === 1 && String((err as Error).message).includes('UX_CXC_RUTAS_CODIGO');
+/**
+ * Siguiente código de ruta con el formato RUT-001. Igual que pagos, recibos y notas de
+ * crédito: bloquea la tabla hasta el commit de quien llama, para que dos altas
+ * simultáneas no tomen el mismo número. Debe llamarse antes del INSERT.
+ */
+async function siguienteCodigoRuta(conn: Connection): Promise<string> {
+  try {
+    await conn.execute('LOCK TABLE CXC_RUTAS IN EXCLUSIVE MODE WAIT 5');
+  } catch (err) {
+    if (esEsperaVencida(err)) {
+      throw new ConflictError('Otro usuario está registrando una ruta. Intenta de nuevo en unos segundos.');
+    }
+    throw err;
+  }
+  const r = await conn.execute<{ ULTIMO: number | null }>(
+    // El CASE evita convertir códigos heredados con otro formato.
+    `SELECT MAX(CASE WHEN REGEXP_LIKE(CODIGO_RUTA, '^RUT-[0-9]+$') THEN TO_NUMBER(SUBSTR(CODIGO_RUTA, 5)) END) AS ULTIMO
+       FROM CXC_RUTAS`,
+  );
+  return `RUT-${String(Number(r.rows?.[0]?.ULTIMO ?? 0) + 1).padStart(3, '0')}`;
+}
 
 export async function create(input: CreateRutaInput): Promise<number> {
   const conn = await getConnection();
   try {
-    for (let intento = 1; ; intento++) {
-      try {
-        const result = await conn.execute<{ id: number[] }>(
-          `INSERT INTO CXC_RUTAS (CODIGO_RUTA, NOMBRE, ID_EMPLEADO, ID_SUCURSAL, FECHA, ESTADO, OBSERVACIONES, RADIO_KM)
-           VALUES (:codigoRuta, :nombre, :idEmpleado, :idSucursal, TO_DATE(:fecha, 'YYYY-MM-DD'), 'PLANIFICADA', :observaciones, :radioKm)
-           RETURNING ID_RUTA INTO :id`,
-          {
-            codigoRuta: await siguienteCodigoRuta(conn),
-            nombre: input.nombre,
-            idEmpleado: input.idEmpleado,
-            idSucursal: input.idSucursal,
-            fecha: input.fecha,
-            radioKm: input.radioKm,
-            // OBSERVACIONES es NOT NULL en Oracle: si no mandan nada, '' en vez de null.
-            observaciones: input.observaciones ?? '',
-            id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-          },
-        );
-        await conn.commit();
-        return result.outBinds!.id[0];
-      } catch (err) {
-        if (esCodigoRutaRepetido(err) && intento < 3) { await conn.rollback(); continue; }
-        throw err;
-      }
-    }
+    const codigoRuta = await siguienteCodigoRuta(conn);
+    const result = await conn.execute<{ id: number[] }>(
+      `INSERT INTO CXC_RUTAS (CODIGO_RUTA, NOMBRE, ID_EMPLEADO, ID_SUCURSAL, FECHA, ESTADO, OBSERVACIONES, RADIO_KM, ID_ZONA)
+       VALUES (:codigoRuta, :nombre, :idEmpleado, :idSucursal, TO_DATE(:fecha, 'YYYY-MM-DD'), 'PLANIFICADA', :observaciones, :radioKm, :idZona)
+       RETURNING ID_RUTA INTO :id`,
+      {
+        codigoRuta,
+        nombre: input.nombre,
+        idEmpleado: input.idEmpleado,
+        idSucursal: input.idSucursal,
+        fecha: input.fecha,
+        radioKm: input.radioKm,
+        idZona: input.idZona,
+        // OBSERVACIONES es NOT NULL en Oracle: si no mandan nada, '' en vez de null.
+        observaciones: input.observaciones ?? '',
+        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      },
+    );
+    await conn.commit();
+    return result.outBinds!.id[0];
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -275,6 +290,7 @@ export async function update(id: number, input: UpdateRutaInput): Promise<void> 
   }
   if (input.observaciones !== undefined) { fields.push('OBSERVACIONES = :observaciones'); binds.observaciones = input.observaciones ?? ''; }
   if (input.radioKm !== undefined) { fields.push('RADIO_KM = :radioKm'); binds.radioKm = input.radioKm; }
+  if (input.idZona !== undefined) { fields.push('ID_ZONA = :idZona'); binds.idZona = input.idZona; }
 
   if (fields.length === 0) {
     if (!(await findById(id))) throw new NotFoundError(`Ruta ${id} no encontrada`);

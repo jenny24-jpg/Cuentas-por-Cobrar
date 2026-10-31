@@ -130,6 +130,8 @@ interface AsignacionPayload {
 
   latitud: number; longitud: number; horaProgramada: string; ubicacionConfirmada: true;
 
+  fueraZona?: boolean; motivoFueraZona?: string;
+
 }
 
 /** Fecha YYYY-MM-DD → "lunes 27/10/2026". */
@@ -138,9 +140,13 @@ const fechaLarga = (iso: string | null | undefined) =>
 
   iso ? `${NOMBRE_DIAS[diaSemana(iso)]} ${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—';
 
-function AsignacionForm({ data, docs, onSubmit, onClose }: {
+function AsignacionForm({ data, docs, fueraZona, onFueraZonaChange, onSubmit, onClose }: {
 
   data?: RutaOperacion; docs: RutaDocumentoPendiente[]; onClose: () => void;
+
+  /** Mostrar también documentos de clientes fuera de la zona de la ruta. */
+
+  fueraZona: boolean; onFueraZonaChange: (valor: boolean) => void;
 
   onSubmit: (payload: AsignacionPayload) => Promise<void>;
 
@@ -172,9 +178,17 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
 
   const [confirmada, setConfirmada] = useState(false);
 
+  const [motivoFueraZona, setMotivoFueraZona] = useState('');
+
   const disponibles = docs.filter((d) => d.DISPONIBLE > 0 && !data?.asignaciones.some((a) => a.ID_DOCUMENTO === d.ID_DOCUMENTO));
 
   const doc = disponibles.find((d) => String(d.ID_DOCUMENTO) === idDocumento);
+
+  const zonaRuta = ruta?.ZONA ?? null;
+
+  // Un documento de un cliente fuera de la zona solo se asigna con motivo.
+
+  const docFueraZona = Boolean(doc && Number(doc.EN_ZONA) !== 1);
 
   const coordsValidas = latitud !== '' && longitud !== '' && Math.abs(Number(latitud)) <= 90 && Math.abs(Number(longitud)) <= 180;
 
@@ -264,9 +278,15 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
 
   if (pick && !confirmada) validation.ubicacionConfirmada = 'Confirma que el punto del mapa corresponde a la dirección.';
 
+  if (docFueraZona && motivoFueraZona.trim().length < 10) {
+
+    validation.motivoFueraZona = 'Indica por qué se asigna un cliente fuera de la zona (mínimo 10 caracteres).';
+
+  }
+
   const reset = () => {
 
-    setIdDocumento(''); setMonto(''); setDireccion(''); setLatitud(''); setLongitud(''); setConfirmada(false);
+    setIdDocumento(''); setMonto(''); setDireccion(''); setLatitud(''); setLongitud(''); setConfirmada(false); setMotivoFueraZona('');
 
   };
 
@@ -277,6 +297,8 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
       idDocumento: Number(idDocumento), montoAsignado: Number(monto), direccion: direccion.trim(),
 
       latitud: Number(latitud), longitud: Number(longitud), horaProgramada: hora, ubicacionConfirmada: true,
+
+      ...(docFueraZona ? { fueraZona: true, motivoFueraZona: motivoFueraZona.trim() } : {}),
 
     }),
 
@@ -296,7 +318,29 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
 
       {ancla ? ` Área: ${radio} km alrededor de ${ancla.CLIENTE}.` : ' Esta será la primera parada: define el centro del área de la ruta.'}
 
+      <span className="block mt-1">
+
+        Zona de cobro: <strong>{zonaRuta?.NOMBRE ?? 'sin zona'}</strong>
+
+        {zonaRuta ? ' · se muestran los clientes de esta zona, primero los de más días vencidos.' : ' · esta ruta no tiene zona: se muestran todos los documentos. Asígnale una zona al editarla.'}
+
+      </span>
+
     </div>
+
+    {zonaRuta && (
+
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+
+        <input type="checkbox" className="mt-0.5" checked={fueraZona}
+
+          onChange={(e) => { onFueraZonaChange(e.target.checked); setIdDocumento(''); }} />
+
+        <span>Mostrar también clientes <strong>fuera de la zona</strong> (requiere indicar el motivo).</span>
+
+      </label>
+
+    )}
 
     <Select label="Documento" required value={idDocumento} onChange={(e: any) => {
 
@@ -308,13 +352,51 @@ function AsignacionForm({ data, docs, onSubmit, onClose }: {
 
         if (elegido?.DIRECCION_CLIENTE) setDireccion(elegido.DIRECCION_CLIENTE.slice(0, 200));
 
+        // Si el cliente ya tiene su punto registrado, se ubica en el mapa sin buscarlo.
+
+        if (elegido?.LATITUD_CLIENTE != null && elegido?.LONGITUD_CLIENTE != null) {
+
+          setLatitud(Number(elegido.LATITUD_CLIENTE).toFixed(6)); setLongitud(Number(elegido.LONGITUD_CLIENTE).toFixed(6));
+
+        }
+
       }}
 
-      options={disponibles.map((d) => ({ value: String(d.ID_DOCUMENTO), label: `${d.CODIGO_COBRO} · ${d.CLIENTE} · ${d.DOCUMENTO} · disponible ${d.MONEDA} ${money(d.DISPONIBLE)}` }))}
+      options={disponibles.map((d) => ({
+
+        value: String(d.ID_DOCUMENTO),
+
+        label: `${Number(d.EN_ZONA) === 1 ? '' : '⚠ FUERA DE ZONA · '}#${d.ID_CLIENTE} · ${d.CLIENTE} · ${d.DOCUMENTO} · disponible ${d.MONEDA} ${money(d.DISPONIBLE)}`
+
+          + (d.DIAS_VENCIDO > 0 ? ` · ${d.DIAS_VENCIDO} días vencido` : '')
+
+          + (d.ZONA_CLIENTE ? ` · ${d.ZONA_CLIENTE}` : ' · sin zona'),
+
+      }))}
 
       error={f.errors.idDocumento}
 
-      helperText={disponibles.length === 0 ? 'No hay documentos pendientes disponibles: todos tienen saldo cero o ya están asignados a una ruta.' : 'Documento con saldo disponible que aún no está asignado a esta ruta.'} />
+      helperText={disponibles.length === 0
+
+        ? (zonaRuta && !fueraZona
+
+          ? `No hay documentos pendientes de clientes de ${zonaRuta.NOMBRE}. Revisa la zona de los clientes en Clientes o marca «fuera de la zona».`
+
+          : 'No hay documentos pendientes disponibles: todos tienen saldo cero o ya están asignados a una ruta.')
+
+        : 'Ordenados por prioridad: primero los de la zona y los de más días vencidos. No aparecen los que están en convenio activo ni los que tienen una promesa de pago vigente.'} />
+
+    {docFueraZona && (
+
+      <TextArea label="Motivo para asignarlo fuera de la zona" required maxLength={250} rows={2} value={motivoFueraZona}
+
+        onChange={(e: any) => setMotivoFueraZona(e.target.value)}
+
+        error={f.errors.motivoFueraZona ?? (motivoFueraZona ? validation.motivoFueraZona : undefined)}
+
+        helperText={`El cliente está en ${doc?.ZONA_CLIENTE ?? 'una ubicación sin zona'} y la ruta es de ${zonaRuta?.NOMBRE ?? '—'}. Queda registrado en la bitácora.`} />
+
+    )}
 
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -716,6 +798,8 @@ export function RutaOperacionPanel({ idRuta, estado, onActualizacion }: { idRuta
 
   const [docs, setDocs] = useState<RutaDocumentoPendiente[]>([]);
 
+  const [fueraZona, setFueraZona] = useState(false);
+
   const [pagos, setPagos] = useState<RutaPagoDisponible[]>([]);
 
   const [empleados, setEmpleados] = useState<CatalogoOption[]>([]);
@@ -750,7 +834,7 @@ export function RutaOperacionPanel({ idRuta, estado, onActualizacion }: { idRuta
 
       apiClient.get<RutaOperacion>(`/cxc/rutas/${idRuta}/operacion`),
 
-      apiClient.get<RutaDocumentoPendiente[]>('/cxc/rutas-documentos-pendientes'),
+      apiClient.get<RutaDocumentoPendiente[]>(`/cxc/rutas-documentos-pendientes?idRuta=${idRuta}&fueraZona=${fueraZona ? 1 : 0}`),
 
       apiClient.get<CatalogoOption[]>('/cxc/catalogos/empleados'),
 
@@ -1067,6 +1151,18 @@ export function RutaOperacionPanel({ idRuta, estado, onActualizacion }: { idRuta
     {modal === 'asignar' && <Modal isOpen onClose={closeModal} title="Asignar documento pendiente" description="Asigna un documento con saldo a esta ruta, con su hora de visita y ubicación confirmada." size="lg" closeOnBackdrop={false}>
 
       <AsignacionForm data={data} docs={docs} onClose={closeModal}
+
+        fueraZona={fueraZona}
+
+        onFueraZonaChange={(valor) => {
+
+          setFueraZona(valor);
+
+          apiClient.get<RutaDocumentoPendiente[]>(`/cxc/rutas-documentos-pendientes?idRuta=${idRuta}&fueraZona=${valor ? 1 : 0}`)
+
+            .then(setDocs).catch(report);
+
+        }}
 
         onSubmit={(payload) => perform(() => apiClient.post(`/cxc/rutas/${idRuta}/asignaciones`, payload).then(() => undefined))} />
 

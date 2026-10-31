@@ -108,7 +108,27 @@ describe('cliente.repository', () => {
       await expect(clientes.update(1, datos)).rejects.toMatchObject({ statusCode: 409 });
       expect(ejecuto(/SELECT NOMBRE FROM CLIENTE/)[0].binds).toMatchObject({ excluirId: 1 });
     });
-    it('segmento null lo quita', async () => {
+    it('zona elegida por un usuario: queda confirmada y registra quién', async () => {
+      const { ejecuto } = conexion([...reglas(), { sql: /SELECT ESTADO FROM CXC_ZONAS_COBRO/, rows: [{ ESTADO: 'A' }] }]);
+      await clientes.update(1, { ...datos, idZona: 71 }, 4);
+      const merge = ejecuto(/MERGE INTO CXC_CLIENTE_UBICACION/)[0];
+      expect(merge.sql).toMatch(/u.CONFIRMADA = 'S'/);
+      expect(merge.binds).toEqual({ idCliente: 1, idZona: 71, idUsuario: 4 });
+    });
+    it('zona inexistente o inactiva → 400 y no guarda', async () => {
+      const c1 = conexion([...reglas(), { sql: /SELECT ESTADO FROM CXC_ZONAS_COBRO/, rows: [] }]);
+      await expect(clientes.update(1, { ...datos, idZona: 71 }, 4)).rejects.toThrow(/zona de cobro seleccionada no existe/);
+      expect(c1.conn.commit).not.toHaveBeenCalled();
+      conexion([...reglas(), { sql: /SELECT ESTADO FROM CXC_ZONAS_COBRO/, rows: [{ ESTADO: 'I' }] }]);
+      await expect(clientes.update(1, { ...datos, idZona: 71 }, 4)).rejects.toThrow(/inactiva/);
+    });
+    it('quitar la zona: borra la fila si no hay punto en el mapa; si lo hay, solo limpia la zona', async () => {
+      const { ejecuto } = conexion(reglas());
+      await clientes.update(1, { ...datos, idZona: null });
+      expect(ejecuto(/DELETE FROM CXC_CLIENTE_UBICACION WHERE ID_CLIENTE = :idCliente AND LATITUD IS NULL/)).toHaveLength(1);
+      expect(ejecuto(/UPDATE CXC_CLIENTE_UBICACION SET ID_ZONA = NULL/)).toHaveLength(1);
+    });
+        it('segmento null lo quita', async () => {
       const { ejecuto } = conexion(reglas());
       await clientes.update(1, datos);
       expect(ejecuto(/DELETE FROM CXC_CLIENTE_SEGMENTO/)).toHaveLength(1);
@@ -120,16 +140,25 @@ describe('cliente.repository', () => {
 describe('ruta.repository', () => {
   const nueva = { nombre: 'Ruta Centro', idSucursal: 2, idEmpleado: 7, fecha: '2026-10-28', estado: 'PLANIFICADA' as const, radioKm: 5 };
 
-  it('create: código RUT-### consecutivo, observaciones vacías en vez de null y reintento por choque', async () => {
-    const { conn, ejecuto } = conexion([
-      { sql: /SELECT CODIGO_RUTA AS C/, rows: [{ C: 'RUT-009' }] },
+  it('create: bloquea, numera RUT-### consecutivo, guarda zona y observaciones vacías en vez de null', async () => {
+    const { conn, ejecuciones, ejecuto } = conexion([
+      { sql: /SELECT MAX\(CASE WHEN REGEXP_LIKE\(CODIGO_RUTA/, rows: [{ ULTIMO: 9 }] },
       { sql: /INSERT INTO CXC_RUTAS/, outId: 4 },
     ]);
-    fallar(conn, /INSERT INTO CXC_RUTAS/, oraUnico('UX_CXC_RUTAS_CODIGO'));
-    await expect(rutas.create(nueva)).resolves.toBe(4);
-    const ins = ejecuto(/INSERT INTO CXC_RUTAS/);
-    expect(ins).toHaveLength(2);
-    expect(ins[1].binds).toMatchObject({ codigoRuta: 'RUT-010', observaciones: '' });
+    await expect(rutas.create({ ...nueva, idZona: 51 })).resolves.toBe(4);
+    expect(ejecuciones[0].sql).toMatch(/LOCK TABLE CXC_RUTAS IN EXCLUSIVE MODE WAIT 5/);
+    expect(ejecuto(/INSERT INTO CXC_RUTAS/)[0].binds).toMatchObject({ codigoRuta: 'RUT-010', observaciones: '', idZona: 51 });
+    expect(conn.commit).toHaveBeenCalledOnce();
+  });
+  it('create: la primera ruta es RUT-001; un error al insertar revierte y libera el bloqueo', async () => {
+    const { conn, ejecuto } = conexion([{ sql: /INSERT INTO CXC_RUTAS/, outId: 1 }]);
+    await rutas.create({ ...nueva, idZona: 51 });
+    expect(ejecuto(/INSERT INTO CXC_RUTAS/)[0].binds.codigoRuta).toBe('RUT-001');
+    const c2 = conexion([]);
+    fallar(c2.conn, /INSERT INTO CXC_RUTAS/, oraUnico('FK_CXC_RUTAS_ZONA'));
+    await expect(rutas.create({ ...nueva, idZona: 51 })).rejects.toThrow(/ORA-00001/);
+    expect(c2.conn.rollback).toHaveBeenCalledOnce();
+    expect(c2.conn.commit).not.toHaveBeenCalled();
   });
 
   describe('validarSucursalYEmpleado', () => {

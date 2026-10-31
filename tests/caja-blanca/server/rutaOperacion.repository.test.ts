@@ -28,8 +28,10 @@ describe('rutaOperacion.asignar — planificación de una parada', () => {
   const datos = (extra: Record<string, unknown> = {}) => ({
     idDocumento: 5, montoAsignado: 100, direccion: 'Zona 1', latitud: 14.6349, longitud: -90.5069, horaProgramada: '09:00', ubicacionConfirmada: true as const, ...extra,
   });
-  const reglas = (o: { ruta?: unknown[]; paradas?: unknown[]; doc?: unknown[]; existe?: boolean; reservado?: number } = {}): Regla[] => [
+  const reglas = (o: { ruta?: unknown[]; paradas?: unknown[]; doc?: unknown[]; existe?: boolean; reservado?: number; elegible?: unknown[] } = {}): Regla[] => [
     { sql: /FROM CXC_RUTAS WHERE ID_RUTA=:idRuta FOR UPDATE/, rows: o.ruta ?? [ruta()] },
+    // Pertenencia a la zona, convenio y promesa (misma consulta que la lista de documentos).
+    { sql: /SELECT EN_ZONA, ZONA_CLIENTE FROM/, rows: o.elegible ?? [{ EN_ZONA: 1, ZONA_CLIENTE: 'Villa Canales - Zona 4' }] },
     { sql: /SELECT HORA_PROGRAMADA, LATITUD, LONGITUD FROM CXC_RUTA_DETALLE/, rows: o.paradas ?? [] },
     { sql: /SELECT ID_CLIENTE,SALDO,ESTADO FROM CXC_DOCUMENTOS/, rows: o.doc ?? [{ ID_CLIENTE: 1, SALDO: 300, ESTADO: 'PENDIENTE' }] },
     { sql: /SELECT ID_RUTA_DETALLE FROM CXC_RUTA_DETALLE WHERE ID_RUTA=:idRuta AND ID_DOCUMENTO/, rows: o.existe ? [{ ID_RUTA_DETALLE: 1 }] : [] },
@@ -59,6 +61,23 @@ describe('rutaOperacion.asignar — planificación de una parada', () => {
   it('documento ya asignado a la ruta → 409', () => esperaError(reglas({ existe: true }), datos(), /ya está asignado/));
   it('monto + lo ya reservado en otras rutas supera el saldo → 409', () => esperaError(reglas({ reservado: 250 }), datos(), /saldo disponible/));
 
+  it('en convenio activo, con promesa vigente o ya en la ruta → 409', () =>
+    esperaError(reglas({ elegible: [] }), datos(), /convenio activo|promesa de pago vigente/));
+  it('cliente fuera de la zona sin marcar la excepción → 400 en el documento', () =>
+    esperaError(reglas({ elegible: [{ EN_ZONA: 0, ZONA_CLIENTE: 'Amatitlán - Zona 2' }] }), datos(), { statusCode: 400, details: [{ campo: 'idDocumento' }] }));
+  it('fuera de la zona con motivo: se asigna y queda en la bitácora', async () => {
+    const { ejecuto } = conexion(reglas({ elegible: [{ EN_ZONA: 0, ZONA_CLIENTE: 'Amatitlán - Zona 2' }] }));
+    await repo.asignar(4, datos({ fueraZona: true, motivoFueraZona: 'El cliente pidió la visita en su sucursal' }));
+    expect(String(ejecuto(/INSERT INTO CXC_GESTIONES_COBRO/)[0].binds.texto)).toMatch(/FUERA DE ZONA: El cliente pidió/);
+  });
+  it('el punto confirmado queda como ubicación del cliente si no tenía', async () => {
+    const { ejecuto } = conexion(reglas());
+    await repo.asignar(4, datos());
+    const merge = ejecuto(/MERGE INTO CXC_CLIENTE_UBICACION/)[0];
+    expect(merge.sql).toMatch(/WHERE u.LATITUD IS NULL/);
+    expect(merge.binds).toMatchObject({ idCliente: 1, latitud: 14.6349, longitud: -90.5069 });
+  });
+
   it('éxito: la parada queda a cargo del responsable, se renumera y se deja gestión', async () => {
     const { conn, ejecuto } = conexion(reglas({ paradas: [{ HORA_PROGRAMADA: '08:00', LATITUD: 14.6349, LONGITUD: -90.5069 }] }));
     await repo.asignar(4, datos({ latitud: 14.64 }));
@@ -66,6 +85,36 @@ describe('rutaOperacion.asignar — planificación de una parada', () => {
     expect(ejecuto(/MERGE INTO CXC_RUTA_DETALLE/)).toHaveLength(1);
     expect(ejecuto(/INSERT INTO CXC_GESTIONES_COBRO/)[0].binds).toMatchObject({ idEmpleado: 7, idDetalle: 60 });
     expect(conn.commit).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('rutaOperacion.pendientes — documentos por zona', () => {
+  it('por defecto solo la zona; con fueraZona todos; orden por zona, atraso y saldo', async () => {
+    const { ejecuto } = conexion([{ sql: /ORDER BY EN_ZONA DESC/, rows: [{ ID_DOCUMENTO: 5, EN_ZONA: '1', DIAS_VENCIDO: '12' }] }]);
+    const [d] = await repo.pendientes(361);
+    expect(d).toMatchObject({ EN_ZONA: 1, DIAS_VENCIDO: 12 });
+    await repo.pendientes(361, { fueraZona: true });
+    const [solo, todos] = ejecuto(/ORDER BY EN_ZONA DESC/);
+    expect(solo.binds).toMatchObject({ idRuta: 361, fueraZona: 0, hoy: HOY });
+    expect(todos.binds.fueraZona).toBe(1);
+    expect(solo.sql).toMatch(/ORDER BY EN_ZONA DESC, DIAS_VENCIDO DESC, SALDO DESC/);
+  });
+  it('excluye convenio activo, promesa vigente y documentos ya en la ruta', async () => {
+    const { ejecuto } = conexion([]);
+    await repo.pendientes(361);
+    const sql = ejecuto(/ORDER BY EN_ZONA DESC/)[0].sql;
+    expect(sql).toMatch(/CXC_CONVENIOS_PAGO cv .*'ACTIVO'/);
+    expect(sql).toMatch(/CXC_PROMESAS_PAGO pp .*'PENDIENTE'.*pp.FECHA_COMPROMISO >= NVL\(TRUNC\(r.FECHA\)/);
+    expect(sql).toMatch(/x.ID_RUTA=r.ID_RUTA AND x.ID_DOCUMENTO=d.ID_DOCUMENTO/);
+  });
+  it('pertenencia: misma zona, o todas las zonas del municipio si la ruta es de municipio completo; ruta sin zona = todos', async () => {
+    const { ejecuto } = conexion([]);
+    await repo.pendientes(361);
+    const sql = ejecuto(/ORDER BY EN_ZONA DESC/)[0].sql;
+    expect(sql).toMatch(/WHEN rz.ID_ZONA IS NULL THEN 1/);
+    expect(sql).toMatch(/WHEN cz.ID_ZONA = rz.ID_ZONA THEN 1/);
+    expect(sql).toMatch(/WHEN rz.ZONA IS NULL AND cz.ID_ZONA IS NOT NULL .*MUNICIPIO/);
   });
 });
 
