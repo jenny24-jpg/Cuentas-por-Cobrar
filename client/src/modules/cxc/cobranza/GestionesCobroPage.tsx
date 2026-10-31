@@ -45,7 +45,7 @@ export const GestionesCobroPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Gestiones de Cobro</h1>
-          <p className="text-sm text-slate-500">Registro de llamadas, visitas y contactos de cobranza.</p>
+          <p className="text-sm text-slate-500">Historial de contactos con el cliente, resultados y acuerdos de pago.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>
           Nueva Gestión
@@ -73,18 +73,33 @@ export const GestionesCobroPage = () => {
         data={data}
         emptyText="No hay gestiones de cobro registradas"
         columns={[
-          { header: 'Fecha', accessorKey: 'fechaGestion', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Fecha gestión', accessorKey: 'fechaGestion', cell: ({ value }: any) => formatDateGT(value) },
           { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Empleado', accessorKey: 'nombreEmpleado' },
           { header: 'Tipo', accessorKey: 'tipoGestion', cell: ({ value }: any) => value ?? '—' },
           {
-            header: 'Compromiso',
+            header: 'Resultado',
+            accessorKey: 'resultado',
+            cell: ({ value }: any) => value ? <span className="block max-w-[180px] truncate" title={value}>{value}</span> : '—',
+          },
+          {
+            header: 'Observación',
+            accessorKey: 'observacion',
+            cell: ({ value }: any) => value ? <span className="block max-w-[240px] truncate" title={value}>{value}</span> : '—',
+          },
+          {
+            header: 'Fecha compromiso',
+            accessorKey: 'fechaCompromiso',
+            cell: ({ value }: any) => formatDateGT(value),
+          },
+          {
+            header: 'Monto comprometido',
             cell: ({ row }: any) =>
-              row.montoCompromiso ? (
+              row.montoCompromiso != null ? (
                 <span className="inline-flex h-6 items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-semibold text-slate-700">Q {Number(row.montoCompromiso).toFixed(2)}</span>
               ) : (
-                '—'
+                'Sin monto acordado'
               ),
           },
           {

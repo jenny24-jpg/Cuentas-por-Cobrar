@@ -65,7 +65,7 @@ export const ConveniosPagoPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Convenios de Pago</h1>
-          <p className="text-sm text-slate-500">Planes de pago a cuotas acordados con clientes en mora. Pagar una cuota reduce el saldo real de los documentos que cubre el convenio.</p>
+          <p className="text-sm text-slate-500">Planes de pago a cuotas acordados con clientes en mora. Consulta aquí el avance y abre un convenio para revisar sus cuotas y documentos.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" icon={RefreshCw} onClick={() => setConfirmRecalcularOpen(true)} disabled={isRecalculando}>
@@ -75,6 +75,10 @@ export const ConveniosPagoPage = () => {
             Nuevo Convenio
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        El convenio mantiene el saldo total negociado y su avance por cuotas. Las cuotas vencidas se señalan en el detalle; usa <strong>Recalcular incumplimiento</strong> para marcar como incumplido un convenio activo que tenga cuotas vencidas sin pagar.
       </div>
 
       {recalculoMensaje && (
@@ -101,11 +105,14 @@ export const ConveniosPagoPage = () => {
         emptyText="No hay convenios de pago registrados"
         onRowClick={(row: ConvenioPago) => navigate(`/cxc/cobranza/convenios-pago/${row.idConvenio}`)}
         columns={[
-          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
+          { header: 'Convenio', accessorKey: 'idConvenio', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
-          { header: 'Fecha', accessorKey: 'fechaConvenio', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Monto deuda', accessorKey: 'montoDeuda', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
-          { header: 'Cuotas', accessorKey: 'numeroCuotas', align: 'center' },
+          { header: 'Fecha del convenio', accessorKey: 'fechaConvenio', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Deuda acordada', accessorKey: 'montoDeuda', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Pagado', accessorKey: 'montoPagado', cell: ({ value }: any) => `Q ${Number(value ?? 0).toFixed(2)}` },
+          { header: 'Saldo del plan', accessorKey: 'saldoPendiente', cell: ({ value }: any) => `Q ${Number(value ?? 0).toFixed(2)}` },
+          { header: 'Cuotas pagadas', cell: ({ row }: any) => `${Number(row.cuotasPagadas ?? 0)} / ${row.numeroCuotas}` },
+          { header: 'Observaciones', accessorKey: 'observaciones', cell: ({ value }: any) => value ? <span className="block max-w-[220px] truncate" title={value}>{value}</span> : '—' },
           {
             header: 'Estado',
             cell: ({ row }: any) => <StatusBadge status={row.estado} />,

@@ -385,3 +385,33 @@ export async function clienteElegibleParaConvenio(idCliente: number): Promise<bo
     await conn.close();
   }
 }
+
+/** Clientes que cumplen la regla de creación de convenios: mora activa o promesa vencida/incumplida. */
+export async function listClientesElegiblesParaConvenio(): Promise<CatalogoOption[]> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string }>(
+      `SELECT c.ID_CLIENTE, c.NOMBRE
+         FROM CLIENTE c
+        WHERE EXISTS (
+                SELECT 1 FROM CXC_PROMESAS_PAGO p
+                 WHERE p.ID_CLIENTE = c.ID_CLIENTE
+                   AND (UPPER(NVL(p.ESTADO, 'PENDIENTE')) = 'INCUMPLIDA'
+                        OR (UPPER(NVL(p.ESTADO, 'PENDIENTE')) = 'PENDIENTE'
+                            AND p.FECHA_COMPROMISO IS NOT NULL
+                            AND p.FECHA_COMPROMISO < TRUNC(SYSDATE)))
+              )
+           OR EXISTS (
+                SELECT 1 FROM CXC_MORA m
+                JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = m.ID_DOCUMENTO
+                 WHERE d.ID_CLIENTE = c.ID_CLIENTE
+                   AND d.SALDO > 0
+                   AND UPPER(NVL(m.ESTADO, 'ACTIVA')) = 'ACTIVA'
+              )
+        ORDER BY c.NOMBRE ASC`,
+    );
+    return (result.rows ?? []).map((row) => ({ id: row.ID_CLIENTE, label: row.NOMBRE }));
+  } finally {
+    await conn.close();
+  }
+}

@@ -8,7 +8,8 @@ export async function list(req: Request, res: Response, next: NextFunction) {
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(100, Math.max(Number(req.query.limit) || 10, 1));
     const search = typeof req.query.search === 'string' ? req.query.search : undefined;
-    const result = await service.list({ page, limit, search });
+    const pendientesAprobacion = req.query.pendientesAprobacion === '1';
+    const result = await service.list({ page, limit, search, pendientesAprobacion });
     res.json({ data: result.data, meta: { page, limit, total: result.total, totalPages: Math.max(Math.ceil(result.total / limit), 1) } });
   } catch (error) { next(error); }
 }

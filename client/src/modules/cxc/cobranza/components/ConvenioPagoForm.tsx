@@ -24,6 +24,7 @@ const nombreDocumento = (doc: CatalogoOption) => doc.label.replace(/\s*\(saldo:[
 export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPagoFormProps) => {
   const isEditing = !!convenio;
   const [clientes, setClientes] = useState<CatalogoOption[]>([]);
+  const [cargandoClientes, setCargandoClientes] = useState(true);
   const [documentosPendientes, setDocumentosPendientes] = useState<CatalogoOption[]>([]);
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
   const [idCliente, setIdCliente] = useState(convenio?.idCliente?.toString() ?? '');
@@ -37,7 +38,13 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => { apiClient.get<CatalogoOption[]>('/cxc/catalogos/clientes').then(setClientes).catch(() => setClientes([])); }, []);
+  useEffect(() => {
+    const endpoint = isEditing ? '/cxc/catalogos/clientes' : '/cxc/convenios-pago/clientes-elegibles';
+    apiClient.get<CatalogoOption[]>(endpoint)
+      .then(setClientes)
+      .catch(() => setClientes([]))
+      .finally(() => setCargandoClientes(false));
+  }, [isEditing]);
 
   useEffect(() => {
     if (isEditing) return;
@@ -173,9 +180,12 @@ export const ConvenioPagoForm = ({ convenio, onSuccess, onCancel }: ConvenioPago
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      {!isEditing && <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        El convenio formaliza un plan de cuotas para una deuda vencida. Solo puedes elegir clientes con mora activa o una promesa vencida/incumplida. Al guardar, se generan las cuotas y los pagos reducen los saldos de los documentos seleccionados.
+      </div>}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-        <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => setIdCliente(e.target.value)} options={clientes.map((c) => ({ value: c.id, label: c.label }))} error={errors.idCliente} isReadOnly={isEditing} helperText={isEditing ? 'El cliente queda fijo porque el convenio ya tiene plan de cuotas.' : 'Cliente con quien se formaliza el convenio.'} />
-        <TextInput label="Fecha del convenio" type="date" required min={todayIso()} value={fechaConvenio} onChange={(e: any) => setFechaConvenio(e.target.value)} error={vivo('fechaConvenio', !!fechaConvenio)} isReadOnly={isEditing} helperText={isEditing ? 'La fecha original no cambia al editar.' : 'Fecha del acuerdo; no puede ser anterior a hoy. Las cuotas vencen mes a mes desde esta fecha.'} />
+        <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => setIdCliente(e.target.value)} options={clientes.map((c) => ({ value: c.id, label: c.label }))} error={errors.idCliente} isReadOnly={isEditing || cargandoClientes || clientes.length === 0} helperText={isEditing ? 'El cliente queda fijo porque el convenio ya tiene plan de cuotas.' : cargandoClientes ? 'Buscando clientes que califican para un convenio...' : clientes.length === 0 ? 'No hay clientes elegibles. Se requiere mora activa o una promesa vencida/incumplida.' : 'Solo aparecen clientes con mora activa o una promesa vencida/incumplida.'} />
+        <TextInput label="Fecha del convenio" type="date" required min={todayIso()} max={todayIso()} value={fechaConvenio} error={vivo('fechaConvenio', !!fechaConvenio)} isReadOnly helperText={isEditing ? 'La fecha original no cambia al editar.' : 'Se asigna automáticamente con la fecha actual. La primera cuota vence un mes después y las demás, cada mes.'} />
         <TextInput
           label="Monto de la deuda"
           type="number"

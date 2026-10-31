@@ -225,10 +225,9 @@ export const AjusteForm = ({ ajuste, onSuccess, onCancel }: Props) => {
           required
           max={todayIso()}
           value={fecha}
-          onChange={(e: any) => setFecha(e.target.value)}
-          helperText="Fecha del ajuste; no puede ser futura."
+          isReadOnly
+          helperText="Se asigna automáticamente con la fecha actual y no se puede modificar."
           error={errorFor('fecha', fecha)}
-          isReadOnly={isLocked}
         />
         <Select
           label="Solicitante"
