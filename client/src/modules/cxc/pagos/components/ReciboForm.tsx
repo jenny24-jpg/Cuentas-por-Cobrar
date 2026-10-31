@@ -73,9 +73,7 @@ export function ReciboForm({
     item?.monto?.toString() ?? '',
   );
 
-  const [estado, setEstado] = useState<Recibo['estado']>(
-    item?.estado ?? 'EMITIDO',
-  );
+  const estado = item?.estado ?? 'EMITIDO';
 
   const [fechaPagoOriginal, setFechaPagoOriginal] = useState('');
   const [cargandoPago, setCargandoPago] = useState(false);
@@ -321,21 +319,12 @@ export function ReciboForm({
         `(${Number(montoMaximo).toFixed(2)}).`;
     }
 
-    if (
-      !isEditing &&
-      estado !== 'EMITIDO'
-    ) {
-      next.estado =
-        'Los recibos nuevos deben registrarse como emitidos.';
-    }
-
     return next;
   }, [
     idCliente,
     idPago,
     fecha,
     monto,
-    estado,
     hoy,
     fechaPagoVerificada,
     cargandoPago,
@@ -435,7 +424,6 @@ export function ReciboForm({
       idCliente: Number(idCliente),
       idPago: Number(idPago),
       fecha,
-      estado: isEditing ? estado : 'EMITIDO',
     };
 
     try {
@@ -544,19 +532,16 @@ export function ReciboForm({
           label="Estado"
           required
           value={estado}
-          onChange={(e: any) =>
-            setEstado(e.target.value as Recibo['estado'])
-          }
           options={ESTADOS_RECIBO.map((value) => ({
             value,
             label:
               value.charAt(0) +
               value.slice(1).toLowerCase(),
           }))}
-          isReadOnly={!isEditing || isReciboEmitido}
+          isReadOnly
           helperText={
             isEditing
-              ? 'El estado del recibo está sujeto a las reglas del servidor.'
+              ? 'El estado se conserva. Solo cambia mediante el flujo de reversa o anulación del pago.'
               : 'Los recibos nuevos se registran como emitidos.'
           }
           error={errorFor('estado', estado)}

@@ -15,6 +15,7 @@ import {
   Trash2,
   CheckCircle2,
   RefreshCw,
+  Ban,
 } from 'lucide-react';
 
 import {
@@ -96,6 +97,10 @@ export const RutaDetallePage = () => {
     setFinalizationError,
   ] = useState<string | null>(null);
 
+  const [confirmarCancelacion, setConfirmarCancelacion] = useState(false);
+  const [isCancelando, setIsCancelando] = useState(false);
+  const [cancelacionError, setCancelacionError] = useState<string | null>(null);
+
   const [
     successMessage,
     setSuccessMessage,
@@ -125,6 +130,11 @@ export const RutaDetallePage = () => {
     rutaEnProceso &&
     !isLoading &&
     !isFinalizing;
+
+  const puedeCancelar =
+    ['PLANIFICADA', 'EN_PROCESO'].includes(estadoRuta) &&
+    !isLoading &&
+    !isCancelando;
 
   const paradasAntiguas = paradas.filter(
     (parada) => !parada.idDocumento,
@@ -282,6 +292,29 @@ export const RutaDetallePage = () => {
     }
   };
 
+  const handleCancelarRuta = async () => {
+    if (!puedeCancelar || !ruta || !Number.isInteger(idRuta) || idRuta <= 0) return;
+    setIsCancelando(true);
+    setCancelacionError(null);
+    setSuccessMessage(null);
+    try {
+      await apiClient.post(`/cxc/rutas/${idRuta}/cancelar`, {});
+      setConfirmarCancelacion(false);
+      setSuccessMessage('La ruta se cancelo. Se conservaron las paradas y los cobros ya aplicados.');
+      await cargar();
+    } catch (err) {
+      const apiError = err as { message?: unknown; error?: unknown; details?: Array<{ mensaje?: string }> } | null;
+      const detalles = Array.isArray(apiError?.details)
+        ? apiError.details.map((item) => item.mensaje).filter(Boolean).join('\n')
+        : '';
+      const textoServidor = typeof apiError?.error === 'string' ? apiError.error
+        : typeof apiError?.message === 'string' ? apiError.message : '';
+      setCancelacionError(detalles || textoServidor || 'No se pudo cancelar la ruta.');
+    } finally {
+      setIsCancelando(false);
+    }
+  };
+
   // =====================================================
   // INTERFAZ PRINCIPAL
   // =====================================================
@@ -365,6 +398,18 @@ export const RutaDetallePage = () => {
             </button>
           )}
 
+          {['PLANIFICADA', 'EN_PROCESO'].includes(estadoRuta) && (
+            <button
+              type="button"
+              onClick={() => { setCancelacionError(null); setConfirmarCancelacion(true); }}
+              disabled={!puedeCancelar}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50 transition-colors"
+            >
+              <Ban size={17} />
+              Cancelar ruta
+            </button>
+          )}
+
         </div>
       </div>
 
@@ -388,6 +433,12 @@ export const RutaDetallePage = () => {
               visitas y cobros registrados.
             </p>
           </div>
+        </div>
+      )}
+
+      {rutaCancelada && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          Ruta cancelada. Las paradas y los cobros aplicados se conservan para consulta; no se pueden registrar nuevas actividades.
         </div>
       )}
 
@@ -579,6 +630,21 @@ export const RutaDetallePage = () => {
         confirmLabel="Finalizar ruta"
         isLoading={isFinalizing}
         errorMessage={finalizationError}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmarCancelacion}
+        onClose={() => {
+          if (isCancelando) return;
+          setConfirmarCancelacion(false);
+          setCancelacionError(null);
+        }}
+        onConfirm={handleCancelarRuta}
+        title="Cancelar ruta de cobranza"
+        description={`¿Cancelar la ruta "${ruta?.nombre ?? ''}"? Las paradas quedaran cerradas y los cobros ya aplicados se conservaran; no se podran registrar nuevas actividades.`}
+        confirmLabel="Cancelar ruta"
+        isLoading={isCancelando}
+        errorMessage={cancelacionError}
       />
     </div>
   );

@@ -28,7 +28,7 @@ const promesaInputBase = z.object({
   fechaPromesa: isoDateSchema('La fecha de la promesa'),
   fechaCompromiso: optionalIsoDateSchema('La fecha comprometida de pago'),
   montoComprometido: moneySchema('El monto comprometido', true),
-  estado: z.enum(ESTADOS_PROMESA_PAGO).default('PENDIENTE'),
+  estado: z.literal('PENDIENTE').default('PENDIENTE'),
   observaciones: optionalTrimmedText('Las observaciones', 500),
 });
 
@@ -38,5 +38,10 @@ export const createPromesaPagoSchema = promesaInputBase.superRefine((data, ctx) 
   }
 });
 export type CreatePromesaPagoInput = z.infer<typeof createPromesaPagoSchema>;
-export const updatePromesaPagoSchema = promesaInputBase.partial();
+// El estado lo controla el cierre automático de promesas; no se modifica al
+// editar datos y no se acepta desde el endpoint de actualización.
+export const updatePromesaPagoSchema = promesaInputBase
+  .omit({ estado: true })
+  .partial()
+  .strict();
 export type UpdatePromesaPagoInput = z.infer<typeof updatePromesaPagoSchema>;

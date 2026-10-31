@@ -437,6 +437,35 @@ export async function finalizar(id: number): Promise<void> {
   }
 }
 
+/** Cancela una ruta abierta sin borrar paradas ni revertir cobros ya aplicados. */
+export async function cancelar(id: number): Promise<void> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ESTADO: string }>(
+      `SELECT TRIM(ESTADO) AS ESTADO FROM CXC_RUTAS WHERE ID_RUTA = :id FOR UPDATE`,
+      { id },
+    );
+    const ruta = result.rows?.[0];
+    if (!ruta) throw new NotFoundError(`Ruta ${id} no encontrada`);
+    if (ruta.ESTADO === 'CANCELADA') throw new ConflictError('La ruta ya esta cancelada.');
+    if (ruta.ESTADO === 'COMPLETADA') throw new ConflictError('Una ruta completada no se puede cancelar.');
+    if (!['PLANIFICADA', 'EN_PROCESO'].includes(ruta.ESTADO)) {
+      throw new ConflictError('Solo se puede cancelar una ruta planificada o en proceso.');
+    }
+    const updated = await conn.execute(
+      `UPDATE CXC_RUTAS SET ESTADO = 'CANCELADA' WHERE ID_RUTA = :id AND TRIM(ESTADO) = :estado`,
+      { id, estado: ruta.ESTADO },
+    );
+    if (updated.rowsAffected !== 1) throw new ConflictError('La ruta cambio mientras se procesaba la cancelacion.');
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    await conn.close();
+  }
+}
+
 /**
  * Reglas al editar una ruta abierta:
  * - Estado: solo transiciones válidas; el cierre COMPLETADA se realiza con finalizar().

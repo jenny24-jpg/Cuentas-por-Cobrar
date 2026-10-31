@@ -6,7 +6,7 @@ import type {
   UpdateDocumentoInput,
   AnularDocumentoInput,
 } from '@erp/contracts';
-import { deriveDocumentoCondicion } from '../../shared/financialRules';
+import { deriveDocumentoCondicion, hasFinancialMovement } from '../../shared/financialRules';
 import { ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
 import { siguienteNumeroDocumento } from '../../shared/correlativos';
 import { registrarEvento } from './documentoHistorial.repository';
@@ -238,6 +238,19 @@ export async function update(id: number, input: DocumentoInternalUpdate): Promis
 
   const conn = await getConnection();
   try {
+    const locked = await conn.execute<{ ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT ESTADO, TOTAL, SALDO FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id FOR UPDATE`,
+      { id },
+    );
+    const current = locked.rows?.[0];
+    if (!current) throw new NotFoundError(`Documento ${id} no encontrado`);
+    const estadoActual = String(current.ESTADO ?? '').trim().toUpperCase();
+    if (['PAGADO', 'PAGADA', 'ANULADO', 'ANULADA'].includes(estadoActual)) {
+      throw new ConflictError('El documento ya esta pagado o anulado y no puede editarse.');
+    }
+    if (hasFinancialMovement(current.TOTAL, current.SALDO)) {
+      throw new ConflictError('El documento ya tiene movimientos financieros. Reversa o corrige esos movimientos antes de editarlo.');
+    }
     await conn.execute(
       `UPDATE CXC_DOCUMENTOS SET ${fields.join(', ')} WHERE ID_DOCUMENTO = :id`,
       binds,
@@ -254,6 +267,16 @@ export async function update(id: number, input: DocumentoInternalUpdate): Promis
 export async function remove(id: number): Promise<void> {
   const conn = await getConnection();
   try {
+    const locked = await conn.execute<{ ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT ESTADO, TOTAL, SALDO FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id FOR UPDATE`,
+      { id },
+    );
+    const current = locked.rows?.[0];
+    if (!current) throw new NotFoundError(`Documento ${id} no encontrado`);
+    const estadoActual = String(current.ESTADO ?? '').trim().toUpperCase();
+    if (hasFinancialMovement(current.TOTAL, current.SALDO) || !['PENDIENTE', 'VENCIDO'].includes(estadoActual)) {
+      throw new ConflictError('Solo se puede eliminar un documento sin movimientos y en estado pendiente.');
+    }
     await conn.execute(`DELETE FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id`, { id });
     await conn.commit();
   } catch (err) {
@@ -317,17 +340,19 @@ export async function anular(id: number, input: AnularDocumentoInput): Promise<v
       fecha: input.fechaAnulacion,
     });
 
-    // Las notas de débito por mora de esta factura se anulan con ella: no puede
-    // quedar un recargo pendiente por una factura que ya no existe. Las ya
-    // pagadas se conservan (ese dinero sí se recibió).
-    const notas = await conn.execute<{ ID_DOCUMENTO: number; ESTADO: string; SALDO: number }>(
-      `SELECT ID_DOCUMENTO, ESTADO, SALDO FROM CXC_DOCUMENTOS
+    // Las notas de débito por mora de este documento se anulan en la misma
+    // transacción. Si alguna ya recibió pagos, primero deben reversarse.
+    const notas = await conn.execute<{ ID_DOCUMENTO: number; ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT ID_DOCUMENTO, ESTADO, TOTAL, SALDO FROM CXC_DOCUMENTOS
         WHERE ID_DOCUMENTO_ORIGEN = :id
-          AND UPPER(TRIM(ESTADO)) NOT IN ('PAGADO', 'PAGADA', 'ANULADO', 'ANULADA')
+          AND UPPER(TRIM(ESTADO)) NOT IN ('ANULADO', 'ANULADA')
         FOR UPDATE`,
       { id },
     );
     for (const nota of notas.rows ?? []) {
+      if (hasFinancialMovement(nota.TOTAL, nota.SALDO)) {
+        throw new ConflictError('El documento tiene notas de mora con pagos aplicados. Reversa esos pagos antes de anularlo.');
+      }
       await conn.execute(
         `UPDATE CXC_DOCUMENTOS
             SET SALDO = 0,

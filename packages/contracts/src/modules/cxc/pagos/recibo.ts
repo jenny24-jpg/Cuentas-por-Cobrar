@@ -26,5 +26,10 @@ export const createReciboSchema = z.object({
 });
 export type CreateReciboInput = z.infer<typeof createReciboSchema>;
 
-export const updateReciboSchema = createReciboSchema.partial();
+// El estado del recibo cambia por el flujo financiero (reversa/anulación),
+// nunca por editar sus datos descriptivos.
+export const updateReciboSchema = createReciboSchema
+  .omit({ estado: true })
+  .partial()
+  .strict();
 export type UpdateReciboInput = z.infer<typeof updateReciboSchema>;

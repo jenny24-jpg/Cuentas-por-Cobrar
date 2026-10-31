@@ -47,6 +47,7 @@ router.get('/rutas/:id/sucursal-sugerida', rutaController.sucursalSugerida);
 router.get('/rutas/:id', rutaController.getOne);
 router.post('/rutas', rutaController.create);
 router.patch('/rutas/:id', rutaController.update);
+router.post('/rutas/:id/cancelar', rutaController.cancelar);
 router.post('/rutas/:id/finalizar', rutaController.finalizar);
 router.delete('/rutas/:id', rutaController.remove);
 

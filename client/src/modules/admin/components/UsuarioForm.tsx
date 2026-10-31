@@ -54,8 +54,9 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
     // Los campos de texto vacíos se explican con un mensaje más claro que el del esquema.
     if (!isEditing && !username.trim()) next.username = 'El usuario es obligatorio.';
     if (!nombre.trim()) next.nombre = 'El nombre completo es obligatorio.';
+    if (rol === 'ADMIN' && !idEmpleado) next.idEmpleado = 'Vincula un empleado a cada usuario administrador.';
     return next;
-  }, [isEditing, username, nombre, email, rol, estado]);
+  }, [isEditing, username, nombre, email, rol, estado, idEmpleado]);
 
   const isFormValid = !hasErrors(validationErrors);
   const marcar = (campo: string) => setTocados((t) => ({ ...t, [campo]: true }));
@@ -65,7 +66,7 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
     e.preventDefault();
     setFormError(null);
     if (!isFormValid) {
-      setTocados({ username: true, nombre: true, email: true, rol: true, estado: true });
+      setTocados({ username: true, nombre: true, email: true, rol: true, estado: true, idEmpleado: true });
       return;
     }
     setServerErrors({});
@@ -149,7 +150,7 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
             .map((emp) => ({ value: String(emp.idEmpleado), label: `${emp.nombre}${emp.codigo ? ` · ${emp.codigo}` : ''}` })),
         ]}
         helperText="Es quien queda registrado en todo lo que este usuario cree, anule o apruebe. Sin empleado, el usuario no podrá registrar información."
-        error={serverErrors.idEmpleado}
+        error={errorDe('idEmpleado')}
       />
       {isEditing && (
         <Select

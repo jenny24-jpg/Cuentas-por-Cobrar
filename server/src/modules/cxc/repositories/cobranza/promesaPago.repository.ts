@@ -292,11 +292,6 @@ export async function update(
     binds.montoComprometido = input.montoComprometido;
   }
 
-  if (input.estado !== undefined) {
-    fields.push('ESTADO = :estado');
-    binds.estado = input.estado;
-  }
-
   if (input.observaciones !== undefined) {
     fields.push('OBSERVACIONES = :observaciones');
     binds.observaciones = input.observaciones;
@@ -378,18 +373,17 @@ export async function cerrarVencidas(
            SET ESTADO = 'CUMPLIDA'
          WHERE ${vencida}
            AND (
-             EXISTS (
-               SELECT 1 FROM CXC_DOCUMENTOS d
-                WHERE d.ID_DOCUMENTO = p.ID_DOCUMENTO
-                  AND d.SALDO <= 0.005
-             )
-             OR (
-               SELECT NVL(SUM(pg.MONTO), 0) FROM CXC_PAGOS pg
-                WHERE pg.ID_CLIENTE = p.ID_CLIENTE
-                  AND UPPER(TRIM(pg.ESTADO)) NOT IN ('ANULADO', 'REVERSADO')
-                  AND pg.FECHA_PAGO BETWEEN TRUNC(p.FECHA_PROMESA) AND TRUNC(p.FECHA_COMPROMISO)
-             ) >= p.MONTO_COMPROMETIDO - 0.005
-           )
+             SELECT NVL(SUM(ap.MONTO_APLICADO), 0)
+               FROM CXC_APLICACION_PAGOS ap
+               JOIN CXC_PAGOS pg ON pg.ID_PAGO = ap.ID_PAGO
+               JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = ap.ID_DOCUMENTO
+              WHERE d.ID_CLIENTE = p.ID_CLIENTE
+                AND (p.ID_DOCUMENTO IS NULL OR ap.ID_DOCUMENTO = p.ID_DOCUMENTO)
+                AND ap.ESTADO = 'CONFIRMADA'
+                AND NVL(UPPER(TRIM(pg.ESTADO)), 'NO_APLICADO') NOT IN ('ANULADO', 'REVERSADO')
+                AND ap.FECHA_APLICACION >= TRUNC(p.FECHA_PROMESA)
+                AND ap.FECHA_APLICACION < TRUNC(p.FECHA_COMPROMISO) + 1
+           ) >= p.MONTO_COMPROMETIDO - 0.005
       `,
       { hoy },
     );
