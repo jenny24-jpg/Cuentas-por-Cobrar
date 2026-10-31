@@ -192,23 +192,27 @@ export async function findAll(params: {
   page: number;
   limit: number;
   search?: string;
+  pendientesAprobacion?: boolean;
 }): Promise<{ data: NotaCredito[]; total: number }> {
   const conn = await getConnection();
 
   try {
     const offset = (params.page - 1) * params.limit;
 
-    const whereClause = params.search
-      ? `
-        WHERE TO_CHAR(n.ID_CLIENTE) LIKE :search
+    const condiciones: string[] = [];
+    if (params.pendientesAprobacion) {
+      condiciones.push("TRIM(n.ESTADO) IN ('PENDIENTE', 'ACTIVA') AND n.ID_EMPLEADO_APROBACION IS NULL");
+    }
+    if (params.search) {
+      condiciones.push(`(TO_CHAR(n.ID_CLIENTE) LIKE :search
            OR TO_CHAR(n.ID_NOTA_CREDITO) LIKE :search
            OR UPPER(NVL(c.NOMBRE, '')) LIKE UPPER(:search)
            OR UPPER(NVL(n.DESCRIPCION, '')) LIKE UPPER(:search)
            OR UPPER(NVL(n.SERIE, '')) LIKE UPPER(:search)
            OR UPPER(NVL(n.NUMERO, '')) LIKE UPPER(:search)
-           OR UPPER(n.ESTADO) LIKE UPPER(:search)
-      `
-      : '';
+           OR UPPER(n.ESTADO) LIKE UPPER(:search))`);
+    }
+    const whereClause = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
 
     const searchBind = params.search
       ? { search: `%${params.search}%` }

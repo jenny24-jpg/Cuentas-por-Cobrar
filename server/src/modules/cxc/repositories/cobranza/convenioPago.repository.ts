@@ -11,6 +11,9 @@ interface ConvenioPagoRow {
   NOMBRE_CLIENTE: string | null;
   FECHA_CONVENIO: Date;
   MONTO_DEUDA: number;
+  MONTO_PAGADO: number;
+  SALDO_PENDIENTE: number;
+  CUOTAS_PAGADAS: number;
   NUMERO_CUOTAS: number;
   ESTADO: string;
   OBSERVACIONES: string | null;
@@ -23,6 +26,9 @@ function mapRow(row: ConvenioPagoRow): ConvenioPago {
     nombreCliente: row.NOMBRE_CLIENTE,
     fechaConvenio: row.FECHA_CONVENIO?.toISOString() ?? '',
     montoDeuda: row.MONTO_DEUDA,
+    montoPagado: Number(row.MONTO_PAGADO ?? 0),
+    saldoPendiente: Number(row.SALDO_PENDIENTE ?? row.MONTO_DEUDA),
+    cuotasPagadas: Number(row.CUOTAS_PAGADAS ?? 0),
     numeroCuotas: row.NUMERO_CUOTAS,
     estado: row.ESTADO as ConvenioPago['estado'],
     observaciones: row.OBSERVACIONES,
@@ -31,7 +37,11 @@ function mapRow(row: ConvenioPagoRow): ConvenioPago {
 
 const SELECT_BASE = `
   SELECT cv.ID_CONVENIO, cv.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE, cv.FECHA_CONVENIO,
-         cv.MONTO_DEUDA, cv.NUMERO_CUOTAS, cv.ESTADO, cv.OBSERVACIONES
+         cv.MONTO_DEUDA,
+         NVL((SELECT SUM(cc.MONTO - cc.SALDO) FROM CXC_CONVENIO_CUOTAS cc WHERE cc.ID_CONVENIO = cv.ID_CONVENIO), 0) AS MONTO_PAGADO,
+         NVL((SELECT SUM(cc.SALDO) FROM CXC_CONVENIO_CUOTAS cc WHERE cc.ID_CONVENIO = cv.ID_CONVENIO), cv.MONTO_DEUDA) AS SALDO_PENDIENTE,
+         (SELECT COUNT(*) FROM CXC_CONVENIO_CUOTAS cc WHERE cc.ID_CONVENIO = cv.ID_CONVENIO AND cc.ESTADO = 'PAGADA') AS CUOTAS_PAGADAS,
+         cv.NUMERO_CUOTAS, cv.ESTADO, cv.OBSERVACIONES
   FROM CXC_CONVENIOS_PAGO cv
   JOIN CLIENTE c ON c.ID_CLIENTE = cv.ID_CLIENTE
 `;

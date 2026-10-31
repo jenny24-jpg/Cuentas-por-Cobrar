@@ -88,6 +88,7 @@ export async function list(params: {
   page: number;
   limit: number;
   search?: string;
+  pendientesAprobacion?: boolean;
 }) {
   return repository.findAll({
     ...params,

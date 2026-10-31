@@ -111,7 +111,7 @@ export const DocumentoDetalleForm = ({ idDocumento, detalle, onSuccess, onCancel
         restriction="identifier"
         uppercase
         maxLength={30}
-        helperText="SKU o código; admite letras, números, -, _ y /."
+        helperText="SKU o código de producto (opcional). Si lo dejas vacío, el detalle mostrará un código interno DET-000001 basado en su número de registro."
         value={codigoProducto}
         onChange={(e: any) => setCodigoProducto(e.target.value)}
         error={errorFor('codigoProducto', codigoProducto)}

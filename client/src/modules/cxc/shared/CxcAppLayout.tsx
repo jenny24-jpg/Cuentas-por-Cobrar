@@ -34,7 +34,7 @@ import {
   type Tutorial,
 } from '../tutoriales';
 import { useAuth } from '../../../shared/auth/AuthContext';
-import { ROL_LABEL } from '@erp/contracts';
+import { ROL_LABEL, type NotaCredito, type PaginatedResponse } from '@erp/contracts';
 import { apiClient } from '../../../shared/api';
 
 type CxcMenuItem = {
@@ -189,12 +189,31 @@ export const CxcAppLayout = ({ children }: CxcAppLayoutProps) => {
   const isAutorizacionesActive = location.pathname === CXC_AUTORIZACIONES_PATH;
   const [solicitudesPendientes, setSolicitudesPendientes] = useState(0);
 
-  // Contador del menú: reversas y anulaciones esperando aprobación (se refresca al navegar).
+  // El contador suma solicitudes de reversa/anulación y notas de crédito por aprobar.
   useEffect(() => {
-    apiClient.get<{ pendientes: number }>('/cxc/solicitudes-reversa/conteo')
-      .then((r) => setSolicitudesPendientes(r.pendientes))
-      .catch(() => setSolicitudesPendientes(0));
-  }, [location.pathname]);
+    let activo = true;
+    const cargarPendientes = async () => {
+      const [solicitudes, notas] = await Promise.allSettled([
+        apiClient.get<{ pendientes: number }>('/cxc/solicitudes-reversa/conteo'),
+        usuario?.rol === 'ADMIN'
+          ? apiClient.get<PaginatedResponse<NotaCredito>>('/cxc/notas-credito?page=1&limit=1&pendientesAprobacion=1')
+          : Promise.resolve(null),
+      ]);
+      if (!activo) return;
+      const totalSolicitudes = solicitudes.status === 'fulfilled' ? solicitudes.value.pendientes : 0;
+      const totalNotas = notas.status === 'fulfilled' && notas.value ? notas.value.meta.total : 0;
+      setSolicitudesPendientes(totalSolicitudes + totalNotas);
+    };
+    const actualizar = () => { void cargarPendientes(); };
+    actualizar();
+    window.addEventListener('cxc-autorizaciones-actualizadas', actualizar);
+    const timer = window.setInterval(actualizar, 30_000);
+    return () => {
+      activo = false;
+      window.removeEventListener('cxc-autorizaciones-actualizadas', actualizar);
+      window.clearInterval(timer);
+    };
+  }, [location.pathname, usuario?.rol]);
   const isAdminActive = location.pathname.startsWith('/admin');
   const moduloObra = moduloEnConstruccionActivo(location.pathname);
 

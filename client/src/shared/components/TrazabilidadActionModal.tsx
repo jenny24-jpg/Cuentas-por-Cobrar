@@ -67,6 +67,7 @@ export function TrazabilidadActionModal({
       await apiClient.post(endpoint, {
         [motivoFieldName]: motivo.trim(),
       });
+      window.dispatchEvent(new Event('cxc-autorizaciones-actualizadas'));
       if (requiereAutorizacion) toast.info('Solicitud enviada. Un administrador distinto de ti debe aprobarla en Autorizaciones.');
       onSuccess();
     } catch (err) {

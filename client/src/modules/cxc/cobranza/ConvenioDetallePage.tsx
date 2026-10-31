@@ -141,6 +141,10 @@ export const ConvenioDetallePage = () => {
     return <p className="text-red-600 text-center py-12">{error ?? 'Convenio no encontrado'}</p>;
   }
 
+  const saldoConvenio = cuotas.reduce((acc, c) => acc + Number(c.saldo), 0);
+  const montoPagadoConvenio = cuotas.reduce((acc, c) => acc + Number(c.monto) - Number(c.saldo), 0);
+  const proximaCuota = cuotas.find((c) => Number(c.saldo) > 0.005);
+
   return (
     <div className="space-y-6">
       <button
@@ -157,38 +161,47 @@ export const ConvenioDetallePage = () => {
             <p className="text-sm text-slate-500 mt-0.5">
               Convenio del {formatDateGT(convenio.fechaConvenio)} · {convenio.numeroCuotas} cuotas
             </p>
+            {convenio.observaciones && <p className="mt-2 max-w-3xl text-sm text-slate-600">{convenio.observaciones}</p>}
           </div>
           <StatusBadge status={convenio.estado} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-100 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-5 pt-5 border-t border-slate-100 text-sm">
           <div>
-            <p className="text-slate-400 text-xs uppercase font-semibold">Monto total</p>
+            <p className="text-slate-400 text-xs uppercase font-semibold">Deuda acordada</p>
             <p className="font-bold text-slate-900 mt-1">Q {Number(convenio.montoDeuda).toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-xs uppercase font-semibold">Saldo pendiente</p>
-            <p className="font-bold text-slate-900 mt-1">
-              Q {cuotas.reduce((acc, c) => acc + Number(c.saldo), 0).toFixed(2)}
-            </p>
+            <p className="text-slate-400 text-xs uppercase font-semibold">Pagado</p>
+            <p className="font-bold text-slate-900 mt-1">Q {montoPagadoConvenio.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-xs uppercase font-semibold">Cuotas pagadas</p>
-            <p className="font-bold text-slate-900 mt-1">
-              {cuotas.filter((c) => c.estado === 'PAGADA').length} / {cuotas.length}
-            </p>
+            <p className="text-slate-400 text-xs uppercase font-semibold">Saldo pendiente</p>
+            <p className="font-bold text-slate-900 mt-1">Q {saldoConvenio.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-slate-400 text-xs uppercase font-semibold">Cuotas completas</p>
+            <p className="font-bold text-slate-900 mt-1">{cuotas.filter((c) => c.estado === 'PAGADA').length} / {cuotas.length}</p>
+          </div>
+          <div>
+            <p className="text-slate-400 text-xs uppercase font-semibold">Próximo vencimiento</p>
+            <p className="font-bold text-slate-900 mt-1">{proximaCuota ? formatDateGT(proximaCuota.fechaVencimiento) : '—'}</p>
           </div>
         </div>
       </div>
+
+      <p className="text-sm text-slate-500">Cada cuota puede pagarse en uno o varios abonos. El abono reduce el saldo de la cuota y se aplica a los documentos vinculados, empezando por el más antiguo.</p>
 
       <DataTable
         data={cuotas}
         emptyText="Este convenio no tiene cuotas generadas"
         columns={[
           { header: '#', accessorKey: 'numeroCuota', align: 'center' },
-          { header: 'Vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Monto', accessorKey: 'monto', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
-          { header: 'Saldo', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
-          { header: 'Forma de pago', cell: ({ row }: any) => row.nombreFormaPago ?? '—' },
+          { header: 'Fecha de vencimiento', accessorKey: 'fechaVencimiento', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Monto de cuota', accessorKey: 'monto', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Abonado', cell: ({ row }: any) => `Q ${Math.max(0, Number(row.monto) - Number(row.saldo)).toFixed(2)}` },
+          { header: 'Saldo de cuota', accessorKey: 'saldo', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Forma del último abono', cell: ({ row }: any) => row.nombreFormaPago ?? '—' },
+          { header: 'Referencia del último abono', accessorKey: 'referenciaPago', cell: ({ value }: any) => value || '—' },
           {
             header: 'Estado',
             cell: ({ row }: any) => (
@@ -224,15 +237,15 @@ export const ConvenioDetallePage = () => {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-slate-900 text-sm font-bold">Documentos que cubre el convenio</h2>
-          <p className="text-sm text-slate-500">Al pagar una cuota, el monto se distribuye entre estos documentos (el más antiguo primero) y les reduce el saldo real.</p>
+          <h2 className="text-slate-900 text-sm font-bold">Documentos cubiertos por el convenio</h2>
+          <p className="text-sm text-slate-500">Cada pago se aplica a los saldos reales de estos documentos, del más antiguo al más reciente.</p>
         </div>
         <DataTable
           data={documentos}
           emptyText="Este convenio no tiene documentos vinculados"
           columns={[
             { header: 'Documento', accessorKey: 'referenciaDocumento' },
-            { header: 'Monto incluido en el convenio', accessorKey: 'montoIncluido', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+            { header: 'Monto de deuda incluido', accessorKey: 'montoIncluido', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
             { header: 'Saldo real actual', accessorKey: 'saldoActualDocumento', cell: ({ value }: any) => `Q ${Number(value ?? 0).toFixed(2)}` },
           ]}
         />
@@ -258,7 +271,7 @@ export const ConvenioDetallePage = () => {
             value={montoPagado}
             onChange={(e: any) => setMontoPagado(e.target.value)}
             error={errors.montoPagado}
-            helperText="No puede superar el saldo pendiente de la cuota."
+            helperText="Puedes registrar un abono parcial o pagar el saldo completo de la cuota. No puede superar el saldo pendiente."
           />
 
           <Select

@@ -1,5 +1,6 @@
 import type { FacturaFelDetalle } from '@erp/contracts';
 import { drawPdfFooters, newPdfDocument, pdfText } from './reportExport';
+import logoSistemaUrl from '../../assets/brand/logo-cxc-light.png';
 
 const money = (v: number) => `Q ${Number(v).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fecha = (iso: string | null) => {
@@ -16,18 +17,22 @@ export async function downloadFacturaPdf(f: FacturaFelDetalle): Promise<void> {
   const left = 40;
   const right = w - 40;
   const anulada = f.estado === 'ANULADA';
+  const logo = new Image();
+  logo.src = logoSistemaUrl;
+  await logo.decode();
 
   // --- Encabezado ---
   doc.setFillColor(29, 78, 216);
   doc.rect(0, 0, w, 86, 'F');
+  doc.addImage(logo, 'PNG', left, 16, 126, 50);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(17);
-  doc.text(pdfText(f.nombreEmisor), left, 34, { maxWidth: 330 });
+  doc.text(pdfText(f.nombreEmisor), 180, 34, { maxWidth: 300 });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text(`NIT emisor: ${f.nitEmisor}`, left, 54);
-  doc.text('Documento Tributario Electronico (simulado)', left, 70);
+  doc.text(`NIT emisor: ${f.nitEmisor}`, 180, 54);
+  doc.text('Documento Tributario Electronico (simulado)', 180, 70);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
@@ -106,17 +111,14 @@ export async function downloadFacturaPdf(f: FacturaFelDetalle): Promise<void> {
     doc.text(`UUID de anulacion: ${f.uuidAnulacion ?? ''}`, left, ty + 30, { maxWidth: boxX - left - 20 });
   }
 
-  // --- Marca de agua y aviso ---
+  // --- Identificación discreta en el pie ---
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
-    doc.saveGraphicsState();
-    doc.setGState(new (doc as unknown as { GState: new (o: object) => object }).GState({ opacity: 0.08 }));
-    doc.setTextColor(anulada ? 185 : 29, anulada ? 28 : 78, anulada ? 28 : 216);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(80);
-    doc.text(anulada ? 'ANULADA' : 'SIMULACION', w / 2, h / 2, { align: 'center', angle: 35 });
-    doc.restoreGraphicsState();
+    doc.setFontSize(9);
+    doc.setTextColor(anulada ? 185 : 29, anulada ? 28 : 78, anulada ? 28 : 216);
+    doc.text(anulada ? 'ANULADA' : 'SIMULACION', left, h - 43);
   }
   drawPdfFooters(doc, 'Factura simulada: sin validez fiscal, no certificada por la SAT');
   doc.save(`factura-${f.serieFel}-${f.numeroFel}.pdf`);

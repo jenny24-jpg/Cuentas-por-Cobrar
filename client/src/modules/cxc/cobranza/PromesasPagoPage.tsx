@@ -43,11 +43,15 @@ export const PromesasPagoPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Promesas de Pago</h1>
-          <p className="text-sm text-slate-500">Compromisos de pago acordados con clientes en gestión.</p>
+          <p className="text-sm text-slate-500">Seguimiento del monto y la fecha en que cada cliente acordó pagar.</p>
         </div>
         <Button icon={Plus} onClick={() => setModalState({ mode: 'create' })}>
           Nueva Promesa
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <strong>Fecha registrada</strong> indica cuándo se anotó el acuerdo. <strong>Fecha de pago acordada</strong> es el día en que el cliente se comprometió a pagar. Si la promesa nació de una gestión de cobro, aquí también verás el documento y la gestión relacionados.
       </div>
 
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
@@ -69,11 +73,14 @@ export const PromesasPagoPage = () => {
         data={data}
         emptyText="No hay promesas de pago registradas"
         columns={[
-          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
+          { header: 'ID promesa', accessorKey: 'idPromesa' },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
-          { header: 'Fecha promesa', accessorKey: 'fechaPromesa', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Fecha compromiso', accessorKey: 'fechaCompromiso', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Monto', accessorKey: 'montoComprometido', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Documento', cell: ({ row }: any) => row.idDocumento ? `Documento #${row.idDocumento}` : '—' },
+          { header: 'Gestión relacionada', cell: ({ row }: any) => row.idGestion ? `Gestión #${row.idGestion}` : 'Registro directo' },
+          { header: 'Fecha registrada', accessorKey: 'fechaPromesa', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Fecha de pago acordada', accessorKey: 'fechaCompromiso', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Monto acordado', accessorKey: 'montoComprometido', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
+          { header: 'Observaciones', accessorKey: 'observaciones', cell: ({ value }: any) => value ? <span className="block max-w-[240px] truncate" title={value}>{value}</span> : '—' },
           {
             header: 'Estado',
             cell: ({ row }: any) => (

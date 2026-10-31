@@ -108,7 +108,7 @@ export const DocumentoDetallePage = () => {
             <p className="font-bold text-slate-900 mt-1">{documento.nitCliente ?? '—'}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-xs uppercase font-semibold">Fecha</p>
+            <p className="text-slate-400 text-xs uppercase font-semibold">Fecha creación</p>
             <p className="font-bold text-slate-900 mt-1">{formatDateGT(documento.fechaDocumento)}</p>
           </div>
           <div>
@@ -137,7 +137,7 @@ export const DocumentoDetallePage = () => {
           data={detalles}
           emptyText="El documento no tiene detalle"
           columns={[
-            { header: 'Código', accessorKey: 'codigoProducto' },
+            { header: 'Código', cell: ({ row }: any) => row.codigoProducto || `DET-${String(row.idDetalle).padStart(6, '0')}` },
             { header: 'Descripción', accessorKey: 'descripcion' },
             { header: 'Cantidad', accessorKey: 'cantidad' },
             { header: 'Precio unitario', accessorKey: 'precioUnitario', cell: ({ value }: any) => `Q ${Number(value).toFixed(2)}` },
