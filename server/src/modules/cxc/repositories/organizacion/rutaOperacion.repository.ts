@@ -2,6 +2,7 @@ import oracledb from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import { AppError, BadRequestError, NotFoundError, ConflictError } from '../../../../shared/errors/AppError';
 import { isDocumentoBloqueadoParaAplicacion, roundMoney } from '../../shared/financialRules';
+import { EN_ZONA_SQL } from './zonaCobro.repository';
 import { businessNowHHMM, businessTodayIso } from '../../../../shared/date';
 import {
   REGLAS_RUTA, JORNADA_COBRADOR, choqueDeHorario, distanciaKm, esDiaDeVisita, esHoraDeVisita, mensajeDiaDescanso, primeraHoraLibre, NOMBRE_DIAS, diaSemana,
@@ -41,9 +42,10 @@ const reservado = `(SELECT NVL(SUM(GREATEST(a.MONTO_ASIGNADO-${confirmado},0)),0
 export async function resumen(idRuta: number): Promise<RutaOperacion> {
   const conn = await getConnection();
   try {
-    const ruta = await conn.execute<Omit<RutaPlanificacion, 'ANCLA'>>(`SELECT r.ID_RUTA, r.ID_EMPLEADO, TRIM(e.NOMBRE || ' ' || e.APELLIDO) RESPONSABLE,
-      TO_CHAR(r.FECHA,'YYYY-MM-DD') FECHA, TRIM(r.ESTADO) ESTADO, r.RADIO_KM
-      FROM CXC_RUTAS r LEFT JOIN EMPLEADO e ON e.ID_EMPLEADO=r.ID_EMPLEADO WHERE r.ID_RUTA=:idRuta`, {idRuta});
+    const ruta = await conn.execute<Omit<RutaPlanificacion, 'ANCLA' | 'ZONA'> & { ID_ZONA: number | null; NOMBRE_ZONA: string | null }>(`SELECT r.ID_RUTA, r.ID_EMPLEADO, TRIM(e.NOMBRE || ' ' || e.APELLIDO) RESPONSABLE,
+      TO_CHAR(r.FECHA,'YYYY-MM-DD') FECHA, TRIM(r.ESTADO) ESTADO, r.RADIO_KM, r.ID_ZONA, z.NOMBRE NOMBRE_ZONA
+      FROM CXC_RUTAS r LEFT JOIN EMPLEADO e ON e.ID_EMPLEADO=r.ID_EMPLEADO LEFT JOIN CXC_ZONAS_COBRO z ON z.ID_ZONA=r.ID_ZONA
+      WHERE r.ID_RUTA=:idRuta`, {idRuta});
     if (!ruta.rows?.length) throw new NotFoundError('Ruta no encontrada');
     const a = await conn.execute<RutaAsignacion>(`SELECT a.ID_RUTA_DETALLE ID_ASIGNACION,a.ID_DOCUMENTO,a.ID_CLIENTE,
       a.ID_COBRADOR ID_EMPLEADO,a.MONTO_ASIGNADO,${confirmado} MONTO_REGISTRADO,a.DIRECCION,a.LATITUD,a.LONGITUD,a.ORDEN_VISITA,a.ESTADO_VISITA,a.HORA_PROGRAMADA,a.HORA_VISITA,
@@ -76,20 +78,58 @@ export async function resumen(idRuta: number): Promise<RutaOperacion> {
       (SELECT ID_COBRADOR FROM CXC_RUTA_DETALLE WHERE ID_RUTA=:idRuta UNION SELECT ID_EMPLEADO FROM CXC_RUTAS WHERE ID_RUTA=:idRuta)`, {idRuta});
     const asignaciones = a.rows ?? [];
     const primera = [...asignaciones].sort((x, y) => x.ID_ASIGNACION - y.ID_ASIGNACION).find((x) => x.LATITUD != null && x.LONGITUD != null);
+    const { ID_ZONA, NOMBRE_ZONA, ...datosRuta } = ruta.rows[0];
     const planificacion: RutaPlanificacion = {
-      ...ruta.rows[0],
-      RADIO_KM: Number(ruta.rows[0].RADIO_KM ?? REGLAS_RUTA.radioKmDefecto),
+      ...datosRuta,
+      RADIO_KM: Number(datosRuta.RADIO_KM ?? REGLAS_RUTA.radioKmDefecto),
+      ZONA: ID_ZONA ? { ID_ZONA, NOMBRE: NOMBRE_ZONA ?? '' } : null,
       ANCLA: primera ? { ID_ASIGNACION: primera.ID_ASIGNACION, LATITUD: primera.LATITUD, LONGITUD: primera.LONGITUD, CLIENTE: primera.CLIENTE } : null,
     };
     return {ruta:planificacion,asignaciones,bitacora:b.rows ?? [],cobradores:p.rows ?? []};
   } finally { await conn.close(); }
 }
-export async function pendientes() {
-  const conn = await getConnection();
-  try {return (await conn.execute<RutaDocumentoPendiente>(`SELECT d.ID_DOCUMENTO,TRIM(d.SERIE || ' ' || d.NUMERO_DOCUMENTO) DOCUMENTO,
-    d.SALDO,GREATEST(d.SALDO-${reservado},0) DISPONIBLE,d.ID_MONEDA,m.CODIGO MONEDA,c.NOMBRE CLIENTE
+/**
+ * Documento de cobro que todavía puede visitarse en la ruta. Fuera quedan:
+ * - los que cubre un convenio ACTIVO (se cobran por cuotas);
+ * - los que tienen una promesa de pago vigente que vence el día de la ruta o después
+ *   (no se visita antes de lo prometido);
+ * - los que ya están en esta ruta.
+ * EN_ZONA dice si el cliente pertenece a la zona de la ruta (ver EN_ZONA_SQL).
+ */
+const SELECT_DOCUMENTOS_RUTA = `SELECT d.ID_DOCUMENTO,TRIM(d.SERIE || ' ' || d.NUMERO_DOCUMENTO) DOCUMENTO,
+    d.SALDO,GREATEST(d.SALDO-${reservado},0) DISPONIBLE,d.ID_MONEDA,m.CODIGO MONEDA,c.NOMBRE CLIENTE,
+    c.DIRECCION DIRECCION_CLIENTE,'CR-' || LPAD(c.ID_CLIENTE,5,'0') CODIGO_COBRO,c.ID_CLIENTE,
+    cz.NOMBRE ZONA_CLIENTE,${EN_ZONA_SQL} EN_ZONA,
+    TO_DATE(:hoy,'YYYY-MM-DD') - TRUNC(d.FECHA_VENCIMIENTO) DIAS_VENCIDO,
+    u.LATITUD LATITUD_CLIENTE,u.LONGITUD LONGITUD_CLIENTE
     FROM CXC_DOCUMENTOS d JOIN CLIENTE c ON c.ID_CLIENTE=d.ID_CLIENTE JOIN MONEDA m ON m.ID_MONEDA=d.ID_MONEDA
-    WHERE d.SALDO>0 AND TRIM(d.ESTADO) NOT IN ('ANULADO','ANULADA','PAGADO','PAGADA') ORDER BY d.FECHA_VENCIMIENTO`)).rows ?? [];
+    JOIN CXC_RUTAS r ON r.ID_RUTA=:idRuta
+    LEFT JOIN CXC_ZONAS_COBRO rz ON rz.ID_ZONA=r.ID_ZONA
+    LEFT JOIN CXC_CLIENTE_UBICACION u ON u.ID_CLIENTE=c.ID_CLIENTE
+    LEFT JOIN CXC_ZONAS_COBRO cz ON cz.ID_ZONA=u.ID_ZONA
+    WHERE d.SALDO>0 AND TRIM(d.ESTADO) NOT IN ('ANULADO','ANULADA','PAGADO','PAGADA')
+      AND NOT EXISTS (SELECT 1 FROM CXC_CONVENIO_DOCUMENTOS cvd JOIN CXC_CONVENIOS_PAGO cv ON cv.ID_CONVENIO=cvd.ID_CONVENIO
+                       WHERE cvd.ID_DOCUMENTO=d.ID_DOCUMENTO AND UPPER(TRIM(cv.ESTADO))='ACTIVO')
+      AND NOT EXISTS (SELECT 1 FROM CXC_PROMESAS_PAGO pp
+                       WHERE pp.ID_CLIENTE=d.ID_CLIENTE AND UPPER(TRIM(pp.ESTADO))='PENDIENTE'
+                         AND (pp.ID_DOCUMENTO=d.ID_DOCUMENTO OR pp.ID_DOCUMENTO IS NULL)
+                         AND pp.FECHA_COMPROMISO >= NVL(TRUNC(r.FECHA), TO_DATE(:hoy,'YYYY-MM-DD')))
+      AND NOT EXISTS (SELECT 1 FROM CXC_RUTA_DETALLE x WHERE x.ID_RUTA=r.ID_RUTA AND x.ID_DOCUMENTO=d.ID_DOCUMENTO)`;
+
+/**
+ * Documentos para asignar a la ruta: por defecto solo los de clientes de su zona;
+ * con fueraZona también los demás (marcados EN_ZONA = 0). Orden de cobro: primero
+ * los de la zona, luego más días vencidos y mayor saldo.
+ */
+export async function pendientes(idRuta: number, opciones: { fueraZona?: boolean } = {}) {
+  const conn = await getConnection();
+  try {
+    const r = await conn.execute<RutaDocumentoPendiente>(
+      `SELECT * FROM (${SELECT_DOCUMENTOS_RUTA}) WHERE (:fueraZona = 1 OR EN_ZONA = 1) AND DISPONIBLE > 0
+        ORDER BY EN_ZONA DESC, DIAS_VENCIDO DESC, SALDO DESC`,
+      { idRuta, hoy: businessTodayIso(), fueraZona: opciones.fueraZona ? 1 : 0 },
+    );
+    return (r.rows ?? []).map((x) => ({ ...x, EN_ZONA: Number(x.EN_ZONA), DIAS_VENCIDO: Number(x.DIAS_VENCIDO) }));
   } finally {await conn.close();}
 }
 export async function pagosDisponibles() {
@@ -111,6 +151,15 @@ export async function asignar(idRuta: number, input: AsignarDocumentoRuta) {
     if (!doc.rows?.length) throw new NotFoundError('Documento no encontrado');
     const d=doc.rows[0];
     if (isDocumentoBloqueadoParaAplicacion(d.ESTADO) || d.SALDO<=0) throw new BadRequestError('El documento no está pendiente de cobro');
+    const elegible = await conn.execute<{EN_ZONA:number;ZONA_CLIENTE:string|null}>(
+      `SELECT EN_ZONA, ZONA_CLIENTE FROM (${SELECT_DOCUMENTOS_RUTA} AND d.ID_DOCUMENTO=:idDocumento)`,
+      {idRuta, hoy: businessTodayIso(), idDocumento: input.idDocumento});
+    const e = elegible.rows?.[0];
+    if (!e) throw new ConflictError('Este documento no se puede visitar en la ruta: ya está en ella, lo cubre un convenio activo o tiene una promesa de pago vigente para esa fecha.');
+    const fueraZona = Number(e.EN_ZONA) !== 1;
+    if (fueraZona && !input.fueraZona) {
+      throw campo('idDocumento', `El cliente no pertenece a la zona de la ruta (${e.ZONA_CLIENTE ? `está en ${e.ZONA_CLIENTE}` : 'no tiene zona registrada'}). Para asignarlo igual, marca «fuera de la zona» e indica el motivo.`);
+    }
     const exists=await conn.execute('SELECT ID_RUTA_DETALLE FROM CXC_RUTA_DETALLE WHERE ID_RUTA=:idRuta AND ID_DOCUMENTO=:idDocumento',{idRuta,idDocumento:input.idDocumento});
     if(exists.rows?.length) throw new ConflictError('Este documento ya está asignado a la ruta');
     const reservadoResult=await conn.execute<{RESERVADO:number}>(`SELECT ${reservado} RESERVADO FROM CXC_DOCUMENTOS d WHERE d.ID_DOCUMENTO=:id`,{id:input.idDocumento});
@@ -127,38 +176,159 @@ export async function asignar(idRuta: number, input: AsignarDocumentoRuta) {
     await conn.execute(`INSERT INTO CXC_GESTIONES_COBRO(ID_CLIENTE,ID_DOCUMENTO,ID_EMPLEADO,FECHA_GESTION,TIPO_GESTION,RESULTADO,OBSERVACION,ID_RUTA_DETALLE)
       VALUES(:idCliente,:idDocumento,:idEmpleado,SYSDATE,'OTRO','ASIGNACION',:texto,:idDetalle)`,
       {idCliente:d.ID_CLIENTE,idDocumento:input.idDocumento,idEmpleado:idCobrador,
-        texto:`Documento asignado a ruta; monto ${input.montoAsignado}; visita programada ${input.horaProgramada}`,idDetalle:result.outBinds!.id[0]});
+        texto:`Documento asignado a ruta; monto ${input.montoAsignado}; visita programada ${input.horaProgramada}${fueraZona ? `; FUERA DE ZONA: ${input.motivoFueraZona}` : ''}`.slice(0, 500),idDetalle:result.outBinds!.id[0]});
+    // El punto confirmado en el mapa queda como ubicación del cliente si aún no tenía una.
+    await conn.execute(`MERGE INTO CXC_CLIENTE_UBICACION u
+      USING (SELECT :idCliente ID_CLIENTE, :latitud LATITUD, :longitud LONGITUD FROM DUAL) n ON (u.ID_CLIENTE=n.ID_CLIENTE)
+      WHEN MATCHED THEN UPDATE SET u.LATITUD=n.LATITUD, u.LONGITUD=n.LONGITUD, u.FECHA_ACTUALIZACION=SYSDATE WHERE u.LATITUD IS NULL
+      WHEN NOT MATCHED THEN INSERT (ID_CLIENTE, LATITUD, LONGITUD, CONFIRMADA) VALUES (n.ID_CLIENTE, n.LATITUD, n.LONGITUD, 'N')`,
+      {idCliente:d.ID_CLIENTE,latitud:input.latitud,longitud:input.longitud});
     await conn.commit();
   } catch(e) {await conn.rollback();throw e;} finally {await conn.close();}
 }
-export async function registrar(idRuta:number,input:RegistrarBitacoraRuta) {
-  const conn=await getConnection();
+/**
+ * Registra una gestion operativa sin crear movimientos financieros.
+ * PAGO_DENEGADO queda identificado en RESULTADO y se marca como
+ * VISITADO porque el contacto existio. El cierre de la ruta debera
+ * evaluar tambien el ultimo resultado de la bitacora.
+ */
+export async function registrar(idRuta: number, input: RegistrarBitacoraRuta) {
+  const conn = await getConnection();
   try {
-    const ruta = await lockRuta(conn,idRuta);
+    const ruta = await lockRuta(conn, idRuta);
     const hoy = businessTodayIso();
+
     if (ruta.FECHA && ruta.FECHA > hoy) {
-      throw new ConflictError(`La ruta está planificada para el ${fechaLegible(ruta.FECHA)}; las visitas se registran a partir de ese día.`);
+      throw new ConflictError(
+        `La ruta está planificada para el ${fechaLegible(ruta.FECHA)}; las visitas se registran a partir de ese día.`,
+      );
     }
-    if (input.tipo === 'REPROGRAMACION' && input.nuevaFecha) {
-      if (input.nuevaFecha <= hoy) throw new BadRequestError('La nueva fecha de visita debe ser posterior a hoy.');
-      if (!esDiaDeVisita(input.nuevaFecha)) throw new BadRequestError(mensajeDiaDescanso(input.nuevaFecha));
+
+    // Proteccion tambien para llamadas directas al repositorio.
+    const tiposPermitidos = [
+      'VISITA',
+      'NO_ENCONTRADO',
+      'PAGO_DENEGADO',
+      'INCIDENCIA',
+      'REPROGRAMACION',
+    ] as const;
+
+    if (!tiposPermitidos.some((tipo) => tipo === input.tipo)) {
+      throw new BadRequestError('Tipo de actividad no permitido.');
     }
-    const a=await conn.execute<{ID_CLIENTE:number;ID_DOCUMENTO:number;ID_COBRADOR:number}>(`SELECT ID_CLIENTE,ID_DOCUMENTO,ID_COBRADOR FROM CXC_RUTA_DETALLE
-      WHERE ID_RUTA_DETALLE=:id AND ID_RUTA=:idRuta AND ID_DOCUMENTO IS NOT NULL FOR UPDATE`,{id:input.idAsignacion,idRuta});
-    if(!a.rows?.length) throw new NotFoundError('La asignación no pertenece a esta ruta');
-    const row=a.rows[0];
-    await conn.execute(`INSERT INTO CXC_GESTIONES_COBRO(ID_CLIENTE,ID_DOCUMENTO,ID_EMPLEADO,FECHA_GESTION,TIPO_GESTION,RESULTADO,OBSERVACION,ID_RUTA_DETALLE,FECHA_COMPROMISO)
-      VALUES(:cliente,:documento,:empleado,SYSDATE,:tipo,:resultado,:observaciones,:detalle,TO_DATE(:nuevaFecha,'YYYY-MM-DD'))`,
-      {cliente:row.ID_CLIENTE,documento:row.ID_DOCUMENTO,empleado:row.ID_COBRADOR,tipo:['VISITA','NO_ENCONTRADO'].includes(input.tipo)?'VISITA':'OTRO',
-        resultado:input.tipo,observaciones:input.observaciones,detalle:input.idAsignacion,nuevaFecha:input.tipo==='REPROGRAMACION'?input.nuevaFecha ?? null:null});
-    const estadoVisita = { VISITA: 'VISITADO', NO_ENCONTRADO: 'NO_ENCONTRADO', REPROGRAMACION: 'REPROGRAMADO' }[input.tipo as 'VISITA'];
-    // HORA_VISITA es la hora REAL de la visita; la acordada vive en HORA_PROGRAMADA.
-    if (estadoVisita) await conn.execute(`UPDATE CXC_RUTA_DETALLE SET ESTADO_VISITA=:estado,HORA_VISITA=:hora WHERE ID_RUTA_DETALLE=:id`,
-      {estado:estadoVisita,hora:input.tipo==='REPROGRAMACION'?null:businessNowHHMM(),id:input.idAsignacion});
-    if (input.tipo !== 'INCIDENCIA') await iniciarRuta(conn, idRuta);
+
+    if (!input.observaciones?.trim()) {
+      throw campo('observaciones', 'Las observaciones son obligatorias.');
+    }
+
+    if (input.tipo === 'REPROGRAMACION') {
+      if (!input.nuevaFecha) {
+        throw campo('nuevaFecha', 'Indica la nueva fecha de la visita.');
+      }
+      if (input.nuevaFecha <= hoy) {
+        throw new BadRequestError('La nueva fecha de visita debe ser posterior a hoy.');
+      }
+      if (!esDiaDeVisita(input.nuevaFecha)) {
+        throw new BadRequestError(mensajeDiaDescanso(input.nuevaFecha));
+      }
+    }
+
+    // Bloquear la parada antes de registrar la gestion y modificar su estado.
+    const a = await conn.execute<{
+      ID_CLIENTE: number;
+      ID_DOCUMENTO: number;
+      ID_COBRADOR: number;
+    }>(
+      `SELECT ID_CLIENTE, ID_DOCUMENTO, ID_COBRADOR
+       FROM CXC_RUTA_DETALLE
+       WHERE ID_RUTA_DETALLE = :id
+         AND ID_RUTA = :idRuta
+         AND ID_DOCUMENTO IS NOT NULL
+       FOR UPDATE`,
+      { id: input.idAsignacion, idRuta },
+    );
+
+    const row = a.rows?.[0];
+    if (!row) {
+      throw new NotFoundError('La asignación no pertenece a esta ruta');
+    }
+
+    // TIPO_GESTION mantiene las categorias ya empleadas por el ERP.
+    // El resultado preciso (incluido PAGO_DENEGADO) se registra en RESULTADO.
+    const tipoGestion = [
+      'VISITA',
+      'NO_ENCONTRADO',
+      'PAGO_DENEGADO',
+    ].includes(input.tipo) ? 'VISITA' : 'OTRO';
+
+    await conn.execute(
+      `INSERT INTO CXC_GESTIONES_COBRO (
+         ID_CLIENTE, ID_DOCUMENTO, ID_EMPLEADO,
+         FECHA_GESTION, TIPO_GESTION, RESULTADO,
+         OBSERVACION, ID_RUTA_DETALLE, FECHA_COMPROMISO
+       ) VALUES (
+         :cliente, :documento, :empleado,
+         SYSDATE, :tipo, :resultado,
+         :observaciones, :detalle,
+         TO_DATE(:nuevaFecha, 'YYYY-MM-DD')
+       )`,
+      {
+        cliente: row.ID_CLIENTE,
+        documento: row.ID_DOCUMENTO,
+        empleado: row.ID_COBRADOR,
+        tipo: tipoGestion,
+        resultado: input.tipo,
+        observaciones: input.observaciones.trim(),
+        detalle: input.idAsignacion,
+        nuevaFecha: input.tipo === 'REPROGRAMACION'
+          ? input.nuevaFecha ?? null
+          : null,
+      },
+    );
+
+    // PAGO_DENEGADO significa visita efectuada, NO pago realizado.
+    // Se reutiliza VISITADO para evitar introducir valores nuevos en
+    // ESTADO_VISITA sin verificar las restricciones de Oracle.
+    // El detalle de la negativa permanece en la bitacora.
+    const estadosVisita: Record<RegistrarBitacoraRuta['tipo'], string | null> = {
+      VISITA: 'VISITADO',
+      NO_ENCONTRADO: 'NO_ENCONTRADO',
+      PAGO_DENEGADO: 'VISITADO',
+      REPROGRAMACION: 'REPROGRAMADO',
+      INCIDENCIA: null,
+    };
+
+    const estadoVisita = estadosVisita[input.tipo];
+    if (estadoVisita) {
+      await conn.execute(
+        `UPDATE CXC_RUTA_DETALLE
+         SET ESTADO_VISITA = :estado,
+             HORA_VISITA = :hora
+         WHERE ID_RUTA_DETALLE = :id`,
+        {
+          estado: estadoVisita,
+          hora: input.tipo === 'REPROGRAMACION' ? null : businessNowHHMM(),
+          id: input.idAsignacion,
+        },
+      );
+    }
+
+    // Una incidencia por si sola no inicia la ruta.
+    // Un rechazo de pago si implica una visita realizada.
+    if (input.tipo !== 'INCIDENCIA') {
+      await iniciarRuta(conn, idRuta);
+    }
+
+    // No se crean aplicaciones de pago, recibos ni ajustes de saldo.
     await conn.commit();
-  } catch(e) {await conn.rollback();throw e;} finally {await conn.close();}
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    await conn.close();
+  }
 }
+
 export async function perfil(idEmpleado:number,input:PerfilCobradorInput) {
   const conn=await getConnection();
   try {const result=await conn.execute('UPDATE EMPLEADO SET TELEFONO=:telefono,FOTO_URL=:fotoUrl WHERE ID_EMPLEADO=:idEmpleado',{idEmpleado,...input});

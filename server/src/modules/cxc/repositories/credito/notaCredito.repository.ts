@@ -15,6 +15,7 @@ import {
   ConflictError,
   NotFoundError,
 } from '../../../../shared/errors/AppError';
+import { siguienteNumeroNotaCredito } from '../../shared/correlativos';
 
 // =====================================================
 // ESTADOS EN LOS QUE UNA NOTA PUEDE MODIFICARSE
@@ -52,6 +53,13 @@ interface NotaCreditoRow {
   NOMBRE_EMPLEADO_ANULACION: string | null;
   FECHA_ANULACION_ISO: string | null;
   MOTIVO_ANULACION: string | null;
+
+  ID_EMPLEADO_REGISTRO: number | null;
+  NOMBRE_EMPLEADO_REGISTRO: string | null;
+  FECHA_REGISTRO_ISO: string | null;
+  ID_EMPLEADO_APROBACION: number | null;
+  NOMBRE_EMPLEADO_APROBACION: string | null;
+  FECHA_APROBACION_ISO: string | null;
 }
 
 // =====================================================
@@ -84,6 +92,13 @@ function mapRow(row: NotaCreditoRow): NotaCredito {
     nombreEmpleadoAnulacion: row.NOMBRE_EMPLEADO_ANULACION,
     fechaAnulacion: row.FECHA_ANULACION_ISO,
     motivoAnulacion: row.MOTIVO_ANULACION,
+
+    idEmpleadoRegistro: row.ID_EMPLEADO_REGISTRO,
+    nombreEmpleadoRegistro: row.NOMBRE_EMPLEADO_REGISTRO,
+    fechaRegistro: row.FECHA_REGISTRO_ISO,
+    idEmpleadoAprobacion: row.ID_EMPLEADO_APROBACION,
+    nombreEmpleadoAprobacion: row.NOMBRE_EMPLEADO_APROBACION,
+    fechaAprobacion: row.FECHA_APROBACION_ISO,
   };
 }
 
@@ -144,7 +159,15 @@ const SELECT_BASE = `
       'YYYY-MM-DD'
     ) AS FECHA_ANULACION_ISO,
 
-    n.MOTIVO_ANULACION
+    n.MOTIVO_ANULACION,
+
+    n.ID_EMPLEADO_REGISTRO,
+    TRIM(er.NOMBRE || ' ' || NVL(er.APELLIDO, '')) AS NOMBRE_EMPLEADO_REGISTRO,
+    TO_CHAR(n.FECHA_REGISTRO, 'YYYY-MM-DD HH24:MI') AS FECHA_REGISTRO_ISO,
+
+    n.ID_EMPLEADO_APROBACION,
+    TRIM(ep.NOMBRE || ' ' || NVL(ep.APELLIDO, '')) AS NOMBRE_EMPLEADO_APROBACION,
+    TO_CHAR(n.FECHA_APROBACION, 'YYYY-MM-DD HH24:MI') AS FECHA_APROBACION_ISO
 
   FROM CXC_NOTAS_CREDITO n
 
@@ -153,6 +176,12 @@ const SELECT_BASE = `
 
   LEFT JOIN EMPLEADO ea
     ON ea.ID_EMPLEADO = n.ID_EMPLEADO_ANULACION
+
+  LEFT JOIN EMPLEADO er
+    ON er.ID_EMPLEADO = n.ID_EMPLEADO_REGISTRO
+
+  LEFT JOIN EMPLEADO ep
+    ON ep.ID_EMPLEADO = n.ID_EMPLEADO_APROBACION
 `;
 
 // =====================================================
@@ -163,23 +192,27 @@ export async function findAll(params: {
   page: number;
   limit: number;
   search?: string;
+  pendientesAprobacion?: boolean;
 }): Promise<{ data: NotaCredito[]; total: number }> {
   const conn = await getConnection();
 
   try {
     const offset = (params.page - 1) * params.limit;
 
-    const whereClause = params.search
-      ? `
-        WHERE TO_CHAR(n.ID_CLIENTE) LIKE :search
+    const condiciones: string[] = [];
+    if (params.pendientesAprobacion) {
+      condiciones.push("TRIM(n.ESTADO) IN ('PENDIENTE', 'ACTIVA') AND n.ID_EMPLEADO_APROBACION IS NULL");
+    }
+    if (params.search) {
+      condiciones.push(`(TO_CHAR(n.ID_CLIENTE) LIKE :search
            OR TO_CHAR(n.ID_NOTA_CREDITO) LIKE :search
            OR UPPER(NVL(c.NOMBRE, '')) LIKE UPPER(:search)
            OR UPPER(NVL(n.DESCRIPCION, '')) LIKE UPPER(:search)
            OR UPPER(NVL(n.SERIE, '')) LIKE UPPER(:search)
            OR UPPER(NVL(n.NUMERO, '')) LIKE UPPER(:search)
-           OR UPPER(n.ESTADO) LIKE UPPER(:search)
-      `
-      : '';
+           OR UPPER(n.ESTADO) LIKE UPPER(:search))`);
+    }
+    const whereClause = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
 
     const searchBind = params.search
       ? { search: `%${params.search}%` }
@@ -256,10 +289,32 @@ export async function findById(
 
 export async function create(
   input: CreateNotaCreditoInput,
+  idEmpleadoRegistro: number,
 ): Promise<number> {
+  const hoy = businessTodayIso();
+
+  // La fecha de emisión debe ser la fecha actual de Guatemala.
+  // Revalidamos también aquí por si se llama al repositorio directamente.
+  if (input.fecha !== hoy) {
+    throw new BadRequestError(
+      'La fecha de la nota de crédito debe ser la fecha actual de Guatemala. No se permiten fechas anteriores ni futuras.',
+    );
+  }
+
   const conn = await getConnection();
 
   try {
+    // Verificar que no haya cambiado el día durante la operación.
+    const fechaRegistro = businessTodayIso();
+    if (input.fecha !== fechaRegistro) {
+      throw new BadRequestError(
+        'La fecha de Guatemala cambió durante el registro. Intenta guardar nuevamente.',
+      );
+    }
+
+    // Serie y número automáticos (bloquea la tabla hasta el commit).
+    const { serie, numero } = await siguienteNumeroNotaCredito(conn);
+
     const result = await conn.execute<{
       id: number[];
     }>(
@@ -272,7 +327,9 @@ export async function create(
           NUMERO,
           FECHA,
           MONTO,
-          ESTADO
+          ESTADO,
+          ID_EMPLEADO_REGISTRO,
+          FECHA_REGISTRO
         )
         VALUES (
           :idCliente,
@@ -282,7 +339,9 @@ export async function create(
           :numero,
           TO_DATE(:fecha, 'YYYY-MM-DD'),
           :monto,
-          'PENDIENTE'
+          'PENDIENTE',
+          :idEmpleadoRegistro,
+          SYSDATE
         )
         RETURNING ID_NOTA_CREDITO INTO :id
       `,
@@ -290,11 +349,12 @@ export async function create(
         idCliente: input.idCliente,
         idDocumentoReferencia:
           input.idDocumentoReferencia ?? null,
-        descripcion: input.descripcion ?? null,
-        serie: input.serie ?? null,
-        numero: input.numero ?? null,
-        fecha: input.fecha,
+        descripcion: input.descripcion,
+        serie,
+        numero,
+        fecha: fechaRegistro,
         monto: input.monto,
+        idEmpleadoRegistro,
         id: {
           dir: oracledb.BIND_OUT,
           type: oracledb.NUMBER,
@@ -386,6 +446,14 @@ export async function update(
   id: number,
   input: UpdateNotaCreditoInput,
 ): Promise<void> {
+  // La fecha de emisión es inmutable después del registro.
+  // El servicio omite este campo al actualizar la nota.
+  if (input.fecha !== undefined) {
+    throw new BadRequestError(
+      'La fecha de una nota de crédito registrada no puede modificarse.',
+    );
+  }
+
   const fields: string[] = [];
 
   const binds: Record<
@@ -409,23 +477,6 @@ export async function update(
   if (input.descripcion !== undefined) {
     fields.push('DESCRIPCION = :descripcion');
     binds.descripcion = input.descripcion ?? null;
-  }
-
-  if (input.serie !== undefined) {
-    fields.push('SERIE = :serie');
-    binds.serie = input.serie ?? null;
-  }
-
-  if (input.numero !== undefined) {
-    fields.push('NUMERO = :numero');
-    binds.numero = input.numero ?? null;
-  }
-
-  if (input.fecha !== undefined) {
-    fields.push(
-      "FECHA = TO_DATE(:fecha, 'YYYY-MM-DD')",
-    );
-    binds.fecha = input.fecha;
   }
 
   if (input.monto !== undefined) {
@@ -455,6 +506,30 @@ export async function update(
         'Solo las notas de crédito pendientes o activas y sin aplicaciones pueden modificarse.',
       );
     }
+
+    // Una nota que ya se asignó a una factura (aunque luego se reversara) queda
+    // ligada a ese cliente y esa factura: no puede pasar a otra.
+    if (input.idCliente !== undefined || input.idDocumentoReferencia !== undefined) {
+      const historial = await conn.execute<{ TOTAL: number }>(
+        `SELECT COUNT(*) AS TOTAL FROM CXC_APLICACION_NOTA_CREDITO WHERE ID_NOTA_CREDITO = :id`,
+        { id },
+      );
+      const actual = await conn.execute<{ ID_CLIENTE: number; ID_DOCUMENTO_REFERENCIA: number | null }>(
+        `SELECT ID_CLIENTE, ID_DOCUMENTO_REFERENCIA FROM CXC_NOTAS_CREDITO WHERE ID_NOTA_CREDITO = :id`,
+        { id },
+      );
+      const cambiaDestino =
+        (input.idCliente !== undefined && input.idCliente !== actual.rows?.[0]?.ID_CLIENTE) ||
+        (input.idDocumentoReferencia !== undefined && input.idDocumentoReferencia !== actual.rows?.[0]?.ID_DOCUMENTO_REFERENCIA);
+      if (cambiaDestino && Number(historial.rows?.[0]?.TOTAL ?? 0) > 0) {
+        throw new ConflictError(
+          'Esta nota ya se asignó a una factura; no puede cambiarse de cliente ni de factura.',
+        );
+      }
+    }
+
+    // Todo cambio vuelve a requerir la aprobación de un administrador.
+    fields.push('ID_EMPLEADO_APROBACION = NULL', 'FECHA_APROBACION = NULL');
 
     await conn.execute(
       `
@@ -597,6 +672,20 @@ export async function anular(
   } catch (err) {
     await conn.rollback();
     throw err;
+  } finally {
+    await conn.close();
+  }
+}
+
+// =====================================================
+// VISTA PREVIA DE SERIE Y NÚMERO
+// =====================================================
+
+/** Serie y número que tendría hoy la próxima nota de crédito (sin bloquear). */
+export async function previewNumero(): Promise<{ serie: string; numero: string }> {
+  const conn = await getConnection();
+  try {
+    return await siguienteNumeroNotaCredito(conn, { bloquear: false });
   } finally {
     await conn.close();
   }

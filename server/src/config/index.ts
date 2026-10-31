@@ -57,6 +57,8 @@ export const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || 'ERP System <no-reply@localhost>',
   },
+  /** Cierres diarios automáticos (mora, promesas, convenios). TAREAS_AUTOMATICAS=false los apaga. */
+  tareasAutomaticas: process.env.TAREAS_AUTOMATICAS !== 'false',
   oracleConnection: {
     user: process.env.NODE_ORACLEDB_USER || '',
     password: process.env.NODE_ORACLEDB_PASSWORD || '',

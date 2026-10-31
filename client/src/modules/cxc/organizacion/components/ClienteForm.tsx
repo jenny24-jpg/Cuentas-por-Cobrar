@@ -9,7 +9,7 @@ import {
   validateRequiredSelect,
   type ValidationErrors,
 } from '../../../../shared/validation';
-import { esNitValido, normalizarNit, type Cliente, type DocumentoCatalogoOption } from '@erp/contracts';
+import { esNitValido, normalizarNit, type Cliente, type DocumentoCatalogoOption, type ZonaCobro } from '@erp/contracts';
 
 const ESTADOS_CLIENTE = [
   { value: 'A', label: 'Activo' },
@@ -30,6 +30,7 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
   const isEditing = Boolean(cliente);
   const [nombre, setNombre] = useState(cliente?.nombre ?? '');
   const [nit, setNit] = useState(cliente?.nit ?? '');
+  const [direccion, setDireccion] = useState(cliente?.direccion ?? '');
   const [idCondicion, setIdCondicion] = useState(cliente?.idCondicion ? String(cliente.idCondicion) : '');
   const [estado, setEstado] = useState(cliente?.estado === 'I' ? 'I' : 'A');
   const [condiciones, setCondiciones] = useState<DocumentoCatalogoOption[]>([]);
@@ -37,10 +38,25 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Segmento A/B/C/D: sale de la base y reduce el porcentaje de mora del cliente.
+  const [idSegmento, setIdSegmento] = useState(cliente?.idSegmento ? String(cliente.idSegmento) : '');
+  const [segmentos, setSegmentos] = useState<Array<{ id: number; codigo: string; nombre: string; reduccionMora: number }>>([]);
+
+  // Zona de cobro: define en qué rutas aparece el cliente. Al guardar queda confirmada.
+  const [idZona, setIdZona] = useState(cliente?.idZona ? String(cliente.idZona) : '');
+  const [zonas, setZonas] = useState<ZonaCobro[]>([]);
+  const zonaPorConfirmar = Boolean(isEditing && cliente?.idZona && !cliente?.zonaConfirmada);
+
   useEffect(() => {
     apiClient.get<DocumentoCatalogoOption[]>('/cxc/documentos/catalogos/condiciones-credito')
       .then(setCondiciones)
       .catch(() => setFormError('No se pudieron cargar las condiciones de pago.'));
+    apiClient.get<typeof segmentos>('/cxc/catalogos/segmentos')
+      .then(setSegmentos)
+      .catch(() => setSegmentos([]));
+    apiClient.get<ZonaCobro[]>('/cxc/catalogos/zonas-cobro')
+      .then(setZonas)
+      .catch(() => setZonas([]));
   }, []);
 
   // Si la condición actual del cliente ya no está activa, se conserva como opción para no perderla.
@@ -70,16 +86,27 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
       if (nitErr) next.nit = nitErr;
     }
 
+    const d = direccion.trim();
+    if (d.length < 5) next.direccion = 'La dirección es obligatoria (mínimo 5 caracteres).';
+    else if (d.length > 250) next.direccion = 'La dirección no puede superar 250 caracteres.';
+
     const condErr = validateRequiredSelect(idCondicion, 'una condición de pago');
     if (condErr) next.idCondicion = condErr;
+
+    const zonaErr = validateRequiredSelect(idZona, 'la zona de cobro');
+    if (zonaErr) next.idZona = zonaErr;
     return next;
-  }, [nombre, nit, nitCambio, idCondicion]);
+  }, [nombre, nit, nitCambio, direccion, idCondicion, idZona]);
 
   const huboCambios = !isEditing ||
     nombre.trim() !== cliente!.nombre ||
     nitCambio ||
+    direccion.trim() !== (cliente!.direccion ?? '') ||
     idCondicion !== String(cliente!.idCondicion ?? '') ||
-    estado !== (cliente!.estado === 'I' ? 'I' : 'A');
+    estado !== (cliente!.estado === 'I' ? 'I' : 'A') ||
+    idSegmento !== (cliente!.idSegmento ? String(cliente!.idSegmento) : '') ||
+    idZona !== (cliente!.idZona ? String(cliente!.idZona) : '') ||
+    zonaPorConfirmar;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +115,7 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
     setErrors({});
     setIsSubmitting(true);
     try {
-      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), idCondicion: Number(idCondicion), estado };
+      const payload = { nombre: nombre.trim(), nit: nit.trim().toUpperCase(), direccion: direccion.trim(), idCondicion: Number(idCondicion), estado, idSegmento: idSegmento ? Number(idSegmento) : null, idZona: idZona ? Number(idZona) : null };
       if (isEditing) await apiClient.patch(`/cxc/clientes/${cliente!.idCliente}`, payload);
       else await apiClient.post('/cxc/clientes', payload);
       onSuccess();
@@ -109,14 +136,35 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {isEditing && (
-        <TextInput
-          label="ID Cliente"
-          value={`#${cliente!.idCliente}`}
-          isReadOnly
-          helperText="Identificador asignado por el sistema; no se modifica."
-        />
+      {isEditing ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <TextInput
+            label="ID Cliente"
+            value={`#${cliente!.idCliente}`}
+            isReadOnly
+            helperText="Identificador asignado por el sistema; no se modifica."
+          />
+          <TextInput
+            label="Código de cobro"
+            value={cliente!.codigoCobro}
+            isReadOnly
+            helperText="Código para asignar el cliente a rutas de cobro."
+          />
+        </div>
+      ) : (
+        <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          El sistema asigna automáticamente el <strong>código de cobro</strong> (CR-00001, CR-00002…) al guardar el cliente.
+        </p>
       )}
+
+      <TextInput
+        label="Código de cliente"
+        isReadOnly
+        disabled
+        value={cliente?.codigoCliente ?? ''}
+        placeholder="Se asigna automáticamente (CLI-00000)"
+        helperText="Lo genera el sistema y no se puede cambiar."
+      />
 
       <TextInput
         label="Nombre del cliente"
@@ -156,6 +204,17 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
         />
       </div>
 
+      <TextInput
+        label="Dirección"
+        required
+        maxLength={250}
+        value={direccion}
+        onChange={(e: any) => setDireccion(e.target.value)}
+        error={errorFor('direccion', direccion)}
+        helperText="Dirección de cobro; se propone al asignar el cliente a una ruta."
+        placeholder="Ej. 6a. avenida 12-34, zona 1, Guatemala"
+      />
+
       {nitHeredadoInvalido && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
           <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -172,6 +231,39 @@ export const ClienteForm = ({ cliente, onSuccess, onCancel }: ClienteFormProps) 
         error={errorFor('idCondicion', idCondicion)}
         helperText={isEditing ? 'Plazo de crédito del cliente; aplica a los documentos nuevos, no a los ya emitidos.' : 'Plazo de crédito con el que se le venderá al cliente.'}
       />
+
+      <Select
+        label="Segmento del cliente"
+        value={idSegmento}
+        onChange={(e: any) => setIdSegmento(e.target.value)}
+        options={[
+          { value: '', label: 'Sin segmento (sin beneficio)' },
+          ...segmentos.map((s) => ({
+            value: String(s.id),
+            label: `${s.codigo} — ${s.nombre}${s.reduccionMora ? ` · mora −${s.reduccionMora} puntos` : ''}`,
+          })),
+        ]}
+        helperText="El segmento resta puntos al porcentaje de mora del cliente como beneficio."
+      />
+
+      <Select
+        label="Zona de cobro"
+        required
+        value={idZona}
+        onChange={(e: any) => setIdZona(e.target.value)}
+        options={zonas.map((z) => ({ value: String(z.id), label: z.zona ? z.nombre : `${z.nombre} (todo el municipio)` }))}
+        placeholder="Selecciona la zona"
+        error={errorFor('idZona', idZona)}
+        helperText={zonas.length === 0
+          ? 'No hay zonas de cobro registradas en la base. Solicita al equipo DBA que las cargue.'
+          : 'Define en qué rutas de cobro aparece el cliente. Elige la zona más específica de su dirección.'}
+      />
+      {zonaPorConfirmar && (
+        <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+          La zona se propuso automáticamente a partir de la dirección. Revísala y guarda para confirmarla.
+        </p>
+      )}
 
       {formError && (
         <p className="text-sm text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>

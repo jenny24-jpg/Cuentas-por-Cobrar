@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ROLES, ROL_LABEL, crearUsuarioSchema, editarUsuarioSchema,
-  type UsuarioAdmin, type UsuarioCreado,
+  type EmpleadoVinculable, type UsuarioAdmin, type UsuarioCreado,
 } from '@erp/contracts';
 import { TextInput, Select } from '../../../shared/ui-kit';
 import { FormActionButtons } from '../../../shared/components/FormActionButtons';
@@ -32,10 +32,16 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
   const [email, setEmail] = useState(item?.email ?? '');
   const [rol, setRol] = useState<string>(item?.rol ?? 'OPERADOR');
   const [estado, setEstado] = useState<string>(item?.estado ?? 'ACTIVO');
+  const [idEmpleado, setIdEmpleado] = useState<string>(item?.idEmpleado ? String(item.idEmpleado) : '');
+  const [empleados, setEmpleados] = useState<EmpleadoVinculable[]>([]);
   const [serverErrors, setServerErrors] = useState<ValidationErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tocados, setTocados] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    apiClient.get<EmpleadoVinculable[]>('/admin/usuarios/empleados').then(setEmpleados).catch(() => setEmpleados([]));
+  }, []);
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const parsed = isEditing
@@ -48,8 +54,9 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
     // Los campos de texto vacíos se explican con un mensaje más claro que el del esquema.
     if (!isEditing && !username.trim()) next.username = 'El usuario es obligatorio.';
     if (!nombre.trim()) next.nombre = 'El nombre completo es obligatorio.';
+    if (rol === 'ADMIN' && !idEmpleado) next.idEmpleado = 'Vincula un empleado a cada usuario administrador.';
     return next;
-  }, [isEditing, username, nombre, email, rol, estado]);
+  }, [isEditing, username, nombre, email, rol, estado, idEmpleado]);
 
   const isFormValid = !hasErrors(validationErrors);
   const marcar = (campo: string) => setTocados((t) => ({ ...t, [campo]: true }));
@@ -59,17 +66,17 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
     e.preventDefault();
     setFormError(null);
     if (!isFormValid) {
-      setTocados({ username: true, nombre: true, email: true, rol: true, estado: true });
+      setTocados({ username: true, nombre: true, email: true, rol: true, estado: true, idEmpleado: true });
       return;
     }
     setServerErrors({});
     setBusy(true);
     try {
       if (isEditing) {
-        await apiClient.patch(`/admin/usuarios/${item!.idUsuario}`, { nombre: nombre.trim(), email: email.trim(), rol, estado }, { successMessage: 'Usuario actualizado correctamente.' });
+        await apiClient.patch(`/admin/usuarios/${item!.idUsuario}`, { nombre: nombre.trim(), email: email.trim(), rol, estado, idEmpleado: idEmpleado ? Number(idEmpleado) : null }, { successMessage: 'Usuario actualizado correctamente.' });
         onUpdated();
       } else {
-        const r = await apiClient.post<UsuarioCreado>('/admin/usuarios', { username: username.trim(), nombre: nombre.trim(), email: email.trim(), rol }, { successMessage: 'Usuario creado correctamente.' });
+        const r = await apiClient.post<UsuarioCreado>('/admin/usuarios', { username: username.trim(), nombre: nombre.trim(), email: email.trim(), rol, idEmpleado: idEmpleado ? Number(idEmpleado) : null }, { successMessage: 'Usuario creado correctamente.' });
         onCreated(r);
       }
     } catch (err) {
@@ -130,6 +137,20 @@ export function UsuarioForm({ item, esPropio, onCreated, onUpdated, onCancel }: 
         options={ROLES.map((r) => ({ value: r, label: ROL_LABEL[r] }))}
         helperText={esPropio ? 'No puedes cambiar tu propio rol. Pídelo a otro administrador.' : AYUDA_ROL[rol]}
         error={serverErrors.rol}
+      />
+      <Select
+        label="Empleado vinculado"
+        value={idEmpleado}
+        onChange={(e: any) => { setIdEmpleado(e.target.value); limpiar('idEmpleado'); }}
+        options={[
+          { value: '', label: 'Sin empleado vinculado' },
+          ...empleados
+            // Un empleado solo puede tener un usuario: se ocultan los ya vinculados a otro.
+            .filter((emp) => !emp.asignadoA || emp.idEmpleado === item?.idEmpleado)
+            .map((emp) => ({ value: String(emp.idEmpleado), label: `${emp.nombre}${emp.codigo ? ` · ${emp.codigo}` : ''}` })),
+        ]}
+        helperText="Es quien queda registrado en todo lo que este usuario cree, anule o apruebe. Sin empleado, el usuario no podrá registrar información."
+        error={errorDe('idEmpleado')}
       />
       {isEditing && (
         <Select

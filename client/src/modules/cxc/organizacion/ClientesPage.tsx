@@ -7,8 +7,9 @@ import { useAuth } from '../../../shared/auth/AuthContext';
 import type { Cliente } from '@erp/contracts';
 import { ClienteForm } from './components/ClienteForm';
 import { ClienteDetalle } from './components/ClienteDetalle';
+import { SegmentoPill } from '../analisis/ui/Pills';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 const ESTADO_FILTRO = [
   { value: '', label: 'Todos los estados' },
@@ -16,11 +17,14 @@ const ESTADO_FILTRO = [
   { value: 'I', label: 'Inactivos' },
 ];
 
-const etiquetaEstado = (estado: string | null) => (estado === 'A' ? 'Activo' : estado === 'I' ? 'Inactivo' : 'Sin estado');
+// Color del distintivo por segmento (solo presentación; los segmentos salen de la BD).
+// Un segmento nuevo sin color asignado se muestra en azul.
+const etiquetaEstado =(estado: string | null) => (estado === 'A' ? 'Activo' : estado === 'I' ? 'Inactivo' : 'Sin estado');
 
 /** Alta, consulta y edición de clientes. */
 export const ClientesPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.organizacion.ClientesPage');
   const [search, setSearch] = useState('');
   const [estado, setEstado] = useState('');
   const [verId, setVerId] = useState<number | null>(null);
@@ -31,7 +35,7 @@ export const ClientesPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Cliente>(
     '/cxc/clientes',
-    { page, limit: PAGE_SIZE, search, ...(estado ? { estado } : {}) },
+    { page, limit: pageSize, search, ...(estado ? { estado } : {}) },
   );
 
   return (
@@ -51,7 +55,7 @@ export const ClientesPage = () => {
       <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-end">
         <TextInput
           icon={Search}
-          placeholder="Buscar por ID, nombre o NIT..."
+          placeholder="Buscar por ID, código de cobro, nombre, NIT o dirección..."
           value={search}
           onChange={(e: any) => { setSearch(e.target.value); setPage(1); }}
           className="sm:max-w-sm"
@@ -80,9 +84,24 @@ export const ClientesPage = () => {
         data={data}
         emptyText={search || estado ? 'Ningún cliente coincide con la búsqueda' : 'No hay clientes registrados'}
         columns={[
+          { header: 'Código', accessorKey: 'codigoCliente', cell: ({ value }: any) => <span className="font-semibold tabular-nums text-slate-800">{value ?? '—'}</span> },
           { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Nombre del cliente', accessorKey: 'nombre', cell: ({ value }: any) => <span className="font-medium text-slate-900">{value}</span> },
+          { header: 'Código cobro', accessorKey: 'codigoCobro', cell: ({ value }: any) => <span className="tabular-nums font-medium text-blue-800">{value}</span> },
           { header: 'NIT', accessorKey: 'nit', cell: ({ value }: any) => <span className="tabular-nums">{value || '—'}</span> },
+          {
+            header: 'Dirección',
+            accessorKey: 'direccion',
+            cell: ({ value }: any) => value
+              ? <span className="block max-w-xs truncate" title={value}>{value}</span>
+              : <span className="text-amber-700">Sin dirección</span>,
+          },
+          {
+            header: 'Segmento',
+            cell: ({ row }: { row: Cliente }) => (
+              <SegmentoPill segmento={row.segmento} title={row.reduccionMora ? `Mora −${row.reduccionMora} puntos` : 'Sin reducción de mora'} />
+            ),
+          },
           {
             header: 'Condición de pago',
             cell: ({ row }: { row: Cliente }) => {
@@ -148,7 +167,7 @@ export const ClientesPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} clientes`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="clientes" />,
         }}
       />
 

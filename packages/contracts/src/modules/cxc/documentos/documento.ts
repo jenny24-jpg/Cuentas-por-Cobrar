@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  isoDateSchema,
-  moneySchema,
-  optionalIdentifierSchema,
-  identifierSchema,
-} from '../validation';
+import { isoDateSchema, moneySchema } from '../validation';
 
 /**
  * Estados persistidos actuales. VENCIDO se conserva por compatibilidad con
@@ -39,6 +34,7 @@ export const documentoSchema = z.object({
   fechaDocumento: z.string(),
   fechaVencimiento: z.string(),
   total: z.number(),
+  montoPagado: z.number().optional(),
   saldo: z.number(),
   idEmpleadoAnulacion: z.number().int().nullable(),
   nombreEmpleadoAnulacion: z.string().nullable().optional(),
@@ -56,15 +52,16 @@ const documentoEditableBaseSchema = z.object({
   idTipoDocumento: z.number().int().positive('Selecciona un tipo de documento'),
   idMoneda: z.number().int().positive('Selecciona una moneda'),
   idCondicionCredito: z.number().int().positive().nullable().optional(),
-  serie: optionalIdentifierSchema('La serie', 30),
-  numeroDocumento: identifierSchema('El número de documento', 50),
+  // Sin serie/numeroDocumento: los asigna el sistema al crear (serie = código del tipo,
+  // número = siguiente correlativo de esa serie) y no se editan.
   fechaDocumento: isoDateSchema('La fecha del documento'),
-  fechaVencimiento: isoDateSchema('La fecha de vencimiento'),
+  // Lo calcula el servidor: fecha del documento + días de la condición de crédito.
+  fechaVencimiento: isoDateSchema('La fecha de vencimiento').optional(),
   total: moneySchema('El total', true),
 });
 
 export const createDocumentoSchema = documentoEditableBaseSchema.superRefine((data, ctx) => {
-  if (data.fechaVencimiento < data.fechaDocumento) {
+  if (data.fechaVencimiento && data.fechaVencimiento < data.fechaDocumento) {
     ctx.addIssue({
       code: 'custom',
       path: ['fechaVencimiento'],

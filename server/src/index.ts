@@ -10,6 +10,7 @@ import { errorHandler, noStore, requestLogger, securityHeaders } from './middlew
 import { initOraclePool, closeOraclePool } from './config/database';
 import { config } from './config';
 import { logger } from './shared/logger';
+import { programarTareasDiarias } from './modules/cxc/shared/tareasDiarias';
 
 const app = express();
 const PORT = config.port;
@@ -43,7 +44,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', noStore, authRoutes);
 
 // Todo CxC exige sesión válida, clave ya cambiada y rol con permiso para la operación.
-app.use('/api/admin/usuarios', noStore, requireAuth, blockIfPasswordChangeRequired, usuariosRoutes);
+app.use('/api/admin/usuarios', noStore, requireAuth, blockIfPasswordChangeRequired, registrarAcciones, usuariosRoutes);
 app.use('/api/cxc', noStore, requireAuth, blockIfPasswordChangeRequired, enforceReadOnlyRole, blindarActor, registrarAcciones, cxcRoutes);
 
 app.use(errorHandler);
@@ -56,11 +57,14 @@ async function bootstrap() {
       logger.info('server_started', { port: PORT });
     });
 
+    const detenerTareas = config.tareasAutomaticas ? programarTareasDiarias() : () => {};
+
     let shuttingDown = false;
     const shutdown = async () => {
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info('server_shutdown_initiated');
+      detenerTareas();
 
       server.close(async () => {
         try {

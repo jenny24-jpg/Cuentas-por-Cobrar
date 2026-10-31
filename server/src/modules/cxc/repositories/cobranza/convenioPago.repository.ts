@@ -1,7 +1,7 @@
 import oracledb from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { ConvenioPago, CreateConvenioPagoInput, UpdateConvenioPagoInput } from '@erp/contracts';
-import { ConflictError } from '../../../../shared/errors/AppError';
+import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
 import { EPSILON } from '../../shared/financialRules';
 import { businessTodayIso } from '../../../../shared/date';
 
@@ -11,6 +11,9 @@ interface ConvenioPagoRow {
   NOMBRE_CLIENTE: string | null;
   FECHA_CONVENIO: Date;
   MONTO_DEUDA: number;
+  MONTO_PAGADO: number;
+  SALDO_PENDIENTE: number;
+  CUOTAS_PAGADAS: number;
   NUMERO_CUOTAS: number;
   ESTADO: string;
   OBSERVACIONES: string | null;
@@ -23,6 +26,9 @@ function mapRow(row: ConvenioPagoRow): ConvenioPago {
     nombreCliente: row.NOMBRE_CLIENTE,
     fechaConvenio: row.FECHA_CONVENIO?.toISOString() ?? '',
     montoDeuda: row.MONTO_DEUDA,
+    montoPagado: Number(row.MONTO_PAGADO ?? 0),
+    saldoPendiente: Number(row.SALDO_PENDIENTE ?? row.MONTO_DEUDA),
+    cuotasPagadas: Number(row.CUOTAS_PAGADAS ?? 0),
     numeroCuotas: row.NUMERO_CUOTAS,
     estado: row.ESTADO as ConvenioPago['estado'],
     observaciones: row.OBSERVACIONES,
@@ -31,7 +37,11 @@ function mapRow(row: ConvenioPagoRow): ConvenioPago {
 
 const SELECT_BASE = `
   SELECT cv.ID_CONVENIO, cv.ID_CLIENTE, c.NOMBRE AS NOMBRE_CLIENTE, cv.FECHA_CONVENIO,
-         cv.MONTO_DEUDA, cv.NUMERO_CUOTAS, cv.ESTADO, cv.OBSERVACIONES
+         cv.MONTO_DEUDA,
+         NVL((SELECT SUM(cc.MONTO - cc.SALDO) FROM CXC_CONVENIO_CUOTAS cc WHERE cc.ID_CONVENIO = cv.ID_CONVENIO), 0) AS MONTO_PAGADO,
+         NVL((SELECT SUM(cc.SALDO) FROM CXC_CONVENIO_CUOTAS cc WHERE cc.ID_CONVENIO = cv.ID_CONVENIO), cv.MONTO_DEUDA) AS SALDO_PENDIENTE,
+         (SELECT COUNT(*) FROM CXC_CONVENIO_CUOTAS cc WHERE cc.ID_CONVENIO = cv.ID_CONVENIO AND cc.ESTADO = 'PAGADA') AS CUOTAS_PAGADAS,
+         cv.NUMERO_CUOTAS, cv.ESTADO, cv.OBSERVACIONES
   FROM CXC_CONVENIOS_PAGO cv
   JOIN CLIENTE c ON c.ID_CLIENTE = cv.ID_CLIENTE
 `;
@@ -91,6 +101,46 @@ export async function createConCuotas(
 ): Promise<number> {
   const conn = await getConnection();
   try {
+    // Los documentos se bloquean en orden estable y se vuelve a validar dentro
+    // de la misma transacciÃ³n que inserta el convenio. AsÃ­ dos solicitudes
+    // simultÃ¡neas no pueden cubrir la misma factura con convenios activos.
+    const ids = new Set<number>();
+    let monedaDocumentos: number | null = null;
+    let totalIncluido = 0;
+    for (const doc of [...documentos].sort((a, b) => a.idDocumento - b.idDocumento)) {
+      if (ids.has(doc.idDocumento)) throw new BadRequestError('No se puede incluir el mismo documento dos veces en el convenio');
+      ids.add(doc.idDocumento);
+      const result = await conn.execute<{ ID_CLIENTE: number; ID_MONEDA: number; SALDO: number }>(
+        `SELECT ID_CLIENTE, ID_MONEDA, SALDO FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id FOR UPDATE`,
+        { id: doc.idDocumento },
+      );
+      const row = result.rows?.[0];
+      if (!row || row.ID_CLIENTE !== input.idCliente || Number(row.SALDO) <= EPSILON) {
+        throw new BadRequestError(`El documento #${doc.idDocumento} ya no pertenece al cliente o no tiene saldo pendiente`);
+      }
+      if (doc.montoIncluido > Number(row.SALDO) + EPSILON) {
+        throw new BadRequestError(`El monto incluido para el documento #${doc.idDocumento} supera su saldo actual`);
+      }
+      if (monedaDocumentos !== null && monedaDocumentos !== row.ID_MONEDA) {
+        throw new BadRequestError('Todos los documentos de un convenio deben estar en la misma moneda');
+      }
+      monedaDocumentos = row.ID_MONEDA;
+      const vigente = await conn.execute<{ TOTAL: number }>(
+        `SELECT COUNT(*) AS TOTAL
+           FROM CXC_CONVENIO_DOCUMENTOS cvd
+           JOIN CXC_CONVENIOS_PAGO cv ON cv.ID_CONVENIO = cvd.ID_CONVENIO
+          WHERE cvd.ID_DOCUMENTO = :idDocumento AND UPPER(TRIM(cv.ESTADO)) = 'ACTIVO'`,
+        { idDocumento: doc.idDocumento },
+      );
+      if (Number(vigente.rows?.[0]?.TOTAL ?? 0) > 0) {
+        throw new ConflictError(`El documento #${doc.idDocumento} ya pertenece a otro convenio activo`);
+      }
+      totalIncluido = Number((totalIncluido + doc.montoIncluido).toFixed(2));
+    }
+    if (Math.abs(totalIncluido - input.montoDeuda) > EPSILON) {
+      throw new BadRequestError('La suma de los documentos debe coincidir con el monto de la deuda del convenio');
+    }
+
     const result = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_CONVENIOS_PAGO
          (ID_CLIENTE, FECHA_CONVENIO, MONTO_DEUDA, NUMERO_CUOTAS, ESTADO, OBSERVACIONES)
@@ -143,19 +193,41 @@ export async function createConCuotas(
 }
 
 export async function update(id: number, input: UpdateConvenioPagoInput): Promise<void> {
-  const fields: string[] = [];
-  const binds: Record<string, any> = { id };
-
-  if (input.estado !== undefined) { fields.push('ESTADO = :estado'); binds.estado = input.estado; }
-  if (input.observaciones !== undefined) { fields.push('OBSERVACIONES = :observaciones'); binds.observaciones = input.observaciones; }
+  if (input.observaciones === undefined) return;
   // montoDeuda, numeroCuotas y fechaConvenio no se editan aquí a propósito:
   // ya generaron las cuotas al crearse el convenio.
 
-  if (fields.length === 0) return;
-
   const conn = await getConnection();
   try {
-    await conn.execute(`UPDATE CXC_CONVENIOS_PAGO SET ${fields.join(', ')} WHERE ID_CONVENIO = :id`, binds);
+    const current = await conn.execute(`SELECT ID_CONVENIO FROM CXC_CONVENIOS_PAGO WHERE ID_CONVENIO = :id FOR UPDATE`, { id });
+    if (!current.rows?.length) throw new NotFoundError(`Convenio ${id} no encontrado`);
+    await conn.execute(`UPDATE CXC_CONVENIOS_PAGO SET OBSERVACIONES = :observaciones WHERE ID_CONVENIO = :id`, {
+      id,
+      observaciones: input.observaciones,
+    });
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    await conn.close();
+  }
+}
+
+/** CancelaciÃ³n explÃ­cita: cumplimiento e incumplimiento los determina el sistema. */
+export async function cancelar(id: number): Promise<void> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ESTADO: string }>(
+      `SELECT ESTADO FROM CXC_CONVENIOS_PAGO WHERE ID_CONVENIO = :id FOR UPDATE`,
+      { id },
+    );
+    const estado = result.rows?.[0]?.ESTADO;
+    if (!estado) throw new NotFoundError(`Convenio ${id} no encontrado`);
+    if (estado === 'CANCELADO') throw new ConflictError('El convenio ya estÃ¡ cancelado.');
+    if (estado === 'CUMPLIDO') throw new ConflictError('Un convenio cumplido no se puede cancelar.');
+    if (!['ACTIVO', 'INCUMPLIDO'].includes(estado)) throw new ConflictError('El estado actual del convenio no permite cancelarlo.');
+    await conn.execute(`UPDATE CXC_CONVENIOS_PAGO SET ESTADO = 'CANCELADO' WHERE ID_CONVENIO = :id`, { id });
     await conn.commit();
   } catch (err) {
     await conn.rollback();

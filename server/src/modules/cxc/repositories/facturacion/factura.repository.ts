@@ -76,15 +76,15 @@ export async function getEmisor(): Promise<{ idEmpresa: number; nombre: string; 
   }
 }
 
-export async function getCliente(idCliente: number): Promise<{ nombre: string; nit: string | null } | null> {
+export async function getCliente(idCliente: number): Promise<{ nombre: string; nit: string | null; idCondicion: number | null } | null> {
   const conn = await getConnection();
   try {
-    const result = await conn.execute<{ NOMBRE: string; NIT: string | null }>(
-      `SELECT NOMBRE, NIT FROM CLIENTE WHERE ID_CLIENTE = :idCliente`,
+    const result = await conn.execute<{ NOMBRE: string; NIT: string | null; ID_CONDICION: number | null }>(
+      `SELECT NOMBRE, NIT, ID_CONDICION FROM CLIENTE WHERE ID_CLIENTE = :idCliente`,
       { idCliente },
     );
     const row = result.rows?.[0];
-    return row ? { nombre: row.NOMBRE, nit: row.NIT } : null;
+    return row ? { nombre: row.NOMBRE, nit: row.NIT, idCondicion: row.ID_CONDICION ?? null } : null;
   } finally {
     await conn.close();
   }
@@ -327,6 +327,43 @@ export async function anular(id: number, uuidAnulacion: string, input: AnularFac
         WHERE ID_DOCUMENTO = :idDocumento`,
       { idEmpleado: input.idEmpleadoAnulacion, motivo: input.motivoAnulacion, idDocumento: f.ID_DOCUMENTO },
     );
+    const notasMora = await conn.execute<{ ID_DOCUMENTO: number; ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT nd.ID_DOCUMENTO, nd.ESTADO, nd.TOTAL, nd.SALDO
+         FROM CXC_DOCUMENTOS nd
+         JOIN CXC_TIPOS_DOCUMENTO td ON td.ID_TIPO_DOCUMENTO = nd.ID_TIPO_DOCUMENTO
+        WHERE nd.ID_DOCUMENTO_ORIGEN = :idDocumento
+          AND NVL(td.ES_MORA, 'N') = 'S'
+          AND UPPER(TRIM(nd.ESTADO)) NOT IN ('ANULADO', 'ANULADA')
+        FOR UPDATE OF nd.ESTADO`,
+      { idDocumento: f.ID_DOCUMENTO },
+    );
+    for (const nota of notasMora.rows ?? []) {
+      if (hasFinancialMovement(nota.TOTAL, nota.SALDO)) {
+        throw new ConflictError('La factura tiene notas de mora con pagos aplicados. Reversa esos pagos antes de anular la factura.');
+      }
+      await conn.execute(
+        `UPDATE CXC_DOCUMENTOS
+            SET SALDO = 0, ESTADO = 'ANULADO', ID_EMPLEADO_ANULACION = :idEmpleado,
+                FECHA_ANULACION = SYSDATE, MOTIVO_ANULACION = :motivo
+          WHERE ID_DOCUMENTO = :idDocumento`,
+        {
+          idEmpleado: input.idEmpleadoAnulacion,
+          motivo: `Anulada con factura FEL: ${input.motivoAnulacion}`.slice(0, 250),
+          idDocumento: nota.ID_DOCUMENTO,
+        },
+      );
+      await registrarEvento(conn, {
+        idDocumento: nota.ID_DOCUMENTO,
+        estadoAnterior: nota.ESTADO,
+        estadoNuevo: 'ANULADO',
+        idEmpleado: input.idEmpleadoAnulacion,
+        tipoEvento: 'ANULACION_DOCUMENTO',
+        monto: nota.SALDO,
+        naturaleza: 'ABONO',
+        descripcion: 'Nota de mora anulada con su factura FEL de origen',
+      });
+    }
+
     await registrarEvento(conn, {
       idDocumento: f.ID_DOCUMENTO,
       estadoAnterior: d.ESTADO,

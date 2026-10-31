@@ -5,7 +5,6 @@ import { FormActionButtons } from '../../../../shared/components/FormActionButto
 import { apiClient, ApiError } from '../../../../shared/api';
 import {
   hasErrors,
-  validateMoney,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
@@ -55,17 +54,11 @@ export function AnticipoForm({
     item?.idPago?.toString() ?? '',
   );
 
-  const [montoOriginal, setOriginal] = useState(
-    item?.montoOriginal?.toString() ?? '',
-  );
-
-  const [montoDisponible, setDisponible] = useState(
-    item?.montoDisponible?.toString() ?? '',
-  );
-
-  const [fecha, setFecha] = useState(
-    item?.fecha?.slice(0, 10) ?? hoyGuatemalaIso(),
-  );
+  // Fecha fija: al crear es la fecha actual de Guatemala;
+  // al editar se conserva la fecha historica del anticipo.
+  const fecha = isEditing
+    ? item?.fecha?.slice(0, 10) ?? ''
+    : hoyGuatemalaIso();
 
   const [pagoConsultado, setPagoConsultado] = useState<Pago | null>(null);
   const [pagoVerificadoId, setPagoVerificadoId] = useState('');
@@ -114,10 +107,15 @@ export function AnticipoForm({
 
     apiClient
       .get<CatalogoOption[]>(
-        `/cxc/catalogos/pagos?idCliente=${encodeURIComponent(idCliente)}`,
+        `/cxc/catalogos/pagos?idCliente=${encodeURIComponent(idCliente)}&paraAnticipo=1`,
       )
       .then((data) => {
-        if (activo) setPagos(data);
+        if (!activo) return;
+        // El pago que ya respalda este anticipo no sale en el filtro (está ocupado): se conserva.
+        const actual = item?.idPago && String(item.idCliente) === idCliente && !data.some((p) => p.id === item.idPago)
+          ? [{ id: item.idPago, label: `${item.referenciaPago ?? `Pago #${item.idPago}`} (actual)` }]
+          : [];
+        setPagos([...actual, ...data]);
       })
       .catch(() => {
         if (activo) setPagos([]);
@@ -180,6 +178,14 @@ export function AnticipoForm({
   const fechaPagoOriginal =
     pagoVerificado?.fechaPago?.slice(0, 10) ?? '';
 
+  // El monto no se escribe: es el monto del pago que respalda el anticipo.
+  const montoOriginal = pagoVerificado
+    ? Number(pagoVerificado.monto).toFixed(2)
+    : '';
+  const montoDisponible = isEditing && pagoVerificado?.idPago === item?.idPago
+    ? Number(item?.montoDisponible ?? 0).toFixed(2)
+    : montoOriginal;
+
   // =====================================================
   // VALIDACIONES
   // =====================================================
@@ -194,51 +200,6 @@ export function AnticipoForm({
 
     if (clienteErr) {
       next.idCliente = clienteErr;
-    }
-
-    const originalErr = validateMoney(
-      montoOriginal,
-      'El monto original',
-      {
-        required: true,
-        positive: true,
-      },
-    );
-
-    if (originalErr) {
-      next.montoOriginal = originalErr;
-    }
-
-    const disponibleErr = validateMoney(
-      montoDisponible,
-      'El monto disponible',
-      {
-        required: true,
-        min: 0,
-      },
-    );
-
-    if (disponibleErr) {
-      next.montoDisponible = disponibleErr;
-    } else if (
-      montoOriginal !== '' &&
-      Number(montoDisponible) > Number(montoOriginal)
-    ) {
-      next.montoDisponible =
-        'El monto disponible no puede superar el monto original.';
-    }
-
-    // En la creación, el saldo inicial debe ser
-    // exactamente igual al monto original.
-
-    if (
-      !isEditing &&
-      montoOriginal !== '' &&
-      montoDisponible !== '' &&
-      Number(montoDisponible) !== Number(montoOriginal)
-    ) {
-      next.montoDisponible =
-        'Al crear un anticipo, el disponible debe ser igual al monto original.';
     }
 
     const fechaErr = validateRequiredDate(
@@ -260,10 +221,12 @@ export function AnticipoForm({
         'La fecha del anticipo no puede ser anterior a la fecha del pago.';
     }
 
-    // El pago es opcional, pero debe verificarse
-    // cuando se selecciona.
-
-    if (idPago) {
+    // El pago es obligatorio: el anticipo es dinero ya recibido.
+    if (!idPago) {
+      next.idPago = idCliente && pagos.length === 0
+        ? 'El cliente no tiene pagos libres para respaldar un anticipo. Registra primero el pago en Pagos.'
+        : 'Selecciona el pago que respalda el anticipo.';
+    } else {
       if (!pagoVerificado || !fechaPagoOriginal) {
         next.idPago = cargandoPago
           ? 'Consultando el pago relacionado.'
@@ -291,11 +254,9 @@ export function AnticipoForm({
   }, [
     idCliente,
     idPago,
-    montoOriginal,
-    montoDisponible,
+    pagos,
     fecha,
     hoy,
-    isEditing,
     pagoVerificado,
     fechaPagoOriginal,
     cargandoPago,
@@ -358,9 +319,9 @@ export function AnticipoForm({
 
     const hoyActual = hoyGuatemalaIso();
 
-    if (fecha > hoyActual) {
+    if (!isEditing && fecha !== hoyActual) {
       setErrors({
-        fecha: 'La fecha del anticipo no puede ser futura.',
+        fecha: 'La fecha del anticipo debe ser la fecha actual de Guatemala.',
       });
       return;
     }
@@ -392,22 +353,24 @@ export function AnticipoForm({
     setBusy(true);
     setErrors({});
 
-    const payload = {
+    const datos = {
       idCliente: Number(idCliente),
-      idPago: idPago ? Number(idPago) : undefined,
-      montoOriginal: Number(montoOriginal),
-      montoDisponible: Number(montoDisponible),
-      fecha,
+      idPago: Number(idPago),
     };
 
     try {
       if (isEditing) {
+        // No cambiar la fecha original en una edicion.
         await apiClient.patch(
           `/cxc/anticipos/${item!.idAnticipo}`,
-          payload,
+          datos,
         );
       } else {
-        await apiClient.post('/cxc/anticipos', payload);
+        // Recalcular al guardar por si cambio el dia.
+        await apiClient.post('/cxc/anticipos', {
+          ...datos,
+          fecha: hoyActual,
+        });
       }
 
       onSuccess();
@@ -476,7 +439,8 @@ export function AnticipoForm({
         />
 
         <Select
-          label="Pago relacionado"
+          label="Pago que respalda el anticipo"
+          required
           value={idPago}
           onChange={(e: any) =>
             handlePagoChange(e.target.value)
@@ -488,58 +452,29 @@ export function AnticipoForm({
           isReadOnly={!idCliente || isLocked}
           placeholder={
             idCliente
-              ? 'Seleccionar pago (opcional)'
+              ? 'Seleccionar pago'
               : 'Selecciona un cliente primero'
           }
-          helperText="Opcional; solo se muestran pagos del cliente seleccionado."
-          error={errorFor('idPago', idPago)}
+          helperText="Pago recibido del cliente que aún no se aplicó a documentos; de él sale el monto del anticipo."
+          error={errorFor('idPago', idPago) ?? (idCliente && pagos.length === 0 ? validationErrors.idPago : undefined)}
         />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextInput
           label="Monto original"
-          type="number"
-          restriction="decimal"
-          decimalPlaces={2}
-          min={0.01}
-          step="0.01"
-          required
-          value={montoOriginal}
-          onChange={(e: any) => {
-            setOriginal(e.target.value);
-
-            if (!isEditing) {
-              setDisponible(e.target.value);
-            }
-          }}
-          helperText="Importe inicial del anticipo; mayor a cero."
-          error={errorFor('montoOriginal', montoOriginal)}
-          isReadOnly={isLocked}
+          value={montoOriginal ? `Q ${montoOriginal}` : ''}
+          placeholder="Se toma del pago seleccionado"
+          isReadOnly
+          helperText="Automático: es el monto del pago que respalda el anticipo."
         />
 
         <TextInput
           label="Monto disponible"
-          type="number"
-          restriction="decimal"
-          decimalPlaces={2}
-          min={0.01}
-          step="0.01"
-          required
-          value={montoDisponible}
-          onChange={(e: any) =>
-            setDisponible(e.target.value)
-          }
-          isReadOnly={!isEditing || isLocked}
-          helperText={
-            isEditing
-              ? 'Debe estar entre cero y el monto original.'
-              : 'Al crear inicia automáticamente igual al monto original.'
-          }
-          error={errorFor(
-            'montoDisponible',
-            montoDisponible,
-          )}
+          value={montoDisponible ? `Q ${montoDisponible}` : ''}
+          placeholder="Igual al monto original"
+          isReadOnly
+          helperText="Inicia igual al original y baja cada vez que el anticipo se aplica a un documento."
         />
       </div>
 
@@ -548,22 +483,14 @@ export function AnticipoForm({
           label="Fecha"
           type="date"
           required
-          min={fechaPagoOriginal || undefined}
-          max={hoy}
           value={fecha}
-          onChange={(e: any) =>
-            setFecha(e.target.value)
-          }
           helperText={
-            fechaPagoOriginal
-              ? `Debe ser igual o posterior al pago (${fechaPagoOriginal}) y no puede ser futura.`
-              : 'Fecha real del anticipo; no puede ser futura.'
+            isEditing
+              ? 'Fecha original del anticipo. No se puede modificar.'
+              : 'Fecha automatica del sistema (Guatemala). No se puede modificar.'
           }
           error={errorFor('fecha', fecha)}
-          isReadOnly={
-            isLocked ||
-            (Boolean(idPago) && (cargandoPago || !pagoVerificado))
-          }
+          isReadOnly
         />
         {isEditing && (
           <TextInput

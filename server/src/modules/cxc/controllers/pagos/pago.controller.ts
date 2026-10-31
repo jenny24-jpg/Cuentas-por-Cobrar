@@ -2,7 +2,8 @@ import {Request,Response,NextFunction} from 'express'; import * as service from 
 import { conEmpleadoActual } from '../../../auth/empleadoActual';
 export async function list(req:Request,res:Response,next:NextFunction){try{res.json(await service.listPagos({page:req.query.page as string|undefined,limit:req.query.limit as string|undefined,search:req.query.search as string|undefined}));}catch(e){next(e);}}
 export async function getOne(req:Request,res:Response,next:NextFunction){try{res.json(await service.getPago(Number(req.params.id)));}catch(e){next(e);}}
-export async function create(req:Request,res:Response,next:NextFunction){try{res.status(201).json(await service.createPago(req.body));}catch(e){next(e);}}
+// Si el pago se aplica a un documento, la aplicación registra al empleado del usuario actual.
+export async function create(req:Request,res:Response,next:NextFunction){try{res.status(201).json(await service.createPago(req.body?.aplicaciones?.length?await conEmpleadoActual(req):req.body));}catch(e){next(e);}}
+export async function siguienteReferencia(_req:Request,res:Response,next:NextFunction){try{res.json(await service.previewReferencia());}catch(e){next(e);}}
 export async function update(req:Request,res:Response,next:NextFunction){try{res.json(await service.updatePago(Number(req.params.id),req.body));}catch(e){next(e);}}
 export async function remove(req:Request,res:Response,next:NextFunction){try{await service.deletePago(Number(req.params.id));res.status(204).send();}catch(e){next(e);}}
-export async function anular(req:Request,res:Response,next:NextFunction){try{res.json(await service.anularPago(Number(req.params.id),await conEmpleadoActual(req,'idEmpleadoAnulacion')));}catch(e){next(e);}}

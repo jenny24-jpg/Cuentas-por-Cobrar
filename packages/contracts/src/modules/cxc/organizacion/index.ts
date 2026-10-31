@@ -9,3 +9,4 @@ export * from './ruta-reglas';
 export * from './ruta-detalle';
 
 export * from './ruta-operacion';
+export * from './zona-cobro';

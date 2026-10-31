@@ -9,6 +9,7 @@ import analiticaRoutes from './analitica.routes';
 import pagosRoutes from './pagos';
 import documentosRoutes from './documentos';
 import facturacionRoutes from './facturacion';
+import autorizacionesRoutes from './autorizaciones';
 
 const router = Router();
 
@@ -37,6 +38,9 @@ router.use('/', pagosRoutes);
 
 // Rutas de Crédito
 router.use('/', creditoRoutes);
+
+// Solicitudes de reversa y anulación (autorización de un ADMIN)
+router.use('/', autorizacionesRoutes);
 
 // Rutas de Documentos
 router.use('/', documentosRoutes);

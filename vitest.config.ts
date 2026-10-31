@@ -20,17 +20,14 @@ export default defineConfig({
       include: [
         'packages/contracts/src/modules/cxc/validation.ts',
         'packages/contracts/src/modules/cxc/nit.ts',
-        'server/src/modules/cxc/shared/**/*.ts',
+        'server/src/modules/cxc/**/*.ts',
         'server/src/shared/date.ts',
         'server/src/shared/idParams.ts',
         'server/src/middlewares/errorHandler.ts',
-        'server/src/modules/cxc/services/pagos/aplicacionPago.service.ts',
-        'server/src/modules/cxc/repositories/pagos/aplicacionPago.repository.ts',
-        'server/src/modules/cxc/repositories/pagos/anticipo.repository.ts',
-        'server/src/modules/cxc/repositories/pagos/pago.repository.ts',
-        'server/src/modules/cxc/repositories/documentos/ajuste.repository.ts',
         'client/src/shared/validation.ts',
       ],
+      // Controladores y rutas solo enlazan HTTP con los servicios; se prueban de punta a punta (e2e).
+      exclude: ['server/src/modules/cxc/controllers/**', 'server/src/modules/cxc/routes/**', '**/index.ts'],
     },
   },
 });

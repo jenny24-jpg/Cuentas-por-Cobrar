@@ -92,6 +92,8 @@ export const crearUsuarioSchema = z.object({
     .refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v), 'Ingresa un correo válido (ejemplo: nombre@empresa.com)')
     .optional(),
   rol: z.enum(ROLES, { message: 'Selecciona un rol' }),
+  /** Empleado al que se atribuyen los registros del usuario. null/ausente = sin empleado. */
+  idEmpleado: z.number().int().positive().nullable().optional(),
 });
 export type CrearUsuarioInput = z.infer<typeof crearUsuarioSchema>;
 
@@ -107,6 +109,8 @@ export interface UsuarioAdmin {
   email: string | null;
   rol: Rol;
   estado: 'ACTIVO' | 'INACTIVO';
+  idEmpleado: number | null;
+  nombreEmpleado: string | null;
   debeCambiarClave: boolean;
   /** Minutos que faltan para que termine el bloqueo por intentos fallidos (0 = no bloqueado). */
   minutosBloqueo: number;
@@ -114,6 +118,52 @@ export interface UsuarioAdmin {
   sesionesActivas: number;
   ultimoLogin: string | null;
   fechaCreacion: string;
+}
+
+// --- Gestión de empleados (solo ADMIN) ----------------------------------------------
+
+export const CODIGO_EMPLEADO_REGEX = /^[A-Za-z0-9._/-]{1,30}$/;
+
+export const empleadoSchema = z.object({
+  nombre: z.string().trim().min(2, 'Ingresa el nombre').max(120, 'El nombre no puede superar 120 caracteres'),
+  apellido: z.string().trim().max(120, 'El apellido no puede superar 120 caracteres').optional(),
+  puesto: z.string().trim().max(100, 'El puesto no puede superar 100 caracteres').optional(),
+  /** Sucursal a la que pertenece el empleado: solo puede tener rutas de su sucursal. */
+  idSucursal: z.number({ error: 'Selecciona una sucursal' }).int().positive('Selecciona una sucursal'),
+  email: z.string().trim().max(150, 'El correo no puede superar 150 caracteres')
+    .refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v), 'Ingresa un correo válido (ejemplo: nombre@empresa.com)')
+    .optional(),
+  telefono: z.string().trim().max(30, 'El teléfono no puede superar 30 caracteres')
+    .refine((v) => v === '' || /^[0-9+()\-\s]{6,30}$/.test(v), 'El teléfono solo admite números, espacios, +, - y paréntesis')
+    .optional(),
+  estado: z.enum(['A', 'I'], { message: 'Selecciona un estado' }).optional(),
+});
+export type EmpleadoInput = z.infer<typeof empleadoSchema>;
+
+export interface EmpleadoAdmin {
+  idEmpleado: number;
+  codigo: string | null;
+  nombre: string;
+  apellido: string | null;
+  nombreCompleto: string;
+  puesto: string | null;
+  idSucursal: number | null;
+  nombreSucursal: string | null;
+  email: string | null;
+  telefono: string | null;
+  estado: 'A' | 'I';
+  /** Usuario de acceso vinculado a este empleado (null = sin usuario). */
+  usuarioVinculado: string | null;
+}
+
+/** Empleado que se puede vincular a un usuario (solo informativo para el selector del administrador). */
+export interface EmpleadoVinculable {
+  idEmpleado: number;
+  nombre: string;
+  codigo: string | null;
+  puesto: string | null;
+  /** Usuario que ya lo tiene vinculado (un empleado solo puede tener un usuario). */
+  asignadoA: string | null;
 }
 
 export interface UsuarioCreado {

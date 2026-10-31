@@ -3,23 +3,26 @@ import { Plus, Pencil, Trash2, Search, Ban } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal, TrazabilidadActionModal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Pago } from '@erp/contracts';
 import { PagoForm } from './components/PagoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const PagosPage = () => {
+  const pend = useSolicitudesPendientes('ANULACION_PAGO');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.PagosPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: Pago } | null>(null);
   const [del, setDel] = useState<Pago | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [aAnular, setAAnular] = useState<Pago | null>(null);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<Pago>('/cxc/pagos', { page, limit: 10, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<Pago>('/cxc/pagos', { page, limit: pageSize, search });
 
   const remove = async () => {
     if (!del) return;
@@ -68,11 +71,12 @@ export const PagosPage = () => {
         emptyText="No hay pagos registrados"
         columns={[
           { header: 'ID', accessorKey: 'idPago' },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || `Cliente #${row.idCliente}` },
           { header: 'Fecha', accessorKey: 'fechaPago', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Monto', accessorKey: 'monto', cell: ({ value }: any) => money(value) },
-          { header: 'Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
-          { header: 'Disponible', accessorKey: 'montoDisponible', cell: ({ value }: any) => money(value) },
+          { header: 'Monto registrado', accessorKey: 'monto', cell: ({ value }: any) => money(value) },
+          { header: 'Monto aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
+          { header: 'Monto disponible', accessorKey: 'montoDisponible', cell: ({ value }: any) => money(value) },
           { header: 'Referencia', accessorKey: 'numeroReferencia', cell: ({ value }: any) => value || '—' },
           { header: 'Estado', accessorKey: 'estado', cell: ({ value }: any) => value ? <StatusBadge status={value} /> : '—' },
           {
@@ -80,9 +84,11 @@ export const PagosPage = () => {
             align: 'right',
             cell: ({ row }: any) => {
               const locked = Number(row.montoAplicado ?? 0) > 0.005 || ['APLICADO', 'REVERSADO', 'ANULADO'].includes(String(row.estado).toUpperCase());
-              const anulable = Number(row.montoAplicado ?? 0) <= 0.005 && String(row.estado).toUpperCase() !== 'ANULADO';
+              const pendiente = pend.pendientes.has(row.idPago);
+              const anulable = (Number(row.montoAplicado ?? 0) <= 0.005 && String(row.estado).toUpperCase() !== 'ANULADO') && !pendiente;
               return (
                 <div className="flex justify-end gap-1">
+                  {pendiente && <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Anulación solicitada</span>}
                   <button
                     onClick={() => setModal({ mode: 'edit', item: row })}
                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
@@ -94,7 +100,7 @@ export const PagosPage = () => {
                     onClick={() => anulable && setAAnular(row)}
                     disabled={!anulable}
                     className={`p-1.5 rounded-md ${anulable ? 'text-slate-400 hover:text-amber-700 hover:bg-amber-50' : 'text-slate-300 cursor-not-allowed'}`}
-                    title={anulable ? 'Anular pago' : 'Un pago con aplicaciones o ya anulado no se puede anular de nuevo'}
+                    title={pendiente ? 'Anulación solicitada: espera la aprobación de un administrador' : anulable ? 'Anular pago' : 'Un pago con aplicaciones o ya anulado no se puede anular de nuevo'}
                   >
                     <Ban size={15} />
                   </button>
@@ -115,7 +121,7 @@ export const PagosPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 
@@ -135,14 +141,15 @@ export const PagosPage = () => {
 
       {aAnular && (
         <TrazabilidadActionModal
-          title={`Anular pago #${aAnular.idPago}`}
-          description="El pago quedará marcado como anulado de forma permanente. Solo se puede anular un pago sin aplicaciones vigentes."
+          title={`Solicitar anulación de pago #${aAnular.idPago}`}
+          description="Al aprobarse, el pago quedará marcado como anulado de forma permanente. Solo se puede anular un pago sin aplicaciones vigentes."
           endpoint={`/cxc/pagos/${aAnular.idPago}/anular`}
-          actionLabel="Anular"
+          actionLabel="Solicitar anulación"
+          requiereAutorizacion
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}
-          onSuccess={() => { setAAnular(null); refetch(); }}
+          onSuccess={() => { setAAnular(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

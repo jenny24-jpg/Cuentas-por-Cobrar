@@ -16,6 +16,12 @@ export const aplicacionNotaCreditoSchema = z.object({
   nombreEmpleadoReversa: z.string().nullable().optional(),
   fechaReversa: z.string().nullable(),
   motivoReversa: z.string().nullable(),
+  /** Serie-número de la nota (NC-000001) y del documento (FAC-00000126). */
+  referenciaNota: z.string().optional(),
+  referenciaDocumento: z.string().optional(),
+  /** Cliente de la nota. */
+  idCliente: z.number().int().nullable().optional(),
+  nombreCliente: z.string().nullable().optional(),
 });
 
 export type AplicacionNotaCredito = z.infer<typeof aplicacionNotaCreditoSchema>;

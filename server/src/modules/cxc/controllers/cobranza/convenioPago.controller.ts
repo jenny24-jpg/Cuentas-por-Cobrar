@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import * as convenioPagoService from '../../services/cobranza/convenioPago.service';
+import * as catalogosRepository from '../../repositories/catalogos.repository';
 import { conEmpleadoActual } from '../../../auth/empleadoActual';
+
+export async function clientesElegibles(_req: Request, res: Response, next: NextFunction) {
+  try { res.json(await catalogosRepository.listClientesElegiblesParaConvenio()); } catch (err) { next(err); }
+}
 
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
@@ -36,6 +41,15 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 export async function update(req: Request, res: Response, next: NextFunction) {
   try {
     const convenio = await convenioPagoService.updateConvenio(Number(req.params.id), req.body);
+    res.json(convenio);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function cancelar(req: Request, res: Response, next: NextFunction) {
+  try {
+    const convenio = await convenioPagoService.cancelarConvenio(Number(req.params.id));
     res.json(convenio);
   } catch (err) {
     next(err);

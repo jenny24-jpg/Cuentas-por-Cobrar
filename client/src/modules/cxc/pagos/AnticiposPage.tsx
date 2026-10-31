@@ -3,24 +3,27 @@ import { Plus, Pencil, Trash2, Search, Ban } from 'lucide-react';
 import { DataTable, StatusBadge, Button, TextInput } from '../../../shared/ui-kit';
 import { Modal, TrazabilidadActionModal } from '../../../shared/components';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { usePaginatedList } from '../../../shared/hooks';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import { formatDateGT } from '../../../shared/date';
 import type { Anticipo } from '@erp/contracts';
 import { AnticipoForm } from './components/AnticipoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 const money = (value: unknown) =>
   `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const AnticiposPage = () => {
+  const pend = useSolicitudesPendientes('ANULACION_ANTICIPO');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.pagos.AnticiposPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: Anticipo } | null>(null);
   const [del, setDel] = useState<Anticipo | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [aAnular, setAAnular] = useState<Anticipo | null>(null);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<Anticipo>('/cxc/anticipos', { page, limit: 10, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<Anticipo>('/cxc/anticipos', { page, limit: pageSize, search });
 
   const remove = async () => {
     if (!del) return;
@@ -42,9 +45,9 @@ export const AnticiposPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Anticipos</h1>
-          <p className="text-sm text-slate-500">Un anticipo disponible se aplica contra un documento; para corregirlo se reversa la aplicación o se anula con trazabilidad.</p>
+          <p className="text-sm text-slate-500">Dinero que el cliente entregó antes de tener factura. El dinero nuevo se registra en Pagos con la opción Anticipo (crea pago y anticipo juntos); aquí solo se convierte en anticipo un pago libre ya registrado.</p>
         </div>
-        <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Nuevo</Button>
+        <Button icon={Plus} onClick={() => setModal({ mode: 'create' })}>Convertir pago libre</Button>
       </div>
 
       <div className="bg-white p-4 rounded-lg border border-slate-200">
@@ -59,6 +62,7 @@ export const AnticiposPage = () => {
         emptyText="No hay registros"
         columns={[
           { header: 'ID', accessorKey: 'idAnticipo' },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Pago', cell: ({ row }: any) => (row.idPago ? row.referenciaPago || `Pago #${row.idPago}` : 'Sin pago') },
           { header: 'Original', accessorKey: 'montoOriginal', cell: ({ value }: any) => money(value) },
@@ -79,9 +83,11 @@ export const AnticiposPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) => {
-              const anulable = row.estado === 'DISPONIBLE';
+              const pendiente = pend.pendientes.has(row.idAnticipo);
+              const anulable = (row.estado === 'DISPONIBLE') && !pendiente;
               return (
                 <div className="flex justify-end gap-1">
+                  {pendiente && <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Anulación solicitada</span>}
                   <button onClick={() => setModal({ mode: 'edit', item: row })} className="p-1.5 text-slate-400 hover:text-blue-600" title="Editar">
                     <Pencil size={15} />
                   </button>
@@ -89,7 +95,7 @@ export const AnticiposPage = () => {
                     onClick={() => anulable && setAAnular(row)}
                     disabled={!anulable}
                     className={`p-1.5 rounded-md ${anulable ? 'text-slate-400 hover:text-amber-700 hover:bg-amber-50' : 'text-slate-300 cursor-not-allowed'}`}
-                    title={anulable ? 'Anular anticipo' : 'Solo un anticipo disponible y sin aplicaciones se puede anular'}
+                    title={pendiente ? 'Anulación solicitada: espera la aprobación de un administrador' : anulable ? 'Anular anticipo' : 'Solo un anticipo disponible y sin aplicaciones se puede anular'}
                   >
                     <Ban size={15} />
                   </button>
@@ -105,7 +111,7 @@ export const AnticiposPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 
@@ -125,14 +131,15 @@ export const AnticiposPage = () => {
 
       {aAnular && (
         <TrazabilidadActionModal
-          title={`Anular anticipo #${aAnular.idAnticipo}`}
-          description="El anticipo quedará marcado como anulado de forma permanente y su disponible pasará a Q 0.00. Solo se puede anular un anticipo sin aplicaciones vigentes."
+          title={`Solicitar anulación de anticipo #${aAnular.idAnticipo}`}
+          description="Al aprobarse, el anticipo quedará marcado como anulado de forma permanente y su disponible pasará a Q 0.00. Solo se puede anular un anticipo sin aplicaciones vigentes."
           endpoint={`/cxc/anticipos/${aAnular.idAnticipo}/anular`}
-          actionLabel="Anular"
+          actionLabel="Solicitar anulación"
+          requiereAutorizacion
           motivoLabel="Motivo de la anulación"
           motivoFieldName="motivoAnulacion"
           onClose={() => setAAnular(null)}
-          onSuccess={() => { setAAnular(null); refetch(); }}
+          onSuccess={() => { setAAnular(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

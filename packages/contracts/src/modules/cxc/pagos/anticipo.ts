@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isoDateSchema, moneySchema } from '../validation';
+import { isoDateSchema } from '../validation';
 
 export const ESTADOS_ANTICIPO = ['DISPONIBLE', 'APLICADO', 'AGOTADO', 'CANCELADO'] as const;
 
@@ -20,23 +20,18 @@ export const anticipoSchema = z.object({
 });
 export type Anticipo = z.infer<typeof anticipoSchema>;
 
+/**
+ * Un anticipo es dinero que el cliente ya entregó: siempre nace de un pago registrado
+ * (el "pago relacionado") y su monto original es el monto de ese pago. Por eso el
+ * monto no se escribe: lo pone el sistema, y el disponible inicia igual al original.
+ */
 const anticipoBaseSchema = z.object({
   idCliente: z.number().int().positive('Selecciona un cliente'),
-  idPago: z.number().int().positive().nullable().optional(),
-  montoOriginal: moneySchema('El monto original', true),
-  montoDisponible: moneySchema('El monto disponible', true),
+  idPago: z.number({ error: 'Selecciona el pago que respalda el anticipo' }).int().positive('Selecciona el pago que respalda el anticipo'),
   fecha: isoDateSchema('La fecha'),
 });
 
-export const createAnticipoSchema = anticipoBaseSchema.superRefine((value, ctx) => {
-  if (value.montoDisponible > value.montoOriginal) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['montoDisponible'],
-      message: 'El monto disponible no puede superar el monto original',
-    });
-  }
-});
+export const createAnticipoSchema = anticipoBaseSchema;
 export type CreateAnticipoInput = z.infer<typeof createAnticipoSchema>;
 
 // ESTADO ya no se edita libremente vía update(): nace DISPONIBLE y solo el

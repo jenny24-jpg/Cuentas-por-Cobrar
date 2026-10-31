@@ -19,6 +19,7 @@ router.patch('/cobradores/:idEmpleado/perfil', operacion.perfil);
 // --- Empresas ---
 // /options va ANTES de /:id para que Express no confunda "options" con un id.
 router.get('/empresas/options', empresaController.options);
+router.get('/empresas/tipos-comercio', empresaController.tiposComercio);
 router.get('/empresas', empresaController.list);
 router.get('/empresas/:id', empresaController.getOne);
 router.post('/empresas', empresaController.create);
@@ -42,10 +43,14 @@ router.delete('/sucursales/:id', sucursalController.remove);
 // --- Rutas ---
 router.get('/rutas', rutaController.list);
 router.get('/rutas-por-empleado', rutaController.porEmpleado);
+router.get('/rutas/:id/sucursal-sugerida', rutaController.sucursalSugerida);
 router.get('/rutas/:id', rutaController.getOne);
 router.post('/rutas', rutaController.create);
 router.patch('/rutas/:id', rutaController.update);
+router.post('/rutas/:id/cancelar', rutaController.cancelar);
+router.post('/rutas/:id/finalizar', rutaController.finalizar);
 router.delete('/rutas/:id', rutaController.remove);
+
 
 // --- Paradas (detalle) de una ruta, anidadas bajo la ruta ---
 router.get('/rutas/:id/detalle', rutaDetalleController.listByRuta);

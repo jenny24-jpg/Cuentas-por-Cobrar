@@ -1,24 +1,24 @@
 import { useState } from 'react';
-import { Plus, Search, Undo2 } from 'lucide-react';
-import { DataTable, Button, TextInput, StatusBadge } from '../../../shared/ui-kit';
-import { Modal, TrazabilidadActionModal } from '../../../shared/components';
-import { usePaginatedList } from '../../../shared/hooks';
+import { Search, Undo2 } from 'lucide-react';
+import { DataTable, TextInput, StatusBadge } from '../../../shared/ui-kit';
+import { TrazabilidadActionModal } from '../../../shared/components';
+import { usePaginatedList, useSolicitudesPendientes } from '../../../shared/hooks';
 import { formatDateGT } from '../../../shared/date';
 import type { AplicacionNotaCredito } from '@erp/contracts';
-import { AplicacionNotaCreditoForm } from './components/AplicacionNotaCreditoForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 const money = (value: unknown) => `Q ${Number(value ?? 0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const AplicacionesNotaCreditoPage = () => {
+  const pend = useSolicitudesPendientes('REVERSA_APLICACION_NC');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.credito.AplicacionesNotaCreditoPage');
   const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
   const [aReversar, setAReversar] = useState<AplicacionNotaCredito | null>(null);
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<AplicacionNotaCredito>(
     '/cxc/aplicaciones-nota-credito',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   return (
@@ -26,9 +26,8 @@ export const AplicacionesNotaCreditoPage = () => {
       <div className="flex justify-between items-center gap-4">
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Aplicaciones de Nota de Crédito</h1>
-          <p className="text-sm text-slate-500">La NC reduce el saldo únicamente cuando se aplica al documento.</p>
+          <p className="text-sm text-slate-500">Historial de notas de crédito aplicadas (consulta y reversa). Una nota se aplica a su factura automáticamente cuando un administrador la aprueba en Notas de crédito; al reversarla vuelve a quedar por aprobar.</p>
         </div>
-        <Button icon={Plus} onClick={() => setOpen(true)}>Nueva Aplicación</Button>
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -52,17 +51,20 @@ export const AplicacionesNotaCreditoPage = () => {
         data={data}
         emptyText="No hay aplicaciones de notas de crédito registradas"
         columns={[
-          { header: 'ID', accessorKey: 'idAplicacionNc' },
-          { header: 'Nota de Crédito', cell: ({ row }: any) => `NC #${row.idNotaCredito}` },
-          { header: 'Documento', cell: ({ row }: any) => `Documento #${row.idDocumento}` },
-          { header: 'Monto Aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => money(value) },
-          { header: 'Fecha de Aplicación', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => formatDateGT(value) },
-          { header: 'Empleado', cell: ({ row }: any) => row.nombreEmpleado || (row.idEmpleado ? `#${row.idEmpleado}` : '—') },
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">{value ? `#${value}` : '—'}</span> },
+          { header: 'Cliente', cell: ({ row }: any) => row.nombreCliente || '—' },
+          { header: 'No. nota de crédito', cell: ({ row }: any) => <span className="whitespace-nowrap">{row.referenciaNota ?? `Nota #${row.idNotaCredito}`}</span> },
+          { header: 'Factura aplicada', cell: ({ row }: any) => <span className="whitespace-nowrap">{row.referenciaDocumento ?? `Documento #${row.idDocumento}`}</span> },
+          { header: 'Monto aplicado', accessorKey: 'montoAplicado', cell: ({ value }: any) => <span className="whitespace-nowrap">{money(value)}</span> },
+          { header: 'Fecha', accessorKey: 'fechaAplicacion', cell: ({ value }: any) => formatDateGT(value) },
+          { header: 'Aplicó', cell: ({ row }: any) => row.nombreEmpleado || (row.idEmpleado ? `#${row.idEmpleado}` : '—') },
           {
             header: 'Estado',
             cell: ({ row }: any) => (
               <div className="flex flex-col gap-0.5">
-                <StatusBadge status={row.estado} />
+                {row.estado === 'CONFIRMADA' && pend.pendientes.has(row.idAplicacionNc)
+                  ? <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800" title="Espera la aprobación de un administrador">Reversa solicitada</span>
+                  : <StatusBadge status={row.estado} />}
                 {row.estado === 'REVERSADA' && row.nombreEmpleadoReversa && (
                   <span className="text-[11px] text-slate-400">por {row.nombreEmpleadoReversa}</span>
                 )}
@@ -73,12 +75,12 @@ export const AplicacionesNotaCreditoPage = () => {
             header: '',
             align: 'right',
             cell: ({ row }: any) =>
-              row.estado === 'CONFIRMADA' ? (
+              row.estado === 'CONFIRMADA' && !pend.pendientes.has(row.idAplicacionNc) ? (
                 <button
                   onClick={() => setAReversar(row)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors"
                 >
-                  <Undo2 size={13} /> Reversar
+                  <Undo2 size={13} /> Solicitar reversa
                 </button>
               ) : null,
           },
@@ -87,28 +89,21 @@ export const AplicacionesNotaCreditoPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title="Nueva Aplicación de Nota de Crédito">
-        <AplicacionNotaCreditoForm
-          aplicacion={null}
-          onCancel={() => setOpen(false)}
-          onSuccess={() => { setOpen(false); refetch(); }}
-        />
-      </Modal>
-
       {aReversar && (
         <TrazabilidadActionModal
-          title={`Reversar aplicación #${aReversar.idAplicacionNc}`}
-          description={`Se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y al disponible de la nota de crédito.`}
+          title={`Solicitar reversa de aplicación #${aReversar.idAplicacionNc}`}
+          description={`Al aprobarse, se le devolverá ${money(aReversar.montoAplicado)} al saldo del documento y la nota volverá a quedar por aprobar: para aplicarla otra vez, un administrador debe aprobarla de nuevo.`}
           endpoint={`/cxc/aplicaciones-nota-credito/${aReversar.idAplicacionNc}/reversar`}
-          actionLabel="Reversar"
+          actionLabel="Solicitar reversa"
+          requiereAutorizacion
           motivoLabel="Motivo de la reversa"
           motivoFieldName="motivoReversa"
           onClose={() => setAReversar(null)}
-          onSuccess={() => { setAReversar(null); refetch(); }}
+          onSuccess={() => { setAReversar(null); refetch(); pend.recargar(); }}
         />
       )}
     </div>

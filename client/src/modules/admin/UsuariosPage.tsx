@@ -9,8 +9,10 @@ import { apiClient, ApiError } from '../../shared/api';
 import { useAuth } from '../../shared/auth/AuthContext';
 import { UsuarioForm } from './components/UsuarioForm';
 import { ClaveTemporalModal } from './components/ClaveTemporalModal';
+import { EmpleadosTabla } from './components/EmpleadosTabla';
+import { PieTabla, useTamanoPagina } from '../../shared/components/PieTabla';
 
-type Pestana = 'usuarios' | 'bitacora';
+type Pestana = 'usuarios' | 'empleados' | 'bitacora';
 type Accion = { tipo: 'restablecer' | 'sesiones' | 'desbloquear'; usuario: UsuarioAdmin };
 
 const ROL_ESTILO: Record<string, string> = {
@@ -58,12 +60,13 @@ function BotonFila({ titulo, onClick, disabled, children, tono = 'azul' }: {
 function TablaUsuarios() {
   const { usuario: yo } = useAuth();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('admin.UsuariosPage');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; item?: UsuarioAdmin } | null>(null);
   const [credenciales, setCredenciales] = useState<{ username: string; clave: string; motivo: 'creado' | 'restablecida' } | null>(null);
   const [accion, setAccion] = useState<Accion | null>(null);
   const [procesando, setProcesando] = useState(false);
-  const { data, meta, isLoading, error, refetch } = usePaginatedList<UsuarioAdmin>('/admin/usuarios', { page, limit: 10, search });
+  const { data, meta, isLoading, error, refetch } = usePaginatedList<UsuarioAdmin>('/admin/usuarios', { page, limit: pageSize, search });
 
   const ejecutar = async () => {
     if (!accion) return;
@@ -127,6 +130,12 @@ function TablaUsuarios() {
           },
           { header: 'Rol', cell: ({ row }: { row: UsuarioAdmin }) => <Chip className={ROL_ESTILO[row.rol]}>{ROL_LABEL[row.rol]}</Chip> },
           {
+            header: 'Empleado',
+            cell: ({ row }: { row: UsuarioAdmin }) => row.nombreEmpleado
+              ? <span className="text-sm text-slate-700">{row.nombreEmpleado}</span>
+              : <Chip className="bg-amber-50 text-amber-800 ring-amber-200">Sin empleado</Chip>,
+          },
+          {
             header: 'Estado',
             cell: ({ row }: { row: UsuarioAdmin }) => (
               <div className="flex flex-wrap gap-1">
@@ -159,7 +168,7 @@ function TablaUsuarios() {
             },
           },
         ]}
-        paginationProps={{ currentPage: meta.page, totalPages: meta.totalPages, onPageChange: setPage, showingText: `Mostrando ${data.length} de ${meta.total} usuarios` }}
+        paginationProps={{ currentPage: meta.page, totalPages: meta.totalPages, onPageChange: setPage, showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="usuarios" /> }}
       />
 
       <Modal isOpen={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'edit' ? `Editar a ${modal.item?.username}` : 'Nuevo usuario'}
@@ -191,8 +200,9 @@ function TablaUsuarios() {
 
 function TablaBitacora() {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('admin.UsuariosPage.2');
   const [search, setSearch] = useState('');
-  const { data, meta, isLoading, error } = usePaginatedList<BitacoraAcceso>('/admin/usuarios/bitacora', { page, limit: 15, search });
+  const { data, meta, isLoading, error } = usePaginatedList<BitacoraAcceso>('/admin/usuarios/bitacora', { page, limit: pageSize, search });
 
   return (
     <>
@@ -218,7 +228,7 @@ function TablaBitacora() {
           { header: 'Detalle', cell: ({ row }: { row: BitacoraAcceso }) => <span className="text-xs text-slate-600">{row.detalle ?? '—'}</span> },
           { header: 'IP', cell: ({ row }: { row: BitacoraAcceso }) => <span className="font-mono text-xs text-slate-500">{row.ip ?? '—'}</span> },
         ]}
-        paginationProps={{ currentPage: meta.page, totalPages: meta.totalPages, onPageChange: setPage, showingText: `Mostrando ${data.length} de ${meta.total} eventos` }}
+        paginationProps={{ currentPage: meta.page, totalPages: meta.totalPages, onPageChange: setPage, showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="eventos" /> }}
       />
     </>
   );
@@ -228,6 +238,7 @@ export const UsuariosPage = () => {
   const [pestana, setPestana] = useState<Pestana>('usuarios');
   const tabs: Array<{ id: Pestana; label: string }> = [
     { id: 'usuarios', label: 'Usuarios' },
+    { id: 'empleados', label: 'Empleados' },
     { id: 'bitacora', label: 'Bitácora de accesos' },
   ];
 
@@ -237,7 +248,7 @@ export const UsuariosPage = () => {
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-700" aria-hidden="true"><ShieldCheck size={22} /></span>
         <div>
           <h1 className="text-slate-900 text-sm font-bold">Usuarios y accesos</h1>
-          <p className="text-sm text-slate-500">Crea cuentas, asigna roles, restablece contraseñas y revisa la actividad de seguridad.</p>
+          <p className="text-sm text-slate-500">Crea cuentas, asigna roles y empleados, restablece contraseñas y revisa la actividad de seguridad.</p>
         </div>
       </div>
 
@@ -254,7 +265,7 @@ export const UsuariosPage = () => {
       </div>
 
       <div role="tabpanel" id={`panel-${pestana}`} aria-labelledby={`tab-${pestana}`} className="space-y-4">
-        {pestana === 'usuarios' ? <TablaUsuarios /> : <TablaBitacora />}
+        {pestana === 'usuarios' ? <TablaUsuarios /> : pestana === 'empleados' ? <EmpleadosTabla /> : <TablaBitacora />}
       </div>
     </div>
   );

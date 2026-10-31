@@ -169,6 +169,8 @@ export function resumenRaw(a: Alcance): Promise<ResumenRaw> {
       `SELECT ${dia('d.FECHA_DOCUMENTO')} AS F, SUM(d.TOTAL) AS M
          FROM CXC_DOCUMENTOS d
         WHERE ${NO_ANULADO} AND ${entre('d.FECHA_DOCUMENTO', 'desde', 'hasta')}${doc}
+          -- Las notas de débito por mora son recargos, no ventas facturadas.
+          AND d.ID_DOCUMENTO_ORIGEN IS NULL
         GROUP BY ${dia('d.FECHA_DOCUMENTO')}`, rangoTotal);
 
     const gestRuta = porRutaCli(a, 'g.ID_CLIENTE');

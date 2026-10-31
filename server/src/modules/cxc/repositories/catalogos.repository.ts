@@ -6,9 +6,39 @@ import type { CatalogoOption, FormaPagoOption } from '@erp/contracts';
  * Este repositorio solo LEE las tablas relacionadas; no administra sus CRUD.
  */
 
-export async function listClientesActivos(search?: string): Promise<CatalogoOption[]> {
+/** Documentos de cargo con saldo pendiente: los que un pago puede rebajar. */
+const DOCUMENTOS_PENDIENTES_DEL_CLIENTE = `
+  FROM CXC_DOCUMENTOS d
+  LEFT JOIN CXC_TIPOS_DOCUMENTO t ON t.ID_TIPO_DOCUMENTO = d.ID_TIPO_DOCUMENTO
+ WHERE d.ID_CLIENTE = CLIENTE.ID_CLIENTE
+   AND d.SALDO > 0.005
+   AND UPPER(NVL(d.ESTADO,'PENDIENTE')) NOT IN ('PAGADO','PAGADA','ANULADO','ANULADA')
+   AND NVL(t.NATURALEZA, 'CARGO') = 'CARGO'`;
+
+export async function listClientesActivos(
+  search?: string,
+  { conSaldo = false }: { conSaldo?: boolean } = {},
+): Promise<CatalogoOption[]> {
   const conn = await getConnection();
   try {
+    if (conSaldo) {
+      // Solo clientes que deben algo, con su código de cobro y el total pendiente.
+      const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string; CODIGO: string; SALDO: number }>(
+        `SELECT ID_CLIENTE, NOMBRE, 'CR-' || LPAD(ID_CLIENTE, 5, '0') AS CODIGO,
+                (SELECT SUM(d.SALDO) ${DOCUMENTOS_PENDIENTES_DEL_CLIENTE}) AS SALDO
+           FROM CLIENTE
+          WHERE EXISTS (SELECT 1 ${DOCUMENTOS_PENDIENTES_DEL_CLIENTE})
+            ${search ? 'AND UPPER(NOMBRE) LIKE UPPER(:search)' : ''}
+          ORDER BY NOMBRE ASC`,
+        search ? { search: `%${search}%` } : {},
+      );
+      return (result.rows ?? []).map((r) => ({
+        id: r.ID_CLIENTE,
+        label: `${r.CODIGO} · ${r.NOMBRE} · debe Q ${Number(r.SALDO).toFixed(2)}`,
+        saldo: Number(r.SALDO),
+      }));
+    }
+
     // Sin filtro de ESTADO por ahora.
     // CLIENTE.ESTADO existe, pero todavía no hay una regla confirmada
     // sobre qué valor representa "activo".
@@ -17,8 +47,7 @@ export async function listClientesActivos(search?: string): Promise<CatalogoOpti
     const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string }>(
       `SELECT ID_CLIENTE, NOMBRE FROM CLIENTE
        ${whereClause}
-       ORDER BY NOMBRE ASC
-       FETCH FIRST 50 ROWS ONLY`,
+       ORDER BY NOMBRE ASC`,
       search ? { search: `%${search}%` } : {},
     );
 
@@ -34,14 +63,16 @@ export async function listEmpleadosActivos(): Promise<CatalogoOption[]> {
     // Sin filtro de ESTADO por ahora.
     // EMPLEADO.ESTADO existe, pero todavía no está confirmado
     // qué valor representa "activo".
-    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string | null }>(
-      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO FROM EMPLEADO
+    const result = await conn.execute<{ ID_EMPLEADO: number; NOMBRE: string; APELLIDO: string | null; ID_SUCURSAL: number | null }>(
+      `SELECT ID_EMPLEADO, NOMBRE, APELLIDO, ID_SUCURSAL FROM EMPLEADO
        ORDER BY NOMBRE ASC`,
     );
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_EMPLEADO,
       label: `${r.NOMBRE} ${r.APELLIDO ?? ''}`.trim(),
+      // Sucursal del empleado: el formulario de rutas muestra solo los de la sucursal elegida.
+      idSucursal: r.ID_SUCURSAL,
     }));
   } finally {
     await conn.close();
@@ -102,25 +133,38 @@ export async function listFormasPagoActivas(): Promise<FormaPagoOption[]> {
 export async function listDocumentosPendientesPorCliente(idCliente: number): Promise<CatalogoOption[]> {
   const conn = await getConnection();
   try {
+    // Solo documentos de cargo (facturas, pagarés...): son los únicos que un pago,
+    // anticipo o nota de crédito pueden rebajar.
     const result = await conn.execute<{
       ID_DOCUMENTO: number;
+      TIPO: string | null;
       SERIE: string | null;
       NUMERO_DOCUMENTO: string | null;
+      VENCE: string;
+      VENCIDO: number;
       SALDO: number;
+      ID_MONEDA: number;
     }>(
-      `SELECT ID_DOCUMENTO, SERIE, NUMERO_DOCUMENTO, SALDO
-       FROM CXC_DOCUMENTOS
-       WHERE ID_CLIENTE = :idCliente
-         AND SALDO > 0
-         AND UPPER(NVL(ESTADO,'PENDIENTE')) NOT IN ('PAGADO','PAGADA','ANULADO','ANULADA')
-       ORDER BY FECHA_VENCIMIENTO ASC`,
+      `SELECT d.ID_DOCUMENTO, d.ID_MONEDA, t.NOMBRE AS TIPO, d.SERIE, d.NUMERO_DOCUMENTO,
+              TO_CHAR(d.FECHA_VENCIMIENTO, 'DD/MM/YYYY') AS VENCE,
+              CASE WHEN d.FECHA_VENCIMIENTO < TRUNC(SYSDATE) THEN 1 ELSE 0 END AS VENCIDO,
+              d.SALDO
+       FROM CXC_DOCUMENTOS d
+       LEFT JOIN CXC_TIPOS_DOCUMENTO t ON t.ID_TIPO_DOCUMENTO = d.ID_TIPO_DOCUMENTO
+       WHERE d.ID_CLIENTE = :idCliente
+         AND d.SALDO > 0
+         AND UPPER(NVL(d.ESTADO,'PENDIENTE')) NOT IN ('PAGADO','PAGADA','ANULADO','ANULADA')
+         AND NVL(t.NATURALEZA, 'CARGO') = 'CARGO'
+       ORDER BY d.FECHA_VENCIMIENTO ASC`,
       { idCliente },
     );
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_DOCUMENTO,
-      label: `${r.SERIE ?? ''}-${r.NUMERO_DOCUMENTO ?? r.ID_DOCUMENTO} (saldo: ${r.SALDO})`,
+      label: `${r.TIPO ?? 'Documento'} ${[r.SERIE, r.NUMERO_DOCUMENTO ?? r.ID_DOCUMENTO].filter(Boolean).join('-')}`
+        + ` · vence ${r.VENCE}${r.VENCIDO ? ' (VENCIDO)' : ''} · saldo Q ${Number(r.SALDO).toFixed(2)}`,
       saldo: r.SALDO,
+      idMoneda: r.ID_MONEDA,
     }));
   } finally {
     await conn.close();
@@ -152,6 +196,8 @@ export async function listNotasCreditoActivas(): Promise<CatalogoOption[]> {
          LEFT JOIN CXC_APLICACION_NOTA_CREDITO a
            ON a.ID_NOTA_CREDITO = n.ID_NOTA_CREDITO AND a.ESTADO = 'CONFIRMADA'
         WHERE UPPER(NVL(n.ESTADO,'PENDIENTE')) IN ('PENDIENTE','ACTIVA')
+          -- Solo notas aprobadas por un ADMIN pueden aplicarse a documentos.
+          AND n.ID_EMPLEADO_APROBACION IS NOT NULL
         GROUP BY n.ID_NOTA_CREDITO,n.ID_CLIENTE,n.SERIE,n.NUMERO,n.MONTO,n.FECHA
        HAVING GREATEST(n.MONTO - NVL(SUM(a.MONTO_APLICADO),0),0) > 0
         ORDER BY n.FECHA DESC, n.ID_NOTA_CREDITO DESC`,
@@ -181,10 +227,11 @@ export async function listAnticiposDisponiblesPorCliente(idCliente: number): Pro
   try {
     const result = await conn.execute<{
       ID_ANTICIPO: number;
+      MONTO_ORIGINAL: number;
       MONTO_DISPONIBLE: number;
       FECHA: Date;
     }>(
-      `SELECT ID_ANTICIPO, MONTO_DISPONIBLE, FECHA
+      `SELECT ID_ANTICIPO, MONTO_ORIGINAL, MONTO_DISPONIBLE, FECHA
          FROM CXC_ANTICIPOS
         WHERE ID_CLIENTE = :idCliente
           AND MONTO_DISPONIBLE > 0
@@ -195,7 +242,8 @@ export async function listAnticiposDisponiblesPorCliente(idCliente: number): Pro
 
     return (result.rows ?? []).map((r) => ({
       id: r.ID_ANTICIPO,
-      label: `Anticipo #${r.ID_ANTICIPO} · Disponible Q ${Number(r.MONTO_DISPONIBLE).toFixed(2)}`,
+      label: `Anticipo #${r.ID_ANTICIPO} · original Q ${Number(r.MONTO_ORIGINAL).toFixed(2)} · disponible Q ${Number(r.MONTO_DISPONIBLE).toFixed(2)}`,
+      monto: r.MONTO_ORIGINAL,
       saldo: r.MONTO_DISPONIBLE,
     }));
   } finally {
@@ -333,6 +381,36 @@ export async function clienteElegibleParaConvenio(idCliente: number): Promise<bo
       { idCliente },
     );
     return Number(result.rows?.[0]?.ELEGIBLE ?? 0) === 1;
+  } finally {
+    await conn.close();
+  }
+}
+
+/** Clientes que cumplen la regla de creación de convenios: mora activa o promesa vencida/incumplida. */
+export async function listClientesElegiblesParaConvenio(): Promise<CatalogoOption[]> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string }>(
+      `SELECT c.ID_CLIENTE, c.NOMBRE
+         FROM CLIENTE c
+        WHERE EXISTS (
+                SELECT 1 FROM CXC_PROMESAS_PAGO p
+                 WHERE p.ID_CLIENTE = c.ID_CLIENTE
+                   AND (UPPER(NVL(p.ESTADO, 'PENDIENTE')) = 'INCUMPLIDA'
+                        OR (UPPER(NVL(p.ESTADO, 'PENDIENTE')) = 'PENDIENTE'
+                            AND p.FECHA_COMPROMISO IS NOT NULL
+                            AND p.FECHA_COMPROMISO < TRUNC(SYSDATE)))
+              )
+           OR EXISTS (
+                SELECT 1 FROM CXC_MORA m
+                JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = m.ID_DOCUMENTO
+                 WHERE d.ID_CLIENTE = c.ID_CLIENTE
+                   AND d.SALDO > 0
+                   AND UPPER(NVL(m.ESTADO, 'ACTIVA')) = 'ACTIVA'
+              )
+        ORDER BY c.NOMBRE ASC`,
+    );
+    return (result.rows ?? []).map((row) => ({ id: row.ID_CLIENTE, label: row.NOMBRE }));
   } finally {
     await conn.close();
   }

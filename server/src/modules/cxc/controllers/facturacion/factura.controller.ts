@@ -87,27 +87,3 @@ export async function getOne(
   }
 }
 
-// =====================================================
-// ANULAR FACTURA
-// =====================================================
-
-export async function anular(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const id = Number(req.params.id);
-
-    const input = await conEmpleadoActual(
-      req,
-      'idEmpleadoAnulacion',
-    );
-
-    const factura = await service.anularFactura(id, input);
-
-    res.json(factura);
-  } catch (err) {
-    next(err);
-  }
-}

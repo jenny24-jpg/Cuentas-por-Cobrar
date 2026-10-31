@@ -5,7 +5,13 @@ export interface CatalogoOption {
   id: number;
   label: string;
   idCliente?: number;
+  /** Código y nombre del cliente dueño de la opción (p. ej. pagos): "CR-00012 Juan Pérez". */
+  cliente?: string;
   monto?: number;
+  /** Moneda de la opción (p. ej. documentos pendientes). */
+  idMoneda?: number;
   saldo?: number;
   nit?: string | null;
+  /** Sucursal a la que pertenece (empleados). */
+  idSucursal?: number | null;
 }

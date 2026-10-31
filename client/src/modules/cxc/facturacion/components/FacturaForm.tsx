@@ -191,7 +191,7 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <div className="grid grid-cols-1 gap-4">
         <SearchableSelect label="Cliente" required value={idCliente} onChange={(e: any) => handleCliente(e.target.value)}
-          options={clientes.map((c) => ({ value: String(c.id), label: c.nit ? `${c.label} — NIT ${c.nit}` : c.label }))}
+          options={clientes.map((c) => ({ value: String(c.id), label: c.label }))}
           error={errors.idCliente} helperText="Receptor de la factura; su NIT y nombre se cargan solos." />
       </div>
 
@@ -245,9 +245,9 @@ export const FacturaForm = ({ onSuccess, onCancel }: FacturaFormProps) => {
                   error={errors[`linea${i}.cantidad`] ?? (l.cantidad ? validation[`linea${i}.cantidad`] : undefined)} helperText="Mayor a 0." />
               </div>
               <div className="sm:col-span-3">
-                <TextInput label="Precio unitario (con IVA)" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" required value={l.precioUnitario}
+                <TextInput label="Precio unitario" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" required value={l.precioUnitario}
                   onChange={(e: any) => setLinea(i, { precioUnitario: e.target.value })}
-                  error={errors[`linea${i}.precioUnitario`] ?? (l.precioUnitario ? validation[`linea${i}.precioUnitario`] : undefined)} helperText="Mayor a 0; IVA incluido." />
+                  error={errors[`linea${i}.precioUnitario`] ?? (l.precioUnitario ? validation[`linea${i}.precioUnitario`] : undefined)} helperText="Con IVA incluido; mayor a 0." />
               </div>
               <div className="sm:col-span-2 flex flex-col gap-1.5">
                 <span className="form-label text-xs font-semibold text-slate-700">Total línea</span>

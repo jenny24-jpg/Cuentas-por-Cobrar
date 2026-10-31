@@ -23,7 +23,7 @@ function reglasCreate(o: { pago?: unknown[]; documento?: unknown[]; anticipos?: 
     { sql: /FROM CXC_PAGOS WHERE ID_PAGO = :idPago FOR UPDATE/, rows: o.pago ?? [pago()] },
     { sql: /FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :idDocumento FOR UPDATE/, rows: o.documento ?? [documento()] },
     { sql: /FROM CXC_ANTICIPOS WHERE ID_PAGO/, rows: o.anticipos ?? [] },
-    { sql: /SUM\(MONTO_APLICADO\), 0\) TOTAL FROM CXC_APLICACION_PAGOS WHERE ID_PAGO/, rows: [{ TOTAL: o.aplicado ?? 0 }] },
+    { sql: /SUM\(MONTO_APLICADO\), 0\) TOTAL,.*FROM CXC_APLICACION_PAGOS WHERE ID_PAGO/, rows: [{ TOTAL: o.aplicado ?? 0 }] },
     { sql: /INSERT INTO CXC_APLICACION_PAGOS/, outId: 500 },
   ];
 }

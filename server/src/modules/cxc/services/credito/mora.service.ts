@@ -1,17 +1,10 @@
 import { businessTodayIso } from '../../../../shared/date';
-import { createMoraSchema, updateMoraSchema, type Mora } from '@erp/contracts';
+import { type Mora } from '@erp/contracts';
 import * as repository from '../../repositories/credito/mora.repository';
-import * as documentoRepository from '../../repositories/documentos/documento.repository';
 import { BadRequestError, NotFoundError } from '../../../../shared/errors/AppError';
 
-
-async function assertDocumento(idDocumento: number, saldoVencido?: number | null) {
-  const documento = await documentoRepository.findById(idDocumento);
-  if (!documento) throw new BadRequestError('El documento seleccionado no existe');
-  if (saldoVencido !== undefined && saldoVencido !== null && saldoVencido > documento.saldo) {
-    throw new BadRequestError('El saldo vencido no puede superar el saldo actual del documento');
-  }
-}
+// La mora no se registra ni se edita a mano: la calcula el sistema a partir de
+// los documentos vencidos y su condición de crédito (recalcular / tareas diarias).
 
 export async function list(params: { page: number; limit: number; search?: string }) {
   return repository.findAll({ ...params, page: Math.max(1, params.page), limit: Math.min(100, Math.max(1, params.limit)) });
@@ -24,31 +17,17 @@ export async function getOne(id: number): Promise<Mora> {
   return mora;
 }
 
-export async function create(rawInput: unknown) {
-  const input = createMoraSchema.parse(rawInput);
-  if (input.fechaCalculo && input.fechaCalculo > businessTodayIso()) throw new BadRequestError('La fecha de cálculo no puede ser futura');
-  await assertDocumento(input.idDocumento, input.saldoVencido);
-  const id = await repository.create(input);
-  return getOne(id);
-}
-
-export async function update(id: number, rawInput: unknown) {
-  const current = await getOne(id);
-  const input = updateMoraSchema.parse(rawInput);
-  const fecha = input.fechaCalculo === undefined ? current.fechaCalculo?.slice(0, 10) : input.fechaCalculo;
-  if (fecha && fecha > businessTodayIso()) throw new BadRequestError('La fecha de cálculo no puede ser futura');
-  if (input.idDocumento !== undefined || input.saldoVencido !== undefined) {
-    await assertDocumento(input.idDocumento ?? current.idDocumento, input.saldoVencido === undefined ? current.saldoVencido : input.saldoVencido);
-  }
-  await repository.update(id, input);
-  return getOne(id);
-}
-
-export async function remove(id: number) {
-  await getOne(id);
-  await repository.remove(id);
-}
-
 export async function recalcular() {
   return repository.recalcularPendientes();
+}
+
+/** Cartera pendiente con la mora calculada a la fecha de negocio de hoy. */
+export async function cartera() {
+  return repository.findCartera(businessTodayIso());
+}
+
+/** Mora de un cliente (aviso al registrar un pago). */
+export async function resumenCliente(idCliente: number) {
+  if (!Number.isInteger(idCliente) || idCliente <= 0) throw new BadRequestError('ID de cliente inválido');
+  return repository.resumenCliente(idCliente, businessTodayIso());
 }

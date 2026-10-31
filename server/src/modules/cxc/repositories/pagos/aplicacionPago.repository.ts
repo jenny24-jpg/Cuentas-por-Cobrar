@@ -1,10 +1,11 @@
-import oracledb from 'oracledb';
+import oracledb, { type Connection } from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import { businessTodayIso } from '../../../../shared/date';
 import type {
   AplicacionPago,
   CreateAplicacionPagoInput,
   ReversarAplicacionPagoInput,
+  RechazarAplicacionPagoInput,
 } from '@erp/contracts';
 import { BadRequestError, ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
 import { deriveDocumentoEstado, isDocumentoBloqueadoParaAplicacion, roundMoney } from '../../shared/financialRules';
@@ -19,7 +20,7 @@ interface Row {
   ID_DOCUMENTO: number;
   SERIE_DOCUMENTO: string | null;
   NUMERO_DOCUMENTO: string | null;
-  FECHA_APLICACION: Date;
+  FECHA_APLICACION_ISO: string;
   MONTO_APLICADO: number;
   ID_EMPLEADO: number | null;
   NOMBRE_EMPLEADO: string | null;
@@ -28,6 +29,10 @@ interface Row {
   NOMBRE_EMPLEADO_REVERSA: string | null;
   FECHA_REVERSA: Date | null;
   MOTIVO_REVERSA: string | null;
+  ID_EMPLEADO_APROBADOR: number | null;
+  NOMBRE_EMPLEADO_APROBADOR: string | null;
+  FECHA_APROBACION_ISO: string | null;
+  MOTIVO_RECHAZO: string | null;
 }
 
 interface PagoLockRow {
@@ -66,7 +71,7 @@ const mapRow = (r: Row): AplicacionPago => ({
   referenciaDocumento:
     [r.SERIE_DOCUMENTO, r.NUMERO_DOCUMENTO].filter(Boolean).join('-') ||
     `Documento #${r.ID_DOCUMENTO}`,
-  fechaAplicacion: r.FECHA_APLICACION?.toISOString() ?? '',
+  fechaAplicacion: r.FECHA_APLICACION_ISO,
   montoAplicado: r.MONTO_APLICADO,
   idEmpleado: r.ID_EMPLEADO,
   nombreEmpleado: r.NOMBRE_EMPLEADO,
@@ -75,6 +80,10 @@ const mapRow = (r: Row): AplicacionPago => ({
   nombreEmpleadoReversa: r.NOMBRE_EMPLEADO_REVERSA,
   fechaReversa: r.FECHA_REVERSA?.toISOString() ?? null,
   motivoReversa: r.MOTIVO_REVERSA,
+  idEmpleadoAprobador: r.ID_EMPLEADO_APROBADOR,
+  nombreEmpleadoAprobador: r.NOMBRE_EMPLEADO_APROBADOR,
+  fechaAprobacion: r.FECHA_APROBACION_ISO,
+  motivoRechazo: r.MOTIVO_RECHAZO,
 });
 
 const SELECT_BASE = `
@@ -84,7 +93,7 @@ const SELECT_BASE = `
          a.ID_DOCUMENTO,
          d.SERIE AS SERIE_DOCUMENTO,
          d.NUMERO_DOCUMENTO,
-         a.FECHA_APLICACION,
+         TO_CHAR(a.FECHA_APLICACION, 'YYYY-MM-DD') AS FECHA_APLICACION_ISO,
          a.MONTO_APLICADO,
          a.ID_EMPLEADO,
          CASE
@@ -99,11 +108,19 @@ const SELECT_BASE = `
          END AS NOMBRE_EMPLEADO_REVERSA,
          a.FECHA_REVERSA,
          a.MOTIVO_REVERSA
+         , a.ID_EMPLEADO_APROBADOR,
+         CASE
+           WHEN ea.ID_EMPLEADO IS NULL THEN NULL
+           ELSE TRIM(ea.NOMBRE || ' ' || NVL(ea.APELLIDO, ''))
+         END AS NOMBRE_EMPLEADO_APROBADOR,
+         TO_CHAR(a.FECHA_APROBACION, 'YYYY-MM-DD') AS FECHA_APROBACION_ISO,
+         a.MOTIVO_RECHAZO
     FROM CXC_APLICACION_PAGOS a
     JOIN CXC_PAGOS p ON p.ID_PAGO = a.ID_PAGO
     JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = a.ID_DOCUMENTO
     LEFT JOIN EMPLEADO e ON e.ID_EMPLEADO = a.ID_EMPLEADO
     LEFT JOIN EMPLEADO er ON er.ID_EMPLEADO = a.ID_EMPLEADO_REVERSA
+    LEFT JOIN EMPLEADO ea ON ea.ID_EMPLEADO = a.ID_EMPLEADO_APROBADOR
 `;
 
 export async function findAll({
@@ -180,108 +197,170 @@ export async function create(i: CreateAplicacionPagoInput): Promise<number> {
 
   const c = await getConnection();
   try {
-    if (i.idRutaDetalle) {
-      // Route first, then assignment, payment and document. Other route writes use
-      // the same order; normal payment writes never acquire a route afterwards.
-      const detalle = await c.execute<{ID_RUTA:number}>(
-        'SELECT ID_RUTA FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE=:id', {id:i.idRutaDetalle});
-      if (!detalle.rows?.length) throw new NotFoundError('Asignación no encontrada');
-      const ruta = await c.execute<{ESTADO:string}>(
-        'SELECT ESTADO FROM CXC_RUTAS WHERE ID_RUTA=:id FOR UPDATE', {id:detalle.rows[0].ID_RUTA});
-      const asignacion = await c.execute<{ID_DOCUMENTO:number;MONTO_ASIGNADO:number}>(
-        'SELECT ID_DOCUMENTO,MONTO_ASIGNADO FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE=:id FOR UPDATE', {id:i.idRutaDetalle});
-      if (!asignacion.rows?.length || asignacion.rows[0].ID_DOCUMENTO !== i.idDocumento) {
-        throw new BadRequestError('El documento no coincide con la asignación');
+    const id = await aplicarEnConexion(c, i);
+    await c.commit();
+    return id;
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
+/** Registra la solicitud sin afectar saldos ni emitir recibos. */
+export async function crearSolicitud(i: CreateAplicacionPagoInput): Promise<number> {
+  if (i.fechaAplicacion > businessTodayIso()) throw new BadRequestError('La fecha de aplicación no puede ser futura');
+  const c = await getConnection();
+  try {
+    const id = await aplicarEnConexion(c, i, { pendiente: true });
+    await c.commit();
+    return id;
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
+/**
+ * Cuerpo de la aplicación sobre una conexión ya abierta, sin commit ni rollback:
+ * lo usa create() y también pago.repository::create() para registrar y aplicar un
+ * pago en una sola transacción. Quien llama confirma o revierte.
+ */
+export async function aplicarEnConexion(
+  c: Connection,
+  i: CreateAplicacionPagoInput,
+  opciones: { pendiente?: boolean; idAplicacion?: number; idEmpleadoAprobador?: number } = {},
+): Promise<number> {
+  if (i.idRutaDetalle) {
+    // Route first, then assignment, payment and document. Other route writes use
+    // the same order; normal payment writes never acquire a route afterwards.
+    const detalle = await c.execute<{ID_RUTA:number}>(
+      'SELECT ID_RUTA FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE=:id', {id:i.idRutaDetalle});
+    if (!detalle.rows?.length) throw new NotFoundError('Asignación no encontrada');
+    const ruta = await c.execute<{ESTADO:string}>(
+      'SELECT ESTADO FROM CXC_RUTAS WHERE ID_RUTA=:id FOR UPDATE', {id:detalle.rows[0].ID_RUTA});
+    const asignacion = await c.execute<{ID_DOCUMENTO:number;MONTO_ASIGNADO:number}>(
+      'SELECT ID_DOCUMENTO,MONTO_ASIGNADO FROM CXC_RUTA_DETALLE WHERE ID_RUTA_DETALLE=:id FOR UPDATE', {id:i.idRutaDetalle});
+    if (!asignacion.rows?.length || asignacion.rows[0].ID_DOCUMENTO !== i.idDocumento) {
+      throw new BadRequestError('El documento no coincide con la asignación');
+    }
+    const anterior = await c.execute<{ID_APLICACION:number;ID_PAGO:number;ID_DOCUMENTO:number;ID_RUTA_DETALLE:number;MONTO_APLICADO:number;ID_EMPLEADO:number;FECHA:string}>(
+      `SELECT ID_APLICACION,ID_PAGO,ID_DOCUMENTO,ID_RUTA_DETALLE,MONTO_APLICADO,ID_EMPLEADO,
+      TO_CHAR(FECHA_APLICACION,'YYYY-MM-DD') FECHA FROM CXC_APLICACION_PAGOS WHERE CLAVE_RUTA=:clave`, {clave:i.claveRuta});
+    if (anterior.rows?.length) {
+      const a=anterior.rows[0];
+      if(a.ID_PAGO!==i.idPago || a.ID_DOCUMENTO!==i.idDocumento || a.ID_RUTA_DETALLE!==i.idRutaDetalle ||
+        a.ID_EMPLEADO!==i.idEmpleado || a.FECHA!==i.fechaAplicacion || roundMoney(a.MONTO_APLICADO)!==roundMoney(i.montoAplicado)) {
+        throw new ConflictError('La clave de operación ya fue utilizada para otro cobro');
       }
-      const anterior = await c.execute<{ID_APLICACION:number;ID_PAGO:number;ID_DOCUMENTO:number;ID_RUTA_DETALLE:number;MONTO_APLICADO:number;ID_EMPLEADO:number;FECHA:string}>(
-        `SELECT ID_APLICACION,ID_PAGO,ID_DOCUMENTO,ID_RUTA_DETALLE,MONTO_APLICADO,ID_EMPLEADO,
-        TO_CHAR(FECHA_APLICACION,'YYYY-MM-DD') FECHA FROM CXC_APLICACION_PAGOS WHERE CLAVE_RUTA=:clave`, {clave:i.claveRuta});
-      if (anterior.rows?.length) {
-        const a=anterior.rows[0];
-        if(a.ID_PAGO!==i.idPago || a.ID_DOCUMENTO!==i.idDocumento || a.ID_RUTA_DETALLE!==i.idRutaDetalle ||
-          a.ID_EMPLEADO!==i.idEmpleado || a.FECHA!==i.fechaAplicacion || roundMoney(a.MONTO_APLICADO)!==roundMoney(i.montoAplicado)) {
-          throw new ConflictError('La clave de operación ya fue utilizada para otro cobro');
-        }
-        await c.commit();
-        return a.ID_APLICACION; // Retry after timeout: no second application/receipt.
-      }
-      if(!ruta.rows?.length || !['PLANIFICADA','EN_PROCESO'].includes(ruta.rows[0].ESTADO.trim())) throw new ConflictError('La ruta está cerrada');
-      // El primer cobro pone la ruta en curso (misma transacción que el cobro).
-      await c.execute(`UPDATE CXC_RUTAS SET ESTADO='EN_PROCESO' WHERE ID_RUTA=:id AND TRIM(ESTADO)='PLANIFICADA'`, {id:detalle.rows[0].ID_RUTA});
-      const aplicado=await c.execute<{TOTAL:number}>(`SELECT NVL(SUM(MONTO_APLICADO),0) TOTAL FROM CXC_APLICACION_PAGOS
-        WHERE ID_RUTA_DETALLE=:id AND ESTADO='CONFIRMADA'`,{id:i.idRutaDetalle});
-      if(roundMoney((aplicado.rows?.[0]?.TOTAL ?? 0)+i.montoAplicado)>roundMoney(asignacion.rows[0].MONTO_ASIGNADO)) {
-        throw new ConflictError('El cobro supera el monto asignado restante');
-      }
+      return a.ID_APLICACION; // Retry after timeout: no second application/receipt.
     }
-    const pagoResult = await c.execute<PagoLockRow>(
-      `SELECT ID_PAGO, ID_CLIENTE, ID_MONEDA, MONTO, ESTADO,
-              TO_CHAR(FECHA_PAGO, 'YYYY-MM-DD') AS FECHA_PAGO_ISO
-         FROM CXC_PAGOS
-        WHERE ID_PAGO = :idPago
-        FOR UPDATE`,
-      { idPago: i.idPago },
+    if(!ruta.rows?.length || !['PLANIFICADA','EN_PROCESO'].includes(ruta.rows[0].ESTADO.trim())) throw new ConflictError('La ruta está cerrada');
+    // El primer cobro pone la ruta en curso (misma transacción que el cobro).
+    await c.execute(`UPDATE CXC_RUTAS SET ESTADO='EN_PROCESO' WHERE ID_RUTA=:id AND TRIM(ESTADO)='PLANIFICADA'`, {id:detalle.rows[0].ID_RUTA});
+    const aplicado=await c.execute<{TOTAL:number}>(`SELECT NVL(SUM(MONTO_APLICADO),0) TOTAL FROM CXC_APLICACION_PAGOS
+      WHERE ID_RUTA_DETALLE=:id AND ESTADO='CONFIRMADA'`,{id:i.idRutaDetalle});
+    if(roundMoney((aplicado.rows?.[0]?.TOTAL ?? 0)+i.montoAplicado)>roundMoney(asignacion.rows[0].MONTO_ASIGNADO)) {
+      throw new ConflictError('El cobro supera el monto asignado restante');
+    }
+  }
+  const pagoResult = await c.execute<PagoLockRow>(
+    `SELECT ID_PAGO, ID_CLIENTE, ID_MONEDA, MONTO, ESTADO,
+            TO_CHAR(FECHA_PAGO, 'YYYY-MM-DD') AS FECHA_PAGO_ISO
+       FROM CXC_PAGOS
+      WHERE ID_PAGO = :idPago
+      FOR UPDATE`,
+    { idPago: i.idPago },
+  );
+  const pago = pagoResult.rows?.[0];
+  if (!pago) throw new BadRequestError('El pago seleccionado no existe');
+  if (i.fechaAplicacion < pago.FECHA_PAGO_ISO) {
+    throw new BadRequestError('La fecha de aplicación no puede ser anterior a la fecha del pago.');
+  }
+
+  const documentoResult = await c.execute<DocumentoLockRow>(
+    `SELECT ID_DOCUMENTO, ID_CLIENTE, ID_MONEDA, TOTAL, SALDO, ESTADO
+       FROM CXC_DOCUMENTOS
+      WHERE ID_DOCUMENTO = :idDocumento
+      FOR UPDATE`,
+    { idDocumento: i.idDocumento },
+  );
+  const documento = documentoResult.rows?.[0];
+  if (!documento) throw new BadRequestError('El documento seleccionado no existe');
+
+  const pagoEstado = String(pago.ESTADO ?? '').trim().toUpperCase();
+  if (['ANULADO', 'REVERSADO'].includes(pagoEstado)) {
+    throw new ConflictError('Un pago anulado o reversado no puede aplicarse.');
+  }
+
+  if (isDocumentoBloqueadoParaAplicacion(documento.ESTADO) || Number(documento.SALDO) <= 0) {
+    throw new ConflictError('El documento ya está pagado/anulado o no tiene saldo pendiente.');
+  }
+
+  if (pago.ID_CLIENTE !== documento.ID_CLIENTE) {
+    throw new BadRequestError('El pago y el documento deben pertenecer al mismo cliente');
+  }
+
+  if (pago.ID_MONEDA !== documento.ID_MONEDA) throw new BadRequestError('El pago y el documento deben tener la misma moneda');
+  const anticipos = await c.execute(`SELECT ID_ANTICIPO FROM CXC_ANTICIPOS WHERE ID_PAGO=:id AND ESTADO <> 'CANCELADO'`, {id:i.idPago});
+  if(anticipos.rows?.length) throw new ConflictError('Este pago está reservado como anticipo; utiliza el módulo Anticipos');
+
+  const sumResult = await c.execute<{ TOTAL: number; CONFIRMADO: number }>(
+    `SELECT NVL(SUM(MONTO_APLICADO), 0) TOTAL,
+            NVL(SUM(CASE WHEN ESTADO = 'CONFIRMADA' THEN MONTO_APLICADO ELSE 0 END), 0) CONFIRMADO
+       FROM CXC_APLICACION_PAGOS
+      WHERE ID_PAGO = :idPago
+        AND (ESTADO = 'CONFIRMADA'
+          OR (ESTADO = 'PENDIENTE' AND ID_APLICACION <> :idAplicacion))`,
+    { idPago: i.idPago, idAplicacion: opciones.idAplicacion ?? -1 },
+  );
+  const montoReservadoPago = Number(sumResult.rows?.[0]?.TOTAL ?? 0);
+  const montoConfirmadoPago = Number(sumResult.rows?.[0]?.CONFIRMADO ?? 0);
+  const disponiblePago = roundMoney(Number(pago.MONTO) - montoReservadoPago);
+  const saldoDocumento = roundMoney(Number(documento.SALDO));
+  const montoAplicado = roundMoney(Number(i.montoAplicado));
+
+  const solicitudesDocumento = await c.execute<{ TOTAL: number }>(
+    `SELECT NVL(SUM(MONTO_APLICADO), 0) TOTAL
+       FROM CXC_APLICACION_PAGOS
+      WHERE ID_DOCUMENTO = :idDocumento
+        AND ESTADO = 'PENDIENTE'
+        AND ID_APLICACION <> :idAplicacion`,
+    { idDocumento: i.idDocumento, idAplicacion: opciones.idAplicacion ?? -1 },
+  );
+  const saldoReservado = roundMoney(Number(solicitudesDocumento.rows?.[0]?.TOTAL ?? 0));
+
+  if (montoAplicado <= 0) {
+    throw new BadRequestError('El monto aplicado debe ser mayor a cero');
+  }
+  if (montoAplicado > saldoDocumento - saldoReservado + 0.005) {
+    throw new BadRequestError('El monto aplicado no puede superar el saldo del documento');
+  }
+  if (montoAplicado > disponiblePago + 0.005) {
+    throw new BadRequestError('El monto aplicado no puede superar el monto disponible del pago');
+  }
+
+  let idAplicacion = opciones.idAplicacion;
+  if (idAplicacion) {
+    const actualizada = await c.execute(
+      `UPDATE CXC_APLICACION_PAGOS
+          SET ESTADO = 'CONFIRMADA',
+              ID_EMPLEADO_APROBADOR = :idEmpleadoAprobador,
+              FECHA_APROBACION = SYSDATE
+        WHERE ID_APLICACION = :id
+          AND ESTADO = 'PENDIENTE'`,
+      { idEmpleadoAprobador: opciones.idEmpleadoAprobador, id: idAplicacion },
     );
-    const pago = pagoResult.rows?.[0];
-    if (!pago) throw new BadRequestError('El pago seleccionado no existe');
-    if (i.fechaAplicacion < pago.FECHA_PAGO_ISO) {
-      throw new BadRequestError('La fecha de aplicación no puede ser anterior a la fecha del pago.');
-    }
-
-    const documentoResult = await c.execute<DocumentoLockRow>(
-      `SELECT ID_DOCUMENTO, ID_CLIENTE, ID_MONEDA, TOTAL, SALDO, ESTADO
-         FROM CXC_DOCUMENTOS
-        WHERE ID_DOCUMENTO = :idDocumento
-        FOR UPDATE`,
-      { idDocumento: i.idDocumento },
-    );
-    const documento = documentoResult.rows?.[0];
-    if (!documento) throw new BadRequestError('El documento seleccionado no existe');
-
-    const pagoEstado = String(pago.ESTADO ?? '').trim().toUpperCase();
-    if (['ANULADO', 'REVERSADO'].includes(pagoEstado)) {
-      throw new ConflictError('Un pago anulado o reversado no puede aplicarse.');
-    }
-
-    if (isDocumentoBloqueadoParaAplicacion(documento.ESTADO) || Number(documento.SALDO) <= 0) {
-      throw new ConflictError('El documento ya está pagado/anulado o no tiene saldo pendiente.');
-    }
-
-    if (pago.ID_CLIENTE !== documento.ID_CLIENTE) {
-      throw new BadRequestError('El pago y el documento deben pertenecer al mismo cliente');
-    }
-
-    if (pago.ID_MONEDA !== documento.ID_MONEDA) throw new BadRequestError('El pago y el documento deben tener la misma moneda');
-    const anticipos = await c.execute(`SELECT ID_ANTICIPO FROM CXC_ANTICIPOS WHERE ID_PAGO=:id AND ESTADO <> 'CANCELADO'`, {id:i.idPago});
-    if(anticipos.rows?.length) throw new ConflictError('Este pago está reservado como anticipo; utiliza el módulo Anticipos');
-
-    const sumResult = await c.execute<{ TOTAL: number }>(
-      `SELECT NVL(SUM(MONTO_APLICADO), 0) TOTAL
-         FROM CXC_APLICACION_PAGOS
-        WHERE ID_PAGO = :idPago
-          AND ESTADO = 'CONFIRMADA'`,
-      { idPago: i.idPago },
-    );
-    const yaAplicado = Number(sumResult.rows?.[0]?.TOTAL ?? 0);
-    const disponiblePago = roundMoney(Number(pago.MONTO) - yaAplicado);
-    const saldoDocumento = roundMoney(Number(documento.SALDO));
-    const montoAplicado = roundMoney(Number(i.montoAplicado));
-
-    if (montoAplicado <= 0) {
-      throw new BadRequestError('El monto aplicado debe ser mayor a cero');
-    }
-    if (montoAplicado > saldoDocumento + 0.005) {
-      throw new BadRequestError('El monto aplicado no puede superar el saldo del documento');
-    }
-    if (montoAplicado > disponiblePago + 0.005) {
-      throw new BadRequestError('El monto aplicado no puede superar el monto disponible del pago');
-    }
-
+    if (actualizada.rowsAffected !== 1) throw new ConflictError('La solicitud ya fue procesada por otro usuario.');
+  } else {
     const insert = await c.execute<{ id: number[] }>(
       `INSERT INTO CXC_APLICACION_PAGOS
-         (ID_PAGO,ID_DOCUMENTO,FECHA_APLICACION,MONTO_APLICADO,ID_EMPLEADO,ID_RUTA_DETALLE,CLAVE_RUTA)
+         (ID_PAGO,ID_DOCUMENTO,FECHA_APLICACION,MONTO_APLICADO,ID_EMPLEADO,ID_RUTA_DETALLE,CLAVE_RUTA,ESTADO)
        VALUES
-         (:idPago,:idDocumento,TO_DATE(:fechaAplicacion,'YYYY-MM-DD'),:montoAplicado,:idEmpleado,:idRutaDetalle,:claveRuta)
+         (:idPago,:idDocumento,TO_DATE(:fechaAplicacion,'YYYY-MM-DD'),:montoAplicado,:idEmpleado,:idRutaDetalle,:claveRuta,:estado)
        RETURNING ID_APLICACION INTO :id`,
       {
         idPago: i.idPago,
@@ -291,61 +370,105 @@ export async function create(i: CreateAplicacionPagoInput): Promise<number> {
         idEmpleado: i.idEmpleado,
         idRutaDetalle: i.idRutaDetalle ?? null,
         claveRuta: i.claveRuta ?? null,
+        estado: opciones.pendiente ? 'PENDIENTE' : 'CONFIRMADA',
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
     );
+    idAplicacion = insert.outBinds!.id[0];
+  }
 
-    const nuevoSaldo = Math.max(0, roundMoney(saldoDocumento - montoAplicado));
-    const nuevoEstadoDocumento = deriveDocumentoEstado(
-      Number(documento.TOTAL),
-      nuevoSaldo,
-      documento.ESTADO,
-    );
+  if (opciones.pendiente) return idAplicacion!;
 
-    await c.execute(
-      `UPDATE CXC_DOCUMENTOS
-          SET SALDO = :saldo,
-              ESTADO = :estado
-        WHERE ID_DOCUMENTO = :idDocumento`,
-      {
-        saldo: nuevoSaldo,
-        estado: nuevoEstadoDocumento,
-        idDocumento: i.idDocumento,
-      },
-    );
+  const nuevoSaldo = Math.max(0, roundMoney(saldoDocumento - montoAplicado));
+  const nuevoEstadoDocumento = deriveDocumentoEstado(
+    Number(documento.TOTAL),
+    nuevoSaldo,
+    documento.ESTADO,
+  );
 
-    const totalAplicado = roundMoney(yaAplicado + montoAplicado);
-    const nuevoEstadoPago =
-      totalAplicado >= Number(pago.MONTO) - 0.005 ? 'APLICADO' : 'EN_CUENTA';
-
-    await c.execute(
-      `UPDATE CXC_PAGOS
-          SET ESTADO = :estado
-        WHERE ID_PAGO = :idPago`,
-      { estado: nuevoEstadoPago, idPago: i.idPago },
-    );
-
-    await registrarEvento(c, {
+  await c.execute(
+    `UPDATE CXC_DOCUMENTOS
+        SET SALDO = :saldo,
+            ESTADO = :estado
+      WHERE ID_DOCUMENTO = :idDocumento`,
+    {
+      saldo: nuevoSaldo,
+      estado: nuevoEstadoDocumento,
       idDocumento: i.idDocumento,
-      estadoAnterior: documento.ESTADO,
-      estadoNuevo: nuevoEstadoDocumento,
-      idEmpleado: i.idEmpleado,
-      tipoEvento: 'APLICACION_PAGO',
-      monto: montoAplicado,
-      naturaleza: 'ABONO',
-      descripcion: `Pago #${i.idPago} aplicado al documento`,
-      fecha: i.fechaAplicacion,
-    });
+    },
+  );
 
-    await crearReciboAutomatico(c, {
-      idCliente: documento.ID_CLIENTE,
-      idPago: i.idPago,
-      fecha: i.fechaAplicacion,
-      monto: montoAplicado,
-    });
+  const totalAplicado = roundMoney(montoConfirmadoPago + montoAplicado);
+  const nuevoEstadoPago =
+    totalAplicado >= Number(pago.MONTO) - 0.005 ? 'APLICADO' : 'EN_CUENTA';
 
+  await c.execute(
+    `UPDATE CXC_PAGOS
+        SET ESTADO = :estado
+      WHERE ID_PAGO = :idPago`,
+    { estado: nuevoEstadoPago, idPago: i.idPago },
+  );
+
+  await registrarEvento(c, {
+    idDocumento: i.idDocumento,
+    estadoAnterior: documento.ESTADO,
+    estadoNuevo: nuevoEstadoDocumento,
+    idEmpleado: i.idEmpleado,
+    tipoEvento: 'APLICACION_PAGO',
+    monto: montoAplicado,
+    naturaleza: 'ABONO',
+    descripcion: `Pago #${i.idPago} aplicado al documento`,
+    fecha: i.fechaAplicacion,
+  });
+
+  await crearReciboAutomatico(c, {
+    idCliente: documento.ID_CLIENTE,
+    idPago: i.idPago,
+    fecha: i.fechaAplicacion,
+    monto: montoAplicado,
+  });
+
+  return idAplicacion!;
+}
+
+/** Revalida y confirma una solicitud pendiente con los saldos vigentes. */
+export async function aprobarSolicitud(id: number, idEmpleadoAprobador: number): Promise<void> {
+  const solicitud = await findById(id);
+  if (!solicitud) throw new NotFoundError(`Aplicación de pago ${id} no encontrada`);
+  if (solicitud.estado !== 'PENDIENTE') throw new ConflictError('Solo se pueden aprobar solicitudes pendientes.');
+  const c = await getConnection();
+  try {
+    await aplicarEnConexion(c, {
+      idPago: solicitud.idPago,
+      idDocumento: solicitud.idDocumento,
+      fechaAplicacion: solicitud.fechaAplicacion.slice(0, 10),
+      montoAplicado: solicitud.montoAplicado,
+      idEmpleado: solicitud.idEmpleado ?? idEmpleadoAprobador,
+    }, { idAplicacion: id, idEmpleadoAprobador });
     await c.commit();
-    return insert.outBinds!.id[0];
+  } catch (e) {
+    await c.rollback();
+    throw e;
+  } finally {
+    await c.close();
+  }
+}
+
+export async function rechazarSolicitud(id: number, idEmpleadoAprobador: number, input: RechazarAplicacionPagoInput): Promise<void> {
+  const c = await getConnection();
+  try {
+    const result = await c.execute(
+      `UPDATE CXC_APLICACION_PAGOS
+          SET ESTADO = 'RECHAZADA',
+              ID_EMPLEADO_APROBADOR = :idEmpleadoAprobador,
+              FECHA_APROBACION = SYSDATE,
+              MOTIVO_RECHAZO = :motivoRechazo
+        WHERE ID_APLICACION = :id
+          AND ESTADO = 'PENDIENTE'`,
+      { id, idEmpleadoAprobador, motivoRechazo: input.motivoRechazo },
+    );
+    if (result.rowsAffected !== 1) throw new ConflictError('Solo se pueden rechazar solicitudes pendientes.');
+    await c.commit();
   } catch (e) {
     await c.rollback();
     throw e;

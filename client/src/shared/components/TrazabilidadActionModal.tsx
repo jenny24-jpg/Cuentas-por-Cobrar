@@ -5,6 +5,7 @@ import { CampoUsuarioActual } from './CampoUsuarioActual';
 import { FormActionButtons } from './FormActionButtons';
 import { apiClient, ApiError } from '../api';
 import { hasErrors, type ValidationErrors } from '../validation';
+import { toast } from './Toast';
 
 interface TrazabilidadActionModalProps {
   onClose: () => void;
@@ -16,6 +17,8 @@ interface TrazabilidadActionModalProps {
   motivoLabel: string;
   motivoFieldName: string;
   motivoHelperText?: string;
+  /** La acción no se ejecuta: se registra una solicitud que un ADMIN distinto debe aprobar. */
+  requiereAutorizacion?: boolean;
 }
 
 /**
@@ -35,6 +38,7 @@ export function TrazabilidadActionModal({
   motivoLabel,
   motivoFieldName,
   motivoHelperText,
+  requiereAutorizacion = false,
 }: TrazabilidadActionModalProps) {
   const [motivo, setMotivo] = useState('');
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -63,6 +67,8 @@ export function TrazabilidadActionModal({
       await apiClient.post(endpoint, {
         [motivoFieldName]: motivo.trim(),
       });
+      window.dispatchEvent(new Event('cxc-autorizaciones-actualizadas'));
+      if (requiereAutorizacion) toast.info('Solicitud enviada. Un administrador distinto de ti debe aprobarla en Autorizaciones.');
       onSuccess();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : `No se pudo completar: ${actionLabel.toLowerCase()}`);
@@ -74,6 +80,11 @@ export function TrazabilidadActionModal({
   return (
     <Modal isOpen onClose={onClose} title={title} description={description} size="sm">
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+        {requiereAutorizacion && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Esta acción <strong>no se aplica de inmediato</strong>: se envía una solicitud y un administrador distinto de ti debe aprobarla. Mientras tanto no cambia ningún saldo.
+          </p>
+        )}
         <TextArea
           label={motivoLabel}
           required

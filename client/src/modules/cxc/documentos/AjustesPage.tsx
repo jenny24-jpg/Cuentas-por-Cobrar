@@ -11,8 +11,8 @@ import { hasErrors, validateTextOnly, type ValidationErrors } from '../../../sha
 import type { Ajuste } from '@erp/contracts';
 import { AjusteForm } from './components/AjusteForm';
 import { CampoUsuarioActual } from '../../../shared/components/CampoUsuarioActual';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 function AprobacionModal({
   ajuste,
@@ -114,6 +114,7 @@ function AprobacionModal({
 
 export const AjustesPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.documentos.AjustesPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; ajuste?: Ajuste } | null>(null);
   const [ajusteAEliminar, setAjusteAEliminar] = useState<Ajuste | null>(null);
@@ -122,7 +123,7 @@ export const AjustesPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Ajuste>(
     '/cxc/ajustes',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -172,6 +173,7 @@ export const AjustesPage = () => {
         data={data}
         emptyText="No hay ajustes registrados"
         columns={[
+          { header: 'ID Cliente', accessorKey: 'idCliente', cell: ({ value }: any) => <span className="tabular-nums text-slate-500">#{value}</span> },
           { header: 'Cliente', accessorKey: 'nombreCliente' },
           { header: 'Documento', accessorKey: 'idDocumento', cell: ({ value }: any) => value ?? '—' },
           { header: 'Tipo', accessorKey: 'tipoAjuste' },
@@ -247,7 +249,7 @@ export const AjustesPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

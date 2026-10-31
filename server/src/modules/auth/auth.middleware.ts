@@ -3,6 +3,7 @@ import type { Rol } from '@erp/contracts';
 import { config } from '../../config';
 import { ForbiddenError, UnauthorizedError } from '../../shared/errors/AppError';
 import { sesionVigente } from './auth.service';
+import * as authRepository from './auth.repository';
 import { verifyAccessToken, type AccessClaims } from './tokens';
 import jwt from 'jsonwebtoken';
 
@@ -61,6 +62,25 @@ export function enforceReadOnlyRole(req: Request, _res: Response, next: NextFunc
 export const requireRole = (...roles: Rol[]) => (req: Request, _res: Response, next: NextFunction) => {
   if (!req.auth || !roles.includes(req.auth.rol)) return next(new ForbiddenError('No tienes permiso para realizar esta acción.'));
   next();
+};
+
+/** Revalida el rol contra SEG_USUARIOS para operaciones financieras sensibles. */
+export const requireCurrentRole = (...roles: Rol[]) => async (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    const idUsuario = req.auth?.sub;
+    if (!idUsuario) throw new UnauthorizedError('Inicia sesión para continuar.', 'UNAUTHORIZED');
+    const usuario = await authRepository.findUsuarioById(idUsuario);
+    if (!usuario || usuario.ESTADO !== 'ACTIVO') {
+      throw new ForbiddenError('El usuario está inactivo o ya no existe.');
+    }
+    req.auth!.rol = usuario.ROL;
+    if (!roles.includes(usuario.ROL)) {
+      throw new ForbiddenError('No tienes permiso para realizar esta acción.');
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
 
 /** Defensa extra contra CSRF en las rutas que usan la cookie de renovación. */

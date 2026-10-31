@@ -2,6 +2,37 @@ import oracledb, { type Connection } from 'oracledb';
 import { getConnection } from '../../../../config/database';
 import type { Recibo, CreateReciboInput, UpdateReciboInput } from '@erp/contracts';
 import { ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
+import { siguienteCorrelativoAnual } from '../../shared/correlativos';
+import { roundMoney } from '../../shared/financialRules';
+
+/** Lo que falta por respaldar con recibo: monto del pago menos sus recibos emitidos. */
+async function montoSinRecibo(conn: Connection, idPago: number, bloquear: boolean): Promise<number | null> {
+  // Con bloqueo, el pago queda tomado hasta el commit: dos recibos simultáneos del
+  // mismo pago no pueden cubrir dos veces el mismo dinero.
+  const pago = await conn.execute<{ MONTO: number }>(
+    `SELECT MONTO FROM CXC_PAGOS WHERE ID_PAGO = :idPago${bloquear ? ' FOR UPDATE' : ''}`,
+    { idPago },
+  );
+  if (!pago.rows?.length) return null;
+  const emitidos = await conn.execute<{ TOTAL: number }>(
+    `SELECT NVL(SUM(MONTO), 0) AS TOTAL FROM CXC_RECIBOS WHERE ID_PAGO = :idPago AND TRIM(ESTADO) = 'EMITIDO'`,
+    { idPago },
+  );
+  return Math.max(0, roundMoney(Number(pago.rows[0].MONTO) - Number(emitidos.rows?.[0]?.TOTAL ?? 0)));
+}
+
+/** Número y monto que tendría hoy el recibo manual de un pago (vista previa, sin bloquear). */
+export async function previewRecibo(idPago: number, fecha: string): Promise<{ numeroRecibo: string; monto: number | null }> {
+  const c = await getConnection();
+  try {
+    return {
+      numeroRecibo: await siguienteCorrelativoAnual(c, 'recibo', { bloquear: false, anio: fecha.slice(0, 4) }),
+      monto: await montoSinRecibo(c, idPago, false),
+    };
+  } finally {
+    await c.close();
+  }
+}
 
 interface Row {
   ID_RECIBO: number;
@@ -96,9 +127,20 @@ export async function findById(id: number): Promise<Recibo | null> {
 }
 
 // Creacion manual: conserva el contrato y las comprobaciones del servicio.
+/**
+ * Recibo manual de un pago. El monto no lo escribe el usuario: es lo que al pago le
+ * falta respaldar con recibo (su monto menos los recibos emitidos), para que el mismo
+ * dinero nunca tenga dos recibos. El número lo asigna el sistema (REC-AAAA-000001).
+ */
 export async function create(input: CreateReciboInput): Promise<number> {
   const c = await getConnection();
   try {
+    const monto = await montoSinRecibo(c, input.idPago, true);
+    if (monto === null) throw new NotFoundError('El pago seleccionado no existe');
+    if (monto <= 0.005) {
+      throw new ConflictError('Este pago ya tiene recibos por todo su monto; no se puede emitir otro.');
+    }
+    const numeroRecibo = await siguienteCorrelativoAnual(c, 'recibo', { anio: input.fecha.slice(0, 4) });
     const result = await c.execute<{ id: number[] }>(
       `INSERT INTO CXC_RECIBOS
          (ID_CLIENTE, ID_PAGO, NUMERO_RECIBO, FECHA, MONTO, ESTADO)
@@ -109,15 +151,16 @@ export async function create(input: CreateReciboInput): Promise<number> {
       {
         idCliente: input.idCliente,
         idPago: input.idPago,
-        numeroRecibo: input.numeroRecibo ?? null,
+        numeroRecibo,
         fecha: input.fecha,
-        monto: input.monto,
+        monto,
         estado: input.estado,
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
     );
+    const id = result.outBinds!.id[0];
     await c.commit();
-    return result.outBinds!.id[0];
+    return id;
   } catch (error) {
     await c.rollback();
     throw error;
@@ -156,9 +199,6 @@ export async function update(id: number, input: UpdateReciboInput): Promise<void
   const columnas = [
     ['idCliente', 'ID_CLIENTE'],
     ['idPago', 'ID_PAGO'],
-    ['numeroRecibo', 'NUMERO_RECIBO'],
-    ['monto', 'MONTO'],
-    ['estado', 'ESTADO'],
   ] as const;
 
   for (const [key, columna] of columnas) {
@@ -213,25 +253,19 @@ export async function crearReciboAutomatico(
   conn: Connection,
   input: { idCliente: number; idPago: number; fecha: string; monto: number },
 ): Promise<number> {
+  const numeroRecibo = await siguienteCorrelativoAnual(conn, 'recibo', { anio: input.fecha.slice(0, 4) });
   const insert = await conn.execute<{ id: number[] }>(
-    `INSERT INTO CXC_RECIBOS (ID_CLIENTE, ID_PAGO, FECHA, MONTO, ESTADO)
-     VALUES (:idCliente, :idPago, TO_DATE(:fecha, 'YYYY-MM-DD'), :monto, 'EMITIDO')
+    `INSERT INTO CXC_RECIBOS (ID_CLIENTE, ID_PAGO, NUMERO_RECIBO, FECHA, MONTO, ESTADO)
+     VALUES (:idCliente, :idPago, :numeroRecibo, TO_DATE(:fecha, 'YYYY-MM-DD'), :monto, 'EMITIDO')
      RETURNING ID_RECIBO INTO :id`,
     {
       idCliente: input.idCliente,
       idPago: input.idPago,
+      numeroRecibo,
       fecha: input.fecha,
       monto: input.monto,
       id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
     },
   );
-  const idRecibo = insert.outBinds!.id[0];
-  await conn.execute(
-    `UPDATE CXC_RECIBOS
-        SET NUMERO_RECIBO = 'REC-' || TO_CHAR(FECHA, 'YYYY') || '-' ||
-                            LPAD(TO_CHAR(:idRecibo), 6, '0')
-      WHERE ID_RECIBO = :idRecibo`,
-    { idRecibo },
-  );
-  return idRecibo;
+  return insert.outBinds!.id[0];
 }

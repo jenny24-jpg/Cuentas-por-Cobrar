@@ -107,12 +107,14 @@ export const GestionCobroForm = ({ gestion, onSuccess, onCancel }: GestionCobroF
       </div>
       <TextArea label="Observación" required value={observacion} onChange={(e: any) => setObservacion(e.target.value)} rows={3} maxLength={500} error={errors.observacion} helperText="Obligatoria: solo letras y espacios; máximo 500 caracteres." />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TextInput label="Fecha compromiso" type="date" min={todayIso()} value={fechaCompromiso} onChange={(e: any) => setFechaCompromiso(e.target.value)} error={errors.fechaCompromiso} helperText="Solo si existe compromiso; no puede ser anterior a hoy." />
-        <TextInput label="Monto comprometido" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" value={montoCompromiso} onChange={(e: any) => setMontoCompromiso(e.target.value)} error={errors.montoCompromiso} helperText="Monto prometido, mayor a 0 y con máximo 2 decimales." />
+        <TextInput label="Fecha compromiso" type="date" min={todayIso()} value={fechaCompromiso} onChange={(e: any) => setFechaCompromiso(e.target.value)} error={errors.fechaCompromiso} helperText="Día acordado en que el cliente realizará el pago. Puede ser hoy o una fecha futura; no es el vencimiento de la factura. Si no hubo compromiso, déjala vacía." />
+        <TextInput label="Monto comprometido" type="number" restriction="decimal" decimalPlaces={2} step="0.01" min="0.01" value={montoCompromiso} onChange={(e: any) => setMontoCompromiso(e.target.value)} error={errors.montoCompromiso} helperText="Cantidad que el cliente prometió pagar en esa fecha. Si no acordaron un monto, déjalo vacío." />
       </div>
-      {!isEditing && fechaCompromiso && montoCompromiso && (
+      {!isEditing && (fechaCompromiso || montoCompromiso) && (
         <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-          Al guardar se creará automáticamente una Promesa de Pago vinculada a esta gestión, con esta fecha y monto.
+          {fechaCompromiso && montoCompromiso
+            ? 'Al guardar se creará automáticamente una Promesa de Pago vinculada a esta gestión, con la fecha y el monto indicados.'
+            : 'Para crear la Promesa de Pago automática debes completar tanto la fecha como el monto. Si el cliente no hizo un compromiso concreto, deja ambos campos vacíos.'}
         </p>
       )}
       {!isEditing && <CampoUsuarioActual />}

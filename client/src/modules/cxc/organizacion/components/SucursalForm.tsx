@@ -12,6 +12,8 @@ import {
   type ValidationErrors,
 } from '../../../../shared/validation';
 import type { CatalogoOption, Sucursal } from '@erp/contracts';
+import { RutaMap } from './RutaMap';
+import { BuscadorDireccion } from './BuscadorDireccion';
 
 const ESTADOS_SUCURSAL = [
   { value: 'A', label: 'Activa' },
@@ -30,6 +32,8 @@ export const SucursalForm = ({ sucursal, onSuccess, onCancel }: SucursalFormProp
   const [idEmpresa, setIdEmpresa] = useState(sucursal?.idEmpresa?.toString() ?? '');
   const [nombre, setNombre] = useState(sucursal?.nombre ?? '');
   const [direccion, setDireccion] = useState(sucursal?.direccion ?? '');
+  const [latitud, setLatitud] = useState(sucursal?.latitud != null ? String(sucursal.latitud) : '');
+  const [longitud, setLongitud] = useState(sucursal?.longitud != null ? String(sucursal.longitud) : '');
   const [estado, setEstado] = useState(sucursal?.estado ?? 'A');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,6 +42,9 @@ export const SucursalForm = ({ sucursal, onSuccess, onCancel }: SucursalFormProp
   useEffect(() => {
     apiClient.get<CatalogoOption[]>('/cxc/empresas/options').then(setEmpresas).catch(() => setEmpresas([]));
   }, []);
+
+  const pick = latitud !== '' && longitud !== '' ? { lat: Number(latitud), lon: Number(longitud) } : null;
+  const fijarPunto = (lat: number, lon: number) => { setLatitud(lat.toFixed(6)); setLongitud(lon.toFixed(6)); };
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
@@ -70,6 +77,8 @@ export const SucursalForm = ({ sucursal, onSuccess, onCancel }: SucursalFormProp
       idEmpresa: Number(idEmpresa),
       nombre: nombre.trim(),
       direccion: direccion.trim() || undefined,
+      latitud: latitud ? Number(latitud) : null,
+      longitud: longitud ? Number(longitud) : null,
       estado,
     };
 
@@ -125,6 +134,24 @@ export const SucursalForm = ({ sucursal, onSuccess, onCancel }: SucursalFormProp
           helperText="Dirección física; máximo 200."
           placeholder="Opcional"
         />
+
+        <div className="sm:col-span-2 flex flex-col gap-2">
+          <p className="text-sm font-medium text-slate-700">Ubicación en el mapa <span className="font-normal text-slate-400">(opcional)</span></p>
+          <p className="text-xs text-slate-500">
+            Escribe la dirección arriba y pulsa «Buscar», o haz clic en el mapa para fijar el punto. Sirve para sugerir la sucursal más cercana a una ruta.
+          </p>
+          <BuscadorDireccion texto={direccion} onSeleccionar={(r) => fijarPunto(r.lat, r.lon)} />
+          <RutaMap heightClass="h-56" pick={pick} onPick={fijarPunto} />
+          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span>{pick ? `Ubicación fijada: ${pick.lat.toFixed(6)}, ${pick.lon.toFixed(6)}` : 'Sin ubicación fijada.'}</span>
+            {pick && (
+              <button type="button" onClick={() => { setLatitud(''); setLongitud(''); }}
+                className="font-semibold text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
+                Quitar ubicación
+              </button>
+            )}
+          </div>
+        </div>
 
         <Select
           label="Estado"

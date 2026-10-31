@@ -7,11 +7,12 @@ import { usePaginatedList } from '../../../shared/hooks';
 import { apiClient, ApiError } from '../../../shared/api';
 import type { Sucursal } from '@erp/contracts';
 import { SucursalForm } from './components/SucursalForm';
+import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
-const PAGE_SIZE = 10;
 
 export const SucursalesPage = () => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useTamanoPagina('cxc.organizacion.SucursalesPage');
   const [search, setSearch] = useState('');
   const [modalState, setModalState] = useState<{ mode: 'create' | 'edit'; sucursal?: Sucursal } | null>(null);
   const [sucursalAEliminar, setSucursalAEliminar] = useState<Sucursal | null>(null);
@@ -20,7 +21,7 @@ export const SucursalesPage = () => {
 
   const { data, meta, isLoading, error, refetch } = usePaginatedList<Sucursal>(
     '/cxc/sucursales',
-    { page, limit: PAGE_SIZE, search },
+    { page, limit: pageSize, search },
   );
 
   const handleDelete = async () => {
@@ -107,7 +108,7 @@ export const SucursalesPage = () => {
           currentPage: meta.page,
           totalPages: meta.totalPages,
           onPageChange: setPage,
-          showingText: `Mostrando ${data.length} de ${meta.total} registros`,
+          showingText: <PieTabla total={meta.total} pagina={meta.page} cantidad={data.length} tamano={pageSize} onTamanoChange={(t) => { setPageSize(t); setPage(1); }} etiqueta="registros" />,
         }}
       />
 

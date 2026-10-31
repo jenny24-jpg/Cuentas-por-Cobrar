@@ -19,12 +19,13 @@ afterEach(() => vi.useRealTimers());
 describe('anticipo.create — pago que lo respalda', () => {
   const reglas = (o: { pago?: unknown[]; aplicado?: number; otros?: number } = {}): Regla[] => [
     { sql: /SELECT ID_CLIENTE, MONTO, ESTADO FROM CXC_PAGOS WHERE ID_PAGO = :idPago FOR UPDATE/, rows: o.pago ?? [{ ID_CLIENTE: 10, MONTO: 500, ESTADO: 'NO_APLICADO' }] },
-    { sql: /FROM CXC_APLICACION_PAGOS WHERE ID_PAGO = :idPago AND ESTADO = 'CONFIRMADA'/, rows: [{ TOTAL: o.aplicado ?? 0 }] },
+    // Una solicitud de aplicación PENDIENTE también reserva el pago.
+    { sql: /FROM CXC_APLICACION_PAGOS WHERE ID_PAGO = :idPago AND ESTADO IN \('CONFIRMADA', 'PENDIENTE'\)/, rows: [{ TOTAL: o.aplicado ?? 0 }] },
     { sql: /COUNT\(\*\) AS TOTAL FROM CXC_ANTICIPOS WHERE ID_PAGO/, rows: [{ TOTAL: o.otros ?? 0 }] },
     { sql: /INSERT INTO CXC_ANTICIPOS/, outId: 40 },
   ];
   const datos = (extra: Record<string, unknown> = {}) =>
-    ({ idCliente: 10, idPago: 1, montoOriginal: 300, montoDisponible: 300, fecha: '2026-10-27', ...extra }) as Parameters<typeof anticipos.create>[0];
+    ({ idCliente: 10, idPago: 1, fecha: '2026-10-27', ...extra }) as Parameters<typeof anticipos.create>[0];
 
   async function esperaError(r: Regla[], d: ReturnType<typeof datos>, mensaje: RegExp) {
     const { conn, ejecuto } = crearConexion(r);
@@ -35,9 +36,7 @@ describe('anticipo.create — pago que lo respalda', () => {
     expect(conn.close).toHaveBeenCalledOnce();
   }
 
-  it('validaciones previas: monto no positivo, disponible distinto y fecha futura', async () => {
-    await expect(anticipos.create(datos({ montoOriginal: 0, montoDisponible: 0 }))).rejects.toThrow(/monto positivo/);
-    await expect(anticipos.create(datos({ montoDisponible: 299 }))).rejects.toThrow(/igual al original/);
+  it('validación previa: fecha futura', async () => {
     await expect(anticipos.create(datos({ fecha: '2026-10-28' }))).rejects.toThrow(/futura/);
     expect(db.getConnection).not.toHaveBeenCalled();
   });
@@ -48,7 +47,12 @@ describe('anticipo.create — pago que lo respalda', () => {
     esperaError(reglas({ pago: [{ ID_CLIENTE: 11, MONTO: 500, ESTADO: 'NO_APLICADO' }] }), datos(), /mismo cliente/));
   it('pago con aplicaciones a documentos', () => esperaError(reglas({ aplicado: 50 }), datos(), /ya tiene aplicaciones/));
   it('pago que ya respalda otro anticipo', () => esperaError(reglas({ otros: 1 }), datos(), /otro anticipo vigente/));
-  it('anticipo mayor al pago', () => esperaError(reglas(), datos({ montoOriginal: 500.01, montoDisponible: 500.01 }), /no puede superar el monto del pago/));
+  it('éxito: el monto original y el disponible salen del pago, aunque se envíe otro', async () => {
+    const { conn, ejecuto } = crearConexion(reglas());
+    db.getConnection.mockResolvedValue(conn);
+    await anticipos.create(datos({ montoOriginal: 1, montoDisponible: 1 }));
+    expect(ejecuto(/INSERT INTO CXC_ANTICIPOS/)[0].binds).toMatchObject({ montoOriginal: 500, montoDisponible: 500 });
+  });
 
   it('éxito: bloquea el pago antes de insertar y confirma', async () => {
     const { conn, ejecuciones } = crearConexion(reglas());
@@ -58,12 +62,6 @@ describe('anticipo.create — pago que lo respalda', () => {
     expect(orden.findIndex((s) => /FOR UPDATE/.test(s))).toBeLessThan(orden.findIndex((s) => /INSERT INTO CXC_ANTICIPOS/.test(s)));
     expect(ejecuciones.find((e) => /COUNT\(\*\)/.test(e.sql))!.binds).toEqual({ idPago: 1, excluir: null });
     expect(conn.commit).toHaveBeenCalledOnce();
-  });
-  it('sin pago relacionado no consulta pagos', async () => {
-    const { conn, ejecuto } = crearConexion(reglas());
-    db.getConnection.mockResolvedValue(conn);
-    await anticipos.create(datos({ idPago: null }));
-    expect(ejecuto(/CXC_PAGOS/)).toHaveLength(0);
   });
 });
 
@@ -76,29 +74,32 @@ describe('anticipo.update — revalida el respaldo excluyéndose a sí mismo', (
     { sql: /COUNT\(\*\) AS TOTAL FROM CXC_ANTICIPOS/, rows: [{ TOTAL: otros }] },
   ];
 
-  it('subir el monto por encima del pago se rechaza', async () => {
+  it('la fecha de un anticipo registrado no se modifica ni se consulta la base', async () => {
     const { conn } = crearConexion(reglas());
     db.getConnection.mockResolvedValue(conn);
-    await expect(anticipos.update(40, { montoOriginal: 600, montoDisponible: 600 })).rejects.toThrow(/monto del pago/);
+    await expect(anticipos.update(40, { fecha: '2026-10-21' })).rejects.toThrow(/fecha de un anticipo registrado no puede modificarse/);
+    expect(db.getConnection).not.toHaveBeenCalled();
   });
-  it('editar otro campo usa el pago y cliente actuales y se excluye del conteo', async () => {
+  it('editar otro campo usa el pago y cliente actuales, se excluye del conteo y resincroniza el monto con el pago', async () => {
     const { conn, ejecuto } = crearConexion(reglas());
     db.getConnection.mockResolvedValue(conn);
-    await anticipos.update(40, { fecha: '2026-10-21' });
+    await anticipos.update(40, { idCliente: 10 });
     expect(ejecuto(/COUNT\(\*\) AS TOTAL FROM CXC_ANTICIPOS/)[0].binds).toEqual({ idPago: 1, excluir: 40 });
-    expect(ejecuto(/UPDATE CXC_ANTICIPOS/)).toHaveLength(1);
+    const update = ejecuto(/UPDATE CXC_ANTICIPOS/);
+    expect(update).toHaveLength(1);
+    expect(update[0].binds).toMatchObject({ montoOriginal: 500 });
     expect(conn.commit).toHaveBeenCalledOnce();
   });
-  it('anticipo sin pago no valida respaldo', async () => {
+  it('un anticipo heredado sin pago no puede editarse sin asignarle uno', async () => {
     const { conn, ejecuto } = crearConexion(reglas({ ID_PAGO: null }));
     db.getConnection.mockResolvedValue(conn);
-    await anticipos.update(40, { fecha: '2026-10-21' });
-    expect(ejecuto(/CXC_PAGOS/)).toHaveLength(0);
+    await expect(anticipos.update(40, { idCliente: 10 })).rejects.toThrow(/pago que respalda/);
+    expect(ejecuto(/UPDATE CXC_ANTICIPOS/)).toHaveLength(0);
   });
   it('estado distinto de DISPONIBLE no se edita', async () => {
     const { conn } = crearConexion(reglas({ ESTADO: 'AGOTADO' }));
     db.getConnection.mockResolvedValue(conn);
-    await expect(anticipos.update(40, { fecha: '2026-10-21' })).rejects.toThrow(/Solo los anticipos disponibles/);
+    await expect(anticipos.update(40, { idCliente: 10 })).rejects.toThrow(/Solo los anticipos disponibles/);
   });
 });
 
@@ -161,13 +162,17 @@ describe('pago.update / pago.remove', () => {
     db.getConnection.mockResolvedValue(conn);
     await expect(pagos.update(1, { monto: 10 })).rejects.toThrow(/respalda un anticipo/);
   });
+  it('update rechaza cambiar la fecha de un pago registrado sin consultar la base', async () => {
+    await expect(pagos.update(1, { monto: 10, fechaPago: '2026-10-01' })).rejects.toThrow(/fecha de un pago registrado no puede modificarse/);
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
   it('update válido escribe solo los campos enviados', async () => {
     const { conn, ejecuto } = crearConexion(reglas());
     db.getConnection.mockResolvedValue(conn);
-    await pagos.update(1, { monto: 10, fechaPago: '2026-10-01', numeroReferencia: 'A-1' });
+    await pagos.update(1, { monto: 10 });
     const upd = ejecuto(/UPDATE CXC_PAGOS SET/)[0];
-    expect(upd.sql).toContain("MONTO=:monto");
-    expect(upd.sql).toContain("FECHA_PAGO=TO_DATE(:fechaPago,'YYYY-MM-DD')");
+    expect(upd.sql).toContain('MONTO=:monto');
+    expect(upd.sql).not.toContain('FECHA_PAGO');
     expect(upd.sql).not.toContain('ID_CLIENTE');
     expect(conn.commit).toHaveBeenCalledOnce();
   });

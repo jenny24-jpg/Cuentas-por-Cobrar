@@ -6,8 +6,9 @@ import type {
   UpdateDocumentoInput,
   AnularDocumentoInput,
 } from '@erp/contracts';
-import { deriveDocumentoCondicion } from '../../shared/financialRules';
+import { deriveDocumentoCondicion, hasFinancialMovement } from '../../shared/financialRules';
 import { ConflictError, NotFoundError } from '../../../../shared/errors/AppError';
+import { siguienteNumeroDocumento } from '../../shared/correlativos';
 import { registrarEvento } from './documentoHistorial.repository';
 
 interface DocumentoRow {
@@ -25,6 +26,7 @@ interface DocumentoRow {
   FECHA_DOCUMENTO: Date;
   FECHA_VENCIMIENTO: Date;
   TOTAL: number;
+  MONTO_PAGADO: number;
   SALDO: number;
   ID_EMPLEADO_ANULACION: number | null;
   NOMBRE_EMPLEADO_ANULACION: string | null;
@@ -50,6 +52,7 @@ function mapRow(row: DocumentoRow): Documento {
     fechaDocumento: row.FECHA_DOCUMENTO?.toISOString() ?? '',
     fechaVencimiento: row.FECHA_VENCIMIENTO?.toISOString() ?? '',
     total: row.TOTAL,
+    montoPagado: Number(row.MONTO_PAGADO ?? 0),
     saldo: row.SALDO,
     idEmpleadoAnulacion: row.ID_EMPLEADO_ANULACION,
     nombreEmpleadoAnulacion: row.NOMBRE_EMPLEADO_ANULACION,
@@ -73,6 +76,17 @@ const SELECT_BASE = `
          d.FECHA_DOCUMENTO,
          d.FECHA_VENCIMIENTO,
          d.TOTAL,
+         NVL((
+           SELECT SUM(ap.MONTO_APLICADO)
+             FROM CXC_APLICACION_PAGOS ap
+            WHERE ap.ID_DOCUMENTO = d.ID_DOCUMENTO
+              AND ap.ESTADO = 'CONFIRMADA'
+         ), 0) + NVL((
+           SELECT SUM(aa.MONTO_APLICADO)
+             FROM CXC_APLICACION_ANTICIPO aa
+            WHERE aa.ID_DOCUMENTO = d.ID_DOCUMENTO
+              AND aa.ESTADO = 'CONFIRMADA'
+         ), 0) AS MONTO_PAGADO,
          d.SALDO,
          d.ID_EMPLEADO_ANULACION,
          CASE
@@ -129,6 +143,16 @@ export async function findAll(params: {
   }
 }
 
+/** Serie y número que recibiría hoy un documento nuevo de ese tipo (vista previa, sin bloquear). */
+export async function previewNumero(idTipoDocumento: number): Promise<{ serie: string; numero: string }> {
+  const conn = await getConnection();
+  try {
+    return await siguienteNumeroDocumento(conn, idTipoDocumento, { bloquear: false });
+  } finally {
+    await conn.close();
+  }
+}
+
 export async function findById(id: number): Promise<Documento | null> {
   const conn = await getConnection();
   try {
@@ -146,6 +170,7 @@ export async function findById(id: number): Promise<Documento | null> {
 export async function create(input: CreateDocumentoInput & { nitCliente?: string | null }): Promise<number> {
   const conn = await getConnection();
   try {
+    const { serie, numero } = await siguienteNumeroDocumento(conn, input.idTipoDocumento);
     const result = await conn.execute<{ id: number[] }>(
       `INSERT INTO CXC_DOCUMENTOS
          (ID_CLIENTE, NIT_CLIENTE, ID_TIPO_DOCUMENTO, ID_MONEDA, ID_CONDICION_CREDITO, ESTADO,
@@ -163,8 +188,8 @@ export async function create(input: CreateDocumentoInput & { nitCliente?: string
         idTipoDocumento: input.idTipoDocumento,
         idMoneda: input.idMoneda,
         idCondicionCredito: input.idCondicionCredito ?? null,
-        serie: input.serie ?? null,
-        numeroDocumento: input.numeroDocumento,
+        serie,
+        numeroDocumento: numero,
         fechaDocumento: input.fechaDocumento,
         fechaVencimiento: input.fechaVencimiento,
         total: input.total,
@@ -196,8 +221,6 @@ export async function update(id: number, input: DocumentoInternalUpdate): Promis
   if (input.idTipoDocumento !== undefined) { fields.push('ID_TIPO_DOCUMENTO = :idTipoDocumento'); binds.idTipoDocumento = input.idTipoDocumento; }
   if (input.idMoneda !== undefined) { fields.push('ID_MONEDA = :idMoneda'); binds.idMoneda = input.idMoneda; }
   if (input.idCondicionCredito !== undefined) { fields.push('ID_CONDICION_CREDITO = :idCondicionCredito'); binds.idCondicionCredito = input.idCondicionCredito ?? null; }
-  if (input.serie !== undefined) { fields.push('SERIE = :serie'); binds.serie = input.serie; }
-  if (input.numeroDocumento !== undefined) { fields.push('NUMERO_DOCUMENTO = :numeroDocumento'); binds.numeroDocumento = input.numeroDocumento; }
   if (input.fechaDocumento !== undefined) {
     fields.push(`FECHA_DOCUMENTO = TO_DATE(:fechaDocumento, 'YYYY-MM-DD')`);
     binds.fechaDocumento = input.fechaDocumento;
@@ -215,6 +238,19 @@ export async function update(id: number, input: DocumentoInternalUpdate): Promis
 
   const conn = await getConnection();
   try {
+    const locked = await conn.execute<{ ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT ESTADO, TOTAL, SALDO FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id FOR UPDATE`,
+      { id },
+    );
+    const current = locked.rows?.[0];
+    if (!current) throw new NotFoundError(`Documento ${id} no encontrado`);
+    const estadoActual = String(current.ESTADO ?? '').trim().toUpperCase();
+    if (['PAGADO', 'PAGADA', 'ANULADO', 'ANULADA'].includes(estadoActual)) {
+      throw new ConflictError('El documento ya esta pagado o anulado y no puede editarse.');
+    }
+    if (hasFinancialMovement(current.TOTAL, current.SALDO)) {
+      throw new ConflictError('El documento ya tiene movimientos financieros. Reversa o corrige esos movimientos antes de editarlo.');
+    }
     await conn.execute(
       `UPDATE CXC_DOCUMENTOS SET ${fields.join(', ')} WHERE ID_DOCUMENTO = :id`,
       binds,
@@ -231,6 +267,16 @@ export async function update(id: number, input: DocumentoInternalUpdate): Promis
 export async function remove(id: number): Promise<void> {
   const conn = await getConnection();
   try {
+    const locked = await conn.execute<{ ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT ESTADO, TOTAL, SALDO FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id FOR UPDATE`,
+      { id },
+    );
+    const current = locked.rows?.[0];
+    if (!current) throw new NotFoundError(`Documento ${id} no encontrado`);
+    const estadoActual = String(current.ESTADO ?? '').trim().toUpperCase();
+    if (hasFinancialMovement(current.TOTAL, current.SALDO) || !['PENDIENTE', 'VENCIDO'].includes(estadoActual)) {
+      throw new ConflictError('Solo se puede eliminar un documento sin movimientos y en estado pendiente.');
+    }
     await conn.execute(`DELETE FROM CXC_DOCUMENTOS WHERE ID_DOCUMENTO = :id`, { id });
     await conn.commit();
   } catch (err) {
@@ -293,6 +339,47 @@ export async function anular(id: number, input: AnularDocumentoInput): Promise<v
       descripcion: input.motivoAnulacion,
       fecha: input.fechaAnulacion,
     });
+
+    // Las notas de débito por mora de este documento se anulan en la misma
+    // transacción. Si alguna ya recibió pagos, primero deben reversarse.
+    const notas = await conn.execute<{ ID_DOCUMENTO: number; ESTADO: string; TOTAL: number; SALDO: number }>(
+      `SELECT ID_DOCUMENTO, ESTADO, TOTAL, SALDO FROM CXC_DOCUMENTOS
+        WHERE ID_DOCUMENTO_ORIGEN = :id
+          AND UPPER(TRIM(ESTADO)) NOT IN ('ANULADO', 'ANULADA')
+        FOR UPDATE`,
+      { id },
+    );
+    for (const nota of notas.rows ?? []) {
+      if (hasFinancialMovement(nota.TOTAL, nota.SALDO)) {
+        throw new ConflictError('El documento tiene notas de mora con pagos aplicados. Reversa esos pagos antes de anularlo.');
+      }
+      await conn.execute(
+        `UPDATE CXC_DOCUMENTOS
+            SET SALDO = 0,
+                ESTADO = 'ANULADO',
+                ID_EMPLEADO_ANULACION = :idEmpleadoAnulacion,
+                FECHA_ANULACION = NVL(TO_DATE(:fechaAnulacion, 'YYYY-MM-DD'), SYSDATE),
+                MOTIVO_ANULACION = :motivo
+          WHERE ID_DOCUMENTO = :idNota`,
+        {
+          idEmpleadoAnulacion: input.idEmpleadoAnulacion,
+          fechaAnulacion: input.fechaAnulacion ?? null,
+          motivo: `Anulada junto con su factura de origen: ${input.motivoAnulacion}`.slice(0, 250),
+          idNota: nota.ID_DOCUMENTO,
+        },
+      );
+      await registrarEvento(conn, {
+        idDocumento: nota.ID_DOCUMENTO,
+        estadoAnterior: nota.ESTADO,
+        estadoNuevo: 'ANULADO',
+        idEmpleado: input.idEmpleadoAnulacion,
+        tipoEvento: 'ANULACION_DOCUMENTO',
+        monto: nota.SALDO,
+        naturaleza: 'ABONO',
+        descripcion: 'Anulada junto con su factura de origen',
+        fecha: input.fechaAnulacion,
+      });
+    }
 
     await conn.commit();
   } catch (err) {

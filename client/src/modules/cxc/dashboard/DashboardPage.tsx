@@ -6,7 +6,7 @@ import { ExportMenu } from '../../../shared/components/ExportMenu';
 import type { ReportSpec } from '../../../shared/export/reportExport';
 import { useApi } from '../analisis/useApi';
 import { useFiltros } from '../analisis/useFiltros';
-import { COLOR, Q, Qc, RAMPA_AZUL, agruparSerie, entero, fechaCorta, pct } from '../analisis/format';
+import { COLOR, Q, Qc, SEMAFORO_ANTIGUEDAD, agruparSerie, entero, fechaCorta, pct } from '../analisis/format';
 import { FilterBar } from '../analisis/ui/FilterBar';
 import { Encabezado, ErrorCaja, Esqueleto, Panel, Vacio } from '../analisis/ui/Panel';
 import { KpiCard } from '../analisis/ui/KpiCard';
@@ -121,7 +121,7 @@ export const DashboardPage = () => {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Panel titulo="Antigüedad de la cartera" subtitulo="Saldo pendiente según los días que lleva vencido">
               <ColumnasChart etiquetaValor="Saldo" alto={230}
-                datos={data.antiguedad.map((t, i) => ({ clave: String(t.orden), etiqueta: ['Corriente', '1-30', '31-60', '61-90', '+90'][i] ?? t.tramo, valor: t.monto, extra: `${t.documentos} documento(s)`, color: RAMPA_AZUL[i] }))}
+                datos={data.antiguedad.map((t, i) => ({ clave: String(t.orden), etiqueta: ['Corriente', '1-30', '31-60', '61-90', '+90'][i] ?? t.tramo, valor: t.monto, extra: `${t.documentos} documento(s)`, color: SEMAFORO_ANTIGUEDAD[i] }))}
                 destacada={filtros.tramo ? String(filtros.tramo) : undefined}
                 onSeleccionar={(d) => alternar('tramo', Number(d.clave))} />
               <p className="mt-2 text-[11.5px] text-slate-500">Clic en una columna para filtrar todo el tablero por ese tramo. <button type="button" onClick={() => navigate('/cxc/reportes/antiguedad-saldos')} className="font-medium text-blue-800 hover:underline">Ver reporte completo</button></p>

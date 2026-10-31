@@ -292,11 +292,6 @@ export async function update(
     binds.montoComprometido = input.montoComprometido;
   }
 
-  if (input.estado !== undefined) {
-    fields.push('ESTADO = :estado');
-    binds.estado = input.estado;
-  }
-
   if (input.observaciones !== undefined) {
     fields.push('OBSERVACIONES = :observaciones');
     binds.observaciones = input.observaciones;
@@ -344,6 +339,66 @@ export async function remove(id: number): Promise<void> {
     );
 
     await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    await conn.close();
+  }
+}
+
+// =====================================================
+// CIERRE AUTOMÁTICO DE PROMESAS VENCIDAS
+// =====================================================
+
+/**
+ * Cierra las promesas PENDIENTE cuya fecha comprometida ya pasó. Es CUMPLIDA si
+ * el documento prometido ya no tiene saldo o si el cliente pagó al menos lo
+ * comprometido entre la fecha de la promesa y la fecha comprometida (pagos no
+ * anulados ni reversados); si no, INCUMPLIDA. Una sola transacción.
+ */
+export async function cerrarVencidas(
+  hoy: string = businessTodayIso(),
+): Promise<{ cumplidas: number; incumplidas: number }> {
+  const conn = await getConnection();
+
+  try {
+    const vencida = `p.ESTADO = 'PENDIENTE'
+          AND p.FECHA_COMPROMISO IS NOT NULL
+          AND p.FECHA_COMPROMISO < TO_DATE(:hoy, 'YYYY-MM-DD')`;
+
+    const cumplidas = await conn.execute(
+      `
+        UPDATE CXC_PROMESAS_PAGO p
+           SET ESTADO = 'CUMPLIDA'
+         WHERE ${vencida}
+           AND (
+             SELECT NVL(SUM(ap.MONTO_APLICADO), 0)
+               FROM CXC_APLICACION_PAGOS ap
+               JOIN CXC_PAGOS pg ON pg.ID_PAGO = ap.ID_PAGO
+               JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = ap.ID_DOCUMENTO
+              WHERE d.ID_CLIENTE = p.ID_CLIENTE
+                AND (p.ID_DOCUMENTO IS NULL OR ap.ID_DOCUMENTO = p.ID_DOCUMENTO)
+                AND ap.ESTADO = 'CONFIRMADA'
+                AND NVL(UPPER(TRIM(pg.ESTADO)), 'NO_APLICADO') NOT IN ('ANULADO', 'REVERSADO')
+                AND ap.FECHA_APLICACION >= TRUNC(p.FECHA_PROMESA)
+                AND ap.FECHA_APLICACION < TRUNC(p.FECHA_COMPROMISO) + 1
+           ) >= p.MONTO_COMPROMETIDO - 0.005
+      `,
+      { hoy },
+    );
+
+    const incumplidas = await conn.execute(
+      `UPDATE CXC_PROMESAS_PAGO p SET ESTADO = 'INCUMPLIDA' WHERE ${vencida}`,
+      { hoy },
+    );
+
+    await conn.commit();
+
+    return {
+      cumplidas: cumplidas.rowsAffected ?? 0,
+      incumplidas: incumplidas.rowsAffected ?? 0,
+    };
   } catch (err) {
     await conn.rollback();
     throw err;

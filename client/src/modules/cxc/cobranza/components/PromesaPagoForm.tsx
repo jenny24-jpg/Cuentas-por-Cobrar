@@ -22,13 +22,7 @@ interface PromesaPagoFormProps {
   onCancel: () => void;
 }
 
-const ESTADOS_PROMESA_PAGO = [
-  'PENDIENTE',
-  'CUMPLIDA',
-  'INCUMPLIDA',
-] as const;
-
-const ESTADO_OPTIONS = ESTADOS_PROMESA_PAGO.map((e) => ({
+const ESTADO_OPTIONS = ['PENDIENTE', 'CUMPLIDA', 'INCUMPLIDA'].map((e) => ({
   value: e,
   label: e,
 }));
@@ -81,9 +75,7 @@ export const PromesaPagoForm = ({
     promesa?.montoComprometido?.toString() ?? '',
   );
 
-  const [estado, setEstado] = useState(
-    promesa?.estado ?? 'PENDIENTE',
-  );
+  const estado = promesa?.estado ?? 'PENDIENTE';
 
   const [observaciones, setObservaciones] = useState(
     promesa?.observaciones ?? '',
@@ -313,7 +305,7 @@ export const PromesaPagoForm = ({
       fechaPromesa,
       fechaCompromiso: fechaCompromiso || undefined,
       montoComprometido: Number(montoComprometido),
-      estado,
+      ...(!isEditing ? { estado: 'PENDIENTE' as const } : {}),
       observaciones: observaciones.trim() || undefined,
     };
 
@@ -472,11 +464,9 @@ export const PromesaPagoForm = ({
           label="Estado"
           required
           value={estado}
-          onChange={(e: any) =>
-            setEstado(e.target.value)
-          }
           options={ESTADO_OPTIONS}
-          helperText="Estado controlado de la promesa; evita valores libres o inconsistentes."
+          isReadOnly
+          helperText="El estado se actualiza automáticamente según el pago aplicado y la fecha de compromiso."
         />
       </div>
 

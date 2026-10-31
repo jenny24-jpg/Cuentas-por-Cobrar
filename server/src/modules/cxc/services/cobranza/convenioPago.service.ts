@@ -106,6 +106,12 @@ export async function updateConvenio(id: number, rawInput: unknown): Promise<Con
   return getConvenio(id);
 }
 
+export async function cancelarConvenio(id: number): Promise<ConvenioPago> {
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de convenio invÃ¡lido');
+  await convenioPagoRepository.cancelar(id);
+  return getConvenio(id);
+}
+
 export async function deleteConvenio(id: number): Promise<void> {
   await getConvenio(id);
   await convenioPagoRepository.remove(id);

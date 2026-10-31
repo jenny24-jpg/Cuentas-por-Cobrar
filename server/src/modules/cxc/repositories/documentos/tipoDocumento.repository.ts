@@ -81,6 +81,41 @@ export async function findById(id: number): Promise<TipoDocumento | null> {
   }
 }
 
+/** Otro tipo con el mismo código o el mismo nombre (sin distinguir mayúsculas ni tildes). */
+export async function findDuplicado(
+  codigo: string | undefined,
+  nombre: string | undefined,
+  excluirId: number | null,
+): Promise<{ CODIGO: string; NOMBRE: string } | null> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ CODIGO: string; NOMBRE: string }>(
+      `SELECT CODIGO, NOMBRE FROM CXC_TIPOS_DOCUMENTO
+        WHERE (:excluirId IS NULL OR ID_TIPO_DOCUMENTO <> :excluirId)
+          AND (UPPER(TRIM(CODIGO)) = UPPER(:codigo)
+               OR NLSSORT(TRIM(NOMBRE), 'NLS_SORT=BINARY_AI') = NLSSORT(TRIM(:nombre), 'NLS_SORT=BINARY_AI'))
+        FETCH FIRST 1 ROWS ONLY`,
+      { excluirId, codigo: codigo ?? null, nombre: nombre ?? null },
+    );
+    return result.rows?.[0] ?? null;
+  } finally {
+    await conn.close();
+  }
+}
+
+export async function countDocumentos(id: number): Promise<number> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ TOTAL: number }>(
+      `SELECT COUNT(*) AS TOTAL FROM CXC_DOCUMENTOS WHERE ID_TIPO_DOCUMENTO = :id`,
+      { id },
+    );
+    return Number(result.rows?.[0]?.TOTAL ?? 0);
+  } finally {
+    await conn.close();
+  }
+}
+
 export async function create(input: CreateTipoDocumentoInput): Promise<number> {
   const conn = await getConnection();
   try {
@@ -148,6 +183,20 @@ export async function remove(id: number): Promise<void> {
   } catch (err) {
     await conn.rollback();
     throw err;
+  } finally {
+    await conn.close();
+  }
+}
+
+/** El tipo es la nota de débito por mora (la emite el sistema, no se crea ni edita a mano). */
+export async function esTipoMora(id: number): Promise<boolean> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ ES_MORA: string | null }>(
+      `SELECT ES_MORA FROM CXC_TIPOS_DOCUMENTO WHERE ID_TIPO_DOCUMENTO = :id`,
+      { id },
+    );
+    return String(result.rows?.[0]?.ES_MORA ?? 'N').trim() === 'S';
   } finally {
     await conn.close();
   }

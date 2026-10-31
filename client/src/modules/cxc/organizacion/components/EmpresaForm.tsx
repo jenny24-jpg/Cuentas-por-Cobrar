@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TextInput, Select } from '../../../../shared/ui-kit';
 import { FormActionButtons } from '../../../../shared/components/FormActionButtons';
 import { apiClient, ApiError } from '../../../../shared/api';
@@ -28,10 +28,21 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
   const isEditing = Boolean(empresa);
   const [nombre, setNombre] = useState(empresa?.nombre ?? '');
   const [nit, setNit] = useState(empresa?.nit ?? '');
+  const [direccion, setDireccion] = useState(empresa?.direccion ?? '');
+  const [giroComercial, setGiroComercial] = useState(empresa?.giroComercial?.trim() ?? '');
   const [estado, setEstado] = useState(empresa?.estado ?? 'A');
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Tipos de comercio registrados en la base; si no hay, el DBA debe cargarlos.
+  const [tiposComercio, setTiposComercio] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    apiClient.get<string[]>('/cxc/empresas/tipos-comercio')
+      .then(setTiposComercio)
+      .catch(() => { setTiposComercio([]); setFormError('No se pudieron cargar los tipos de comercio.'); });
+  }, []);
+  const sinTiposComercio = tiposComercio !== null && tiposComercio.length === 0;
 
   const validationErrors = useMemo<ValidationErrors>(() => {
     const next: ValidationErrors = {};
@@ -45,8 +56,12 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
       const nitErr = validateGuatemalaNit(nit, 'El NIT');
       if (nitErr) next.nit = nitErr;
     }
+    if (sinTiposComercio) next.giroComercial = 'No hay tipos de comercio en la base de datos; solicita al equipo DBA que los cargue.';
+    else if (!giroComercial) next.giroComercial = 'Selecciona el tipo de comercio';
+    const direccionMax = validateMaxLength(direccion, 'La dirección', 250);
+    if (direccionMax) next.direccion = direccionMax;
     return next;
-  }, [nombre, nit]);
+  }, [nombre, nit, giroComercial, direccion, sinTiposComercio]);
 
   const isFormValid = !hasErrors(validationErrors);
 
@@ -63,6 +78,8 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
     const payload = {
       nombre: nombre.trim(),
       nit: nit.trim().toUpperCase() || undefined,
+      direccion: direccion.trim() || null,
+      giroComercial,
       estado,
     };
 
@@ -109,6 +126,26 @@ export const EmpresaForm = ({ empresa, onSuccess, onCancel }: EmpresaFormProps) 
           helperText="NIT guatemalteco con dígito verificador válido, por ejemplo 1234567-9; también admite CF."
           placeholder="Ej. 1234567-9"
         />
+        <Select
+          label="Tipo de comercio"
+          required
+          value={giroComercial}
+          onChange={(e: any) => setGiroComercial(e.target.value)}
+          options={[{ value: '', label: tiposComercio === null ? 'Cargando...' : 'Selecciona...' }, ...(tiposComercio ?? []).map((t) => ({ value: t, label: t }))]}
+          error={errors.giroComercial ?? (sinTiposComercio ? validationErrors.giroComercial : undefined)}
+          helperText="Tipos registrados en la base de datos; uno nuevo lo agrega el equipo DBA."
+        />
+        <div className="sm:col-span-2">
+          <TextInput
+            label="Dirección"
+            maxLength={250}
+            value={direccion}
+            onChange={(e: any) => setDireccion(e.target.value)}
+            error={errors.direccion ?? (direccion ? validationErrors.direccion : undefined)}
+            helperText="Dirección fiscal o comercial; máximo 250 caracteres."
+            placeholder="Ej. 5a. avenida 10-20, zona 1, Guatemala"
+          />
+        </div>
         <Select
           label="Estado"
           required

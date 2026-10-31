@@ -1,13 +1,15 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as service from '../../services/credito/notaCredito.service';
 import { conEmpleadoActual } from '../../../auth/empleadoActual';
+import { ForbiddenError } from '../../../../shared/errors/AppError';
 
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(100, Math.max(Number(req.query.limit) || 10, 1));
     const search = typeof req.query.search === 'string' ? req.query.search : undefined;
-    const result = await service.list({ page, limit, search });
+    const pendientesAprobacion = req.query.pendientesAprobacion === '1';
+    const result = await service.list({ page, limit, search, pendientesAprobacion });
     res.json({ data: result.data, meta: { page, limit, total: result.total, totalPages: Math.max(Math.ceil(result.total / limit), 1) } });
   } catch (error) { next(error); }
 }
@@ -17,7 +19,11 @@ export async function getOne(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function create(req: Request, res: Response, next: NextFunction) {
-  try { res.status(201).json(await service.create(req.body)); } catch (error) { next(error); }
+  try {
+    // Se guarda quién registró la nota: el empleado del usuario actual.
+    const { idEmpleadoRegistro } = await conEmpleadoActual<{ idEmpleadoRegistro: number }>(req, 'idEmpleadoRegistro');
+    res.status(201).json(await service.create(req.body, idEmpleadoRegistro));
+  } catch (error) { next(error); }
 }
 
 export async function update(req: Request, res: Response, next: NextFunction) {
@@ -28,6 +34,34 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   try { await service.remove(Number(req.params.id)); res.status(204).send(); } catch (error) { next(error); }
 }
 
-export async function anular(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await service.anular(Number(req.params.id), await conEmpleadoActual(req, 'idEmpleadoAnulacion'))); } catch (error) { next(error); }
+
+export async function siguienteNumero(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await service.previewNumero());
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Aprobar o rechazar una nota de crédito es exclusivo de ADMIN (supervisores, gerentes, directores). */
+function exigirAdmin(req: Request) {
+  if (req.auth?.rol !== 'ADMIN') {
+    throw new ForbiddenError('Solo un administrador puede aprobar o rechazar notas de crédito.');
+  }
+}
+
+export async function aprobar(req: Request, res: Response, next: NextFunction) {
+  try {
+    exigirAdmin(req);
+    const { idEmpleado } = await conEmpleadoActual<{ idEmpleado: number }>(req);
+    res.json(await service.aprobar(Number(req.params.id), idEmpleado));
+  } catch (error) { next(error); }
+}
+
+export async function rechazar(req: Request, res: Response, next: NextFunction) {
+  try {
+    exigirAdmin(req);
+    const { idEmpleado } = await conEmpleadoActual<{ idEmpleado: number }>(req);
+    res.json(await service.rechazar(Number(req.params.id), req.body, idEmpleado));
+  } catch (error) { next(error); }
 }

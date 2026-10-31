@@ -65,7 +65,9 @@ function assertAprobable(ajuste: Ajuste, accion: string) {
 }
 
 export async function createAjuste(rawInput: unknown): Promise<Ajuste> {
-  const input = createAjusteSchema.parse(rawInput);
+  const parsedInput = createAjusteSchema.parse(rawInput);
+  // La fecha del ajuste la asigna el servidor con el calendario de Guatemala.
+  const input = { ...parsedInput, fecha: businessTodayIso() };
   await validateDocumentRelation(input.idCliente, input.idDocumento, input.tipoAjuste, input.monto);
 
   // El ajuste nace PENDIENTE y NO altera el saldo todavía: el efecto
@@ -77,7 +79,9 @@ export async function createAjuste(rawInput: unknown): Promise<Ajuste> {
 export async function updateAjuste(id: number, rawInput: unknown): Promise<Ajuste> {
   const current = await getAjuste(id);
   assertPendiente(current, 'editarse');
-  const input = updateAjusteSchema.parse(rawInput);
+  const parsedInput = updateAjusteSchema.parse(rawInput);
+  // La fecha queda fijada al crear el ajuste, aunque se editen otros campos pendientes.
+  const { fecha: _fecha, ...input } = parsedInput;
 
   const idCliente = input.idCliente ?? current.idCliente;
   const idDocumento = input.idDocumento === undefined ? current.idDocumento : input.idDocumento;

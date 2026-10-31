@@ -9,6 +9,8 @@ import { z } from 'zod';
 export const antiguedadSaldoSchema = z.object({
   idCliente: z.number().int(),
   nombreCliente: z.string(),
+  /** Código del segmento (A/B/C/D) o null si el cliente no tiene. */
+  segmento: z.string().nullable(),
   corriente: z.number(),
   dias1a30: z.number(),
   dias31a60: z.number(),
@@ -20,7 +22,7 @@ export type AntiguedadSaldo = z.infer<typeof antiguedadSaldoSchema>;
 
 export const antiguedadSaldosReporteSchema = z.object({
   clientes: z.array(antiguedadSaldoSchema),
-  totales: antiguedadSaldoSchema.omit({ idCliente: true, nombreCliente: true }),
+  totales: antiguedadSaldoSchema.omit({ idCliente: true, nombreCliente: true, segmento: true }),
 });
 export type AntiguedadSaldosReporte = z.infer<typeof antiguedadSaldosReporteSchema>;
 

@@ -43,7 +43,7 @@ export interface KpiProps {
   valor: string;
   /** Comparación contra el período anterior. */
   comparar?: { actual: number; anterior: number; subeEsBueno?: boolean };
-  /** Texto de apoyo cuando no hay comparación. */
+  /** Texto de apoyo; si también hay comparación, va debajo de ella. */
   nota?: string;
   tendencia?: number[];
   color?: string;
@@ -60,7 +60,8 @@ export function KpiCard({ etiqueta, valor, comparar, nota, tendencia, color = CO
       </div>
       <p className="mt-2 whitespace-nowrap text-[24px] font-semibold leading-none tracking-tight text-slate-900">{valor}</p>
       <div className="mt-2.5 min-h-[18px]">
-        {comparar ? <Delta {...comparar} /> : nota && <p className="text-[12px] leading-snug text-slate-500">{nota}</p>}
+        {comparar && <Delta {...comparar} />}
+        {nota && <p className={`text-[12px] leading-snug text-slate-500 ${comparar ? 'mt-1' : ''}`}>{nota}</p>}
       </div>
       {tendencia && <div className="mt-2.5"><Sparkline valores={tendencia} color={color} /></div>}
     </>

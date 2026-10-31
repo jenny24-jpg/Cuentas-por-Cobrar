@@ -9,8 +9,6 @@ import { CampoUsuarioActual } from '../../../../shared/components/CampoUsuarioAc
 
 import {
   hasErrors,
-  validateIdentifier,
-  validateMoney,
   validateRequiredDate,
   validateRequiredSelect,
   type ValidationErrors,
@@ -65,9 +63,7 @@ export function ReciboForm({
     item?.idPago?.toString() ?? '',
   );
 
-  const [numeroRecibo, setNumero] = useState(
-    item?.numeroRecibo ?? '',
-  );
+  const numeroGuardado = item?.numeroRecibo ?? '';
 
   const [fecha, setFecha] = useState(
     item?.fecha?.slice(0, 10) ?? hoyGuatemalaIso(),
@@ -77,9 +73,7 @@ export function ReciboForm({
     item?.monto?.toString() ?? '',
   );
 
-  const [estado, setEstado] = useState<Recibo['estado']>(
-    item?.estado ?? 'EMITIDO',
-  );
+  const estado = item?.estado ?? 'EMITIDO';
 
   const [fechaPagoOriginal, setFechaPagoOriginal] = useState('');
   const [cargandoPago, setCargandoPago] = useState(false);
@@ -146,6 +140,44 @@ export function ReciboForm({
   const pagoSeleccionado = pagos.find(
     (p) => String(p.id) === idPago,
   );
+
+  // =====================================================
+  // NÚMERO Y MONTO AUTOMÁTICOS (ALTA)
+  // =====================================================
+  // El número es el siguiente correlativo y el monto es lo que al pago le falta
+  // respaldar con recibo; ambos los calcula la base, no se escriben.
+
+  const [numeroPrevio, setNumeroPrevio] = useState('');
+  const [sinMontoPendiente, setSinMontoPendiente] = useState(false);
+
+  useEffect(() => {
+    setSinMontoPendiente(false);
+    if (isEditing || !idPago) {
+      setNumeroPrevio('');
+      if (!isEditing) setMonto('');
+      return;
+    }
+
+    let activo = true;
+
+    apiClient
+      .get<{ numeroRecibo: string; monto: number | null }>(
+        `/cxc/recibos/siguiente?idPago=${encodeURIComponent(idPago)}&fecha=${encodeURIComponent(fecha)}`,
+      )
+      .then((data) => {
+        if (!activo) return;
+        setNumeroPrevio(data.numeroRecibo);
+        setMonto(data.monto ? Number(data.monto).toFixed(2) : '');
+        setSinMontoPendiente(!data.monto || data.monto <= 0.005);
+      })
+      .catch(() => {
+        if (activo) setNumeroPrevio('');
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [idPago, fecha, isEditing]);
 
   // =====================================================
   // CONSULTAR INFORMACIÓN REAL DEL PAGO
@@ -229,17 +261,6 @@ export function ReciboForm({
       next.idPago = pagoErr;
     }
 
-    if (numeroRecibo) {
-      const numeroErr = validateIdentifier(
-        numeroRecibo,
-        'El número de recibo',
-      );
-
-      if (numeroErr) {
-        next.numeroRecibo = numeroErr;
-      }
-    }
-
     const fechaErr = validateRequiredDate(
       fecha,
       'La fecha',
@@ -282,17 +303,13 @@ export function ReciboForm({
         'No se pueden emitir recibos para pagos anulados o reversados.';
     }
 
-    const montoErr = validateMoney(
-      monto,
-      'El monto',
-      {
-        required: true,
-        positive: true,
-      },
-    );
-
-    if (montoErr) {
-      next.monto = montoErr;
+    // Alta: el monto lo calcula el sistema; solo se avisa si el pago ya está
+    // cubierto por recibos (no se emite un segundo recibo por el mismo dinero).
+    if (!isEditing && idPago && sinMontoPendiente) {
+      next.monto =
+        'Este pago ya tiene recibos por todo su monto; no se puede emitir otro.';
+    } else if (!isEditing && idPago && !monto) {
+      next.monto = 'Calculando el monto del recibo...';
     } else if (
       montoMaximo !== undefined &&
       Number(monto) > Number(montoMaximo)
@@ -302,28 +319,19 @@ export function ReciboForm({
         `(${Number(montoMaximo).toFixed(2)}).`;
     }
 
-    if (
-      !isEditing &&
-      estado !== 'EMITIDO'
-    ) {
-      next.estado =
-        'Los recibos nuevos deben registrarse como emitidos.';
-    }
-
     return next;
   }, [
     idCliente,
     idPago,
-    numeroRecibo,
     fecha,
     monto,
-    estado,
     hoy,
     fechaPagoVerificada,
     cargandoPago,
     pagoVerificado,
     montoMaximo,
     isEditing,
+    sinMontoPendiente,
   ]);
 
   const isFormValid =
@@ -415,10 +423,7 @@ export function ReciboForm({
     const payload = {
       idCliente: Number(idCliente),
       idPago: Number(idPago),
-      numeroRecibo: numeroRecibo.trim() || undefined,
       fecha,
-      monto: Number(monto),
-      estado: isEditing ? estado : 'EMITIDO',
     };
 
     try {
@@ -519,34 +524,24 @@ export function ReciboForm({
 
         <TextInput
           label="Número de recibo"
-          restriction="identifier"
-          uppercase
-          maxLength={30}
-          value={numeroRecibo}
-          onChange={(e: any) =>
-            setNumero(e.target.value)
-          }
-          isReadOnly={isReciboEmitido}
-          helperText="Correlativo del recibo; admite letras, números, -, _ y /."
-          error={errorFor('numeroRecibo', numeroRecibo)}
+          value={numeroGuardado || numeroPrevio || (idPago ? 'Calculando...' : 'Selecciona el pago')}
+          isReadOnly
+          helperText={isEditing ? "Correlativo asignado al recibo; no se edita." : "Siguiente correlativo del sistema. Si otro usuario guarda antes, al guardar se toma el siguiente libre."}
         />
         <Select
           label="Estado"
           required
           value={estado}
-          onChange={(e: any) =>
-            setEstado(e.target.value as Recibo['estado'])
-          }
           options={ESTADOS_RECIBO.map((value) => ({
             value,
             label:
               value.charAt(0) +
               value.slice(1).toLowerCase(),
           }))}
-          isReadOnly={!isEditing || isReciboEmitido}
+          isReadOnly
           helperText={
             isEditing
-              ? 'El estado del recibo está sujeto a las reglas del servidor.'
+              ? 'El estado se conserva. Solo cambia mediante el flujo de reversa o anulación del pago.'
               : 'Los recibos nuevos se registran como emitidos.'
           }
           error={errorFor('estado', estado)}
@@ -591,9 +586,10 @@ export function ReciboForm({
           onChange={(e: any) =>
             setMonto(e.target.value)
           }
-          isReadOnly={isReciboEmitido}
-          helperText="Mayor a 0 y no puede superar el monto del pago seleccionado."
-          error={errorFor('monto', monto)}
+          isReadOnly
+          placeholder="Selecciona el pago"
+          helperText={isEditing ? "Monto del recibo; no se edita." : "Automático: lo que al pago le falta respaldar con recibo."}
+          error={errors.monto ?? (sinMontoPendiente ? validationErrors.monto : undefined)}
         />
       </div>
 

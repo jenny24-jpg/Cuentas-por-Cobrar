@@ -7,6 +7,8 @@ interface EmpresaRow {
   ID_EMPRESA: number;
   NOMBRE: string;
   NIT: string | null;
+  DIRECCION: string | null;
+  GIRO_COMERCIAL: string | null;
   ESTADO: string;
 }
 
@@ -15,12 +17,14 @@ function mapRow(row: EmpresaRow): Empresa {
     idEmpresa: row.ID_EMPRESA,
     nombre: row.NOMBRE,
     nit: row.NIT,
+    direccion: row.DIRECCION,
+    giroComercial: row.GIRO_COMERCIAL,
     estado: row.ESTADO?.trim(),
   };
 }
 
 const SELECT_BASE = `
-  SELECT ID_EMPRESA, NOMBRE, NIT, ESTADO
+  SELECT ID_EMPRESA, NOMBRE, NIT, DIRECCION, GIRO_COMERCIAL, ESTADO
   FROM CXC_EMPRESAS
 `;
 
@@ -33,7 +37,8 @@ export async function findAll(params: {
   try {
     const offset = (params.page - 1) * params.limit;
     const whereClause = params.search
-      ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search) OR UPPER(NIT) LIKE UPPER(:search)`
+      ? `WHERE UPPER(NOMBRE) LIKE UPPER(:search) OR UPPER(NIT) LIKE UPPER(:search)
+           OR UPPER(GIRO_COMERCIAL) LIKE UPPER(:search) OR UPPER(DIRECCION) LIKE UPPER(:search)`
       : '';
     const searchBind = params.search ? { search: `%${params.search}%` } : {};
 
@@ -71,12 +76,14 @@ export async function create(input: CreateEmpresaInput): Promise<number> {
   const conn = await getConnection();
   try {
     const result = await conn.execute<{ id: number[] }>(
-      `INSERT INTO CXC_EMPRESAS (NOMBRE, NIT, ESTADO)
-       VALUES (:nombre, :nit, :estado)
+      `INSERT INTO CXC_EMPRESAS (NOMBRE, NIT, DIRECCION, GIRO_COMERCIAL, ESTADO)
+       VALUES (:nombre, :nit, :direccion, :giroComercial, :estado)
        RETURNING ID_EMPRESA INTO :id`,
       {
         nombre: input.nombre,
         nit: input.nit ?? null,
+        direccion: input.direccion || null,
+        giroComercial: input.giroComercial,
         estado: input.estado ?? 'A',
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       },
@@ -97,6 +104,8 @@ export async function update(id: number, input: UpdateEmpresaInput): Promise<voi
 
   if (input.nombre !== undefined) { fields.push('NOMBRE = :nombre'); binds.nombre = input.nombre; }
   if (input.nit !== undefined) { fields.push('NIT = :nit'); binds.nit = input.nit; }
+  if (input.direccion !== undefined) { fields.push('DIRECCION = :direccion'); binds.direccion = input.direccion || null; }
+  if (input.giroComercial !== undefined) { fields.push('GIRO_COMERCIAL = :giroComercial'); binds.giroComercial = input.giroComercial; }
   if (input.estado !== undefined) { fields.push('ESTADO = :estado'); binds.estado = input.estado; }
 
   if (fields.length === 0) {
@@ -126,6 +135,22 @@ export async function remove(id: number): Promise<void> {
   } catch (err) {
     await conn.rollback();
     throw err;
+  } finally {
+    await conn.close();
+  }
+}
+
+/** Tipos de comercio registrados en la base (valores distintos de CXC_EMPRESAS.GIRO_COMERCIAL). */
+export async function findTiposComercio(): Promise<string[]> {
+  const conn = await getConnection();
+  try {
+    const result = await conn.execute<{ GIRO: string }>(
+      `SELECT DISTINCT TRIM(GIRO_COMERCIAL) AS GIRO
+         FROM CXC_EMPRESAS
+        WHERE TRIM(GIRO_COMERCIAL) IS NOT NULL
+        ORDER BY GIRO`,
+    );
+    return (result.rows ?? []).map((r) => r.GIRO);
   } finally {
     await conn.close();
   }

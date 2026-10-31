@@ -1,6 +1,7 @@
 import {
   createAplicacionPagoSchema,
   reversarAplicacionPagoSchema,
+  rechazarAplicacionPagoSchema,
   buildPaginationMeta,
   type PaginatedResponse,
   type AplicacionPago,
@@ -28,8 +29,11 @@ export async function getAplicacionPago(id: number): Promise<AplicacionPago> {
   return item;
 }
 
-export async function createAplicacionPago(raw: unknown): Promise<AplicacionPago> {
+export async function createAplicacionPago(raw: unknown, requiereAprobacion = false): Promise<AplicacionPago> {
   const input = createAplicacionPagoSchema.parse(raw);
+  if (requiereAprobacion && input.idRutaDetalle) {
+    throw new ConflictError('Los cobros de ruta se registran desde el módulo de operación de rutas.');
+  }
   if (Boolean(input.idRutaDetalle) !== Boolean(input.claveRuta)) throw new BadRequestError('La aplicación de ruta requiere detalle y clave de operación');
   if (input.fechaAplicacion > businessTodayIso()) {
     throw new BadRequestError('La fecha de aplicación no puede ser futura');
@@ -40,7 +44,24 @@ export async function createAplicacionPago(raw: unknown): Promise<AplicacionPago
 
   // repository.create ejecuta la operación completa en una única transacción
   // y bloquea pago/documento para evitar sobre-aplicaciones concurrentes.
-  const id = await repository.create(input);
+  const id = requiereAprobacion
+    ? await repository.crearSolicitud(input)
+    : await repository.create(input);
+  return getAplicacionPago(id);
+}
+
+export async function aprobarSolicitudAplicacionPago(id: number, idEmpleadoAprobador: number): Promise<AplicacionPago> {
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de aplicación inválido');
+  if (!(await catalogosRepository.empleadoExiste(idEmpleadoAprobador))) throw new BadRequestError('El empleado aprobador seleccionado no existe');
+  await repository.aprobarSolicitud(id, idEmpleadoAprobador);
+  return getAplicacionPago(id);
+}
+
+export async function rechazarSolicitudAplicacionPago(id: number, raw: unknown, idEmpleadoAprobador: number): Promise<AplicacionPago> {
+  if (!Number.isInteger(id) || id <= 0) throw new BadRequestError('ID de aplicación inválido');
+  const input = rechazarAplicacionPagoSchema.parse(raw);
+  if (!(await catalogosRepository.empleadoExiste(idEmpleadoAprobador))) throw new BadRequestError('El empleado aprobador seleccionado no existe');
+  await repository.rechazarSolicitud(id, idEmpleadoAprobador, input);
   return getAplicacionPago(id);
 }
 
