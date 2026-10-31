@@ -123,11 +123,12 @@ export async function resumenPorEmpleado(params: { search?: string; idSucursal?:
   try {
     const { where, binds } = filtroRutas(params);
     const result = await conn.execute<{
-      ID_EMPLEADO: number; NOMBRE_EMPLEADO: string | null; TOTAL: number; PLANIFICADAS: number; EN_PROCESO: number;
+      ID_EMPLEADO: number; NOMBRE_EMPLEADO: string | null; FOTO_URL: string | null; TOTAL: number; PLANIFICADAS: number; EN_PROCESO: number;
       COMPLETADAS: number; CANCELADAS: number; PROXIMA_ISO: string | null; ULTIMA_ISO: string | null;
     }>(
       `SELECT r.ID_EMPLEADO,
               MAX(e.NOMBRE || ' ' || e.APELLIDO) AS NOMBRE_EMPLEADO,
+              MAX(e.FOTO_URL) AS FOTO_URL,
               COUNT(*) AS TOTAL,
               COUNT(CASE WHEN TRIM(r.ESTADO) = 'PLANIFICADA' THEN 1 END) AS PLANIFICADAS,
               COUNT(CASE WHEN TRIM(r.ESTADO) = 'EN_PROCESO' THEN 1 END) AS EN_PROCESO,
@@ -145,6 +146,8 @@ export async function resumenPorEmpleado(params: { search?: string; idSucursal?:
     return (result.rows ?? []).map((row) => ({
       idEmpleado: row.ID_EMPLEADO,
       nombreEmpleado: row.NOMBRE_EMPLEADO?.trim() || null,
+      // Solo https, igual que al guardarla en el perfil del cobrador.
+      fotoUrl: /^https:\/\//i.test(row.FOTO_URL?.trim() ?? '') ? row.FOTO_URL!.trim() : null,
       totalRutas: Number(row.TOTAL),
       planificadas: Number(row.PLANIFICADAS),
       enProceso: Number(row.EN_PROCESO),

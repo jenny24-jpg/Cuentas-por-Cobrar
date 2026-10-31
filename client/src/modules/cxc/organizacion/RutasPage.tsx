@@ -16,6 +16,22 @@ const SEARCH_DEBOUNCE_MS = 300;
 const iniciales = (nombre: string | null) =>
   (nombre ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || '?';
 
+/** Foto del empleado; si no tiene o no carga, sus iniciales. */
+function AvatarEmpleado({ nombre, fotoUrl }: { nombre: string | null; fotoUrl: string | null }) {
+  const [fallo, setFallo] = useState(false);
+  if (fotoUrl && !fallo) {
+    return (
+      <img src={fotoUrl} alt="" aria-hidden="true" referrerPolicy="no-referrer" onError={() => setFallo(true)}
+        className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm" />
+    );
+  }
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0e2238] text-sm font-semibold text-white" aria-hidden="true">
+      {iniciales(nombre)}
+    </span>
+  );
+}
+
 const plural = (n: number, singular: string, pluralTxt: string) => `${n} ${n === 1 ? singular : pluralTxt}`;
 
 /** Chips con la cantidad de rutas por estado (solo los estados que tiene). */
@@ -226,9 +242,7 @@ export const RutasPage = () => {
                   aria-controls={panelId}
                   className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0e2238] text-sm font-semibold text-white" aria-hidden="true">
-                    {iniciales(g.nombreEmpleado)}
-                  </span>
+                  <AvatarEmpleado key={g.fotoUrl ?? 'sin-foto'} nombre={g.nombreEmpleado} fotoUrl={g.fotoUrl} />
                   <span className="min-w-0 flex-1">
                     <span className="rutas-emp-nombre block truncate text-slate-900">{g.nombreEmpleado ?? `Empleado #${g.idEmpleado}`}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">

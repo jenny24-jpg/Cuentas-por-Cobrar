@@ -16,6 +16,25 @@ export function RiesgoPill({ nivel, score }: { nivel: NivelRiesgo; score?: numbe
   );
 }
 
+const TONO_SEGMENTO: Record<string, string> = {
+  A: 'border-green-600 bg-green-600 text-white',
+  B: 'border-yellow-400 bg-yellow-400 text-yellow-950',
+  C: 'border-orange-500 bg-orange-500 text-white',
+  D: 'border-red-600 bg-red-600 text-white',
+};
+
+/** Segmento del cliente (A verde, B amarillo, C naranja, D rojo); el código siempre va escrito. */
+export function SegmentoPill({ segmento, title }: { segmento: string | null | undefined; title?: string }) {
+  if (!segmento) return <span className="text-slate-400" title="Sin segmento">—</span>;
+  const codigo = segmento.trim().toUpperCase();
+  return (
+    <span className={`inline-flex min-w-7 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-semibold ${TONO_SEGMENTO[codigo] ?? 'border-blue-600 bg-blue-600 text-white'}`}
+      title={title ?? `Segmento ${codigo}`}>
+      {segmento}
+    </span>
+  );
+}
+
 const TONOS: Record<string, string> = {
   PENDIENTE: 'bg-amber-50 text-amber-900 ring-amber-200',
   PARCIAL: 'bg-amber-50 text-amber-900 ring-amber-200',

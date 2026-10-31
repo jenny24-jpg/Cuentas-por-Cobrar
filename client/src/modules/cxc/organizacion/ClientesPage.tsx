@@ -7,6 +7,7 @@ import { useAuth } from '../../../shared/auth/AuthContext';
 import type { Cliente } from '@erp/contracts';
 import { ClienteForm } from './components/ClienteForm';
 import { ClienteDetalle } from './components/ClienteDetalle';
+import { SegmentoPill } from '../analisis/ui/Pills';
 import { PieTabla, useTamanoPagina } from '../../../shared/components/PieTabla';
 
 
@@ -18,13 +19,6 @@ const ESTADO_FILTRO = [
 
 // Color del distintivo por segmento (solo presentación; los segmentos salen de la BD).
 // Un segmento nuevo sin color asignado se muestra en azul.
-const COLOR_SEGMENTO: Record<string, string> = {
-  A: 'border-green-600 bg-green-600 text-white',
-  B: 'border-yellow-400 bg-yellow-400 text-yellow-950',
-  C: 'border-orange-500 bg-orange-500 text-white',
-  D: 'border-red-600 bg-red-600 text-white',
-};
-
 const etiquetaEstado =(estado: string | null) => (estado === 'A' ? 'Activo' : estado === 'I' ? 'Inactivo' : 'Sin estado');
 
 /** Alta, consulta y edición de clientes. */
@@ -104,16 +98,9 @@ export const ClientesPage = () => {
           },
           {
             header: 'Segmento',
-            cell: ({ row }: { row: Cliente }) => row.segmento
-              ? (
-                <span
-                  className={`inline-flex min-w-7 items-center justify-center rounded-full border px-2 py-0.5 text-xs font-semibold ${COLOR_SEGMENTO[row.segmento.trim().toUpperCase()] ?? 'border-blue-600 bg-blue-600 text-white'}`}
-                  title={row.reduccionMora ? `Mora −${row.reduccionMora} puntos` : 'Sin reducción de mora'}
-                >
-                  {row.segmento}
-                </span>
-              )
-              : <span className="text-slate-400">—</span>,
+            cell: ({ row }: { row: Cliente }) => (
+              <SegmentoPill segmento={row.segmento} title={row.reduccionMora ? `Mora −${row.reduccionMora} puntos` : 'Sin reducción de mora'} />
+            ),
           },
           {
             header: 'Condición de pago',

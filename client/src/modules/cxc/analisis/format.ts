@@ -15,8 +15,18 @@ export const COLOR = {
   critico: '#d03b3b',
 } as const;
 
-/** Escala ordinal de un solo tono (del más claro al más oscuro) para tramos de antigüedad. */
-export const RAMPA_AZUL = ['#86b6ef', '#5598e7', '#2a78d6', '#184f95', '#104281'];
+/**
+ * Semáforo de los tramos de antigüedad (corriente, 1-30, 31-60, 61-90, +90):
+ * de verde a rojo oscuro, para que lo más atrasado se note de inmediato.
+ */
+export const SEMAFORO_ANTIGUEDAD = ['#16a34a', '#eab308', '#f97316', '#dc2626', '#991b1b'];
+
+/** Color por estado para barras apiladas de promesas y convenios. */
+export const COLOR_ESTADO: Record<string, string> = {
+  CUMPLIDA: '#16a34a', CUMPLIDO: '#16a34a', COMPLETADA: '#16a34a', COMPLETADO: '#16a34a',
+  PENDIENTE: '#eab308', ACTIVO: '#2a78d6',
+  INCUMPLIDA: '#dc2626', INCUMPLIDO: '#dc2626',
+};
 
 export const RIESGO: Record<NivelRiesgo, { etiqueta: string; color: string; fondo: string; orden: number }> = {
   CRITICO: { etiqueta: 'Crítico', color: '#d03b3b', fondo: '#fbeaea', orden: 0 },
@@ -48,6 +58,12 @@ export function fechaCorta(iso: string | null | undefined, conAnio = true): stri
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
   if (!y || !m || !d) return '—';
   return `${d} ${MESES[m - 1]}${conAnio ? ` ${y}` : ''}`;
+}
+
+/** '2026-08' → 'ago 2026' (eje y títulos de los reportes mensuales). */
+export function mesCorto(periodo: string): string {
+  const [y, m] = periodo.split('-').map(Number);
+  return y && m ? `${MESES[m - 1]} ${y}` : periodo;
 }
 
 export interface Variacion {

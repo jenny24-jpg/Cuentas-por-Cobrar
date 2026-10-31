@@ -1,3 +1,4 @@
+import type { Connection } from 'oracledb';
 import { getConnection } from '../../../config/database';
 import type { EstadisticaCobranza, EstadisticaVentas, LibroVentasReporte } from '@erp/contracts';
 
@@ -9,6 +10,29 @@ import type { EstadisticaCobranza, EstadisticaVentas, LibroVentasReporte } from 
 
 const num = (v: unknown) => Number(v ?? 0);
 const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+const DIA_MS = 86_400_000;
+const isoDe = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** Período inmediato anterior con la misma cantidad de días (en UTC para no mover el día). */
+export function periodoAnterior(desde: string, hasta: string): { desde: string; hasta: string } {
+  const d = Date.parse(`${desde}T00:00:00Z`);
+  const dias = Math.round((Date.parse(`${hasta}T00:00:00Z`) - d) / DIA_MS) + 1;
+  return { desde: isoDe(d - dias * DIA_MS), hasta: isoDe(d - DIA_MS) };
+}
+
+/** Todos los meses del rango como 'YYYY-MM', para que un mes sin movimiento salga en cero. */
+export function mesesDelRango(desde: string, hasta: string): string[] {
+  const meses: string[] = [];
+  let [y, m] = desde.split('-').map(Number);
+  const [yh, mh] = hasta.split('-').map(Number);
+  while (y < yh || (y === yh && m <= mh)) {
+    meses.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return meses;
+}
 
 export async function getLibroVentas(anio: number, mes: number): Promise<LibroVentasReporte> {
   const desde = `${anio}-${String(mes).padStart(2, '0')}-01`;
@@ -60,22 +84,39 @@ export async function getLibroVentas(anio: number, mes: number): Promise<LibroVe
   }
 }
 
-export async function getEstadisticaVentas(desde: string, hasta: string): Promise<EstadisticaVentas> {
-  const conn = await getConnection();
-  const binds = { desde, hasta };
-  const rango = `f.FECHA_EMISION >= TO_DATE(:desde, 'YYYY-MM-DD') AND f.FECHA_EMISION <= TO_DATE(:hasta, 'YYYY-MM-DD')`;
-  try {
-    const tot = await conn.execute<{ FACTURAS: number; ANULADAS: number; NETO: number; IVA: number; TOTAL: number }>(
+const RANGO_VENTAS = `f.FECHA_EMISION >= TO_DATE(:desde, 'YYYY-MM-DD') AND f.FECHA_EMISION <= TO_DATE(:hasta, 'YYYY-MM-DD')`;
+
+/** Totales de facturas FEL de un período (también se usa para el período anterior). */
+async function totalesVentas(conn: Connection, binds: { desde: string; hasta: string }): Promise<EstadisticaVentas['totales']> {
+  const tot = await conn.execute<{ FACTURAS: number; ANULADAS: number; NETO: number; IVA: number; TOTAL: number }>(
       `SELECT SUM(CASE WHEN f.ESTADO = 'CERTIFICADA' THEN 1 ELSE 0 END) AS FACTURAS,
               SUM(CASE WHEN f.ESTADO = 'ANULADA' THEN 1 ELSE 0 END) AS ANULADAS,
               NVL(SUM(CASE WHEN f.ESTADO = 'CERTIFICADA' THEN f.SUBTOTAL_GRAVADO END), 0) AS NETO,
               NVL(SUM(CASE WHEN f.ESTADO = 'CERTIFICADA' THEN f.IVA END), 0) AS IVA,
               NVL(SUM(CASE WHEN f.ESTADO = 'CERTIFICADA' THEN f.TOTAL END), 0) AS TOTAL
-         FROM CXC_FACTURA_FEL f WHERE ${rango}`,
+         FROM CXC_FACTURA_FEL f WHERE ${RANGO_VENTAS}`,
       binds,
     );
-    const t = tot.rows![0];
-    const facturas = num(t.FACTURAS);
+  const t = tot.rows![0];
+  const facturas = num(t.FACTURAS);
+  const ventaTotal = num(t.TOTAL);
+  return {
+    facturas,
+    anuladas: num(t.ANULADAS),
+    ventaNeta: num(t.NETO),
+    iva: num(t.IVA),
+    ventaTotal,
+    ticketPromedio: facturas > 0 ? round2(ventaTotal / facturas) : 0,
+  };
+}
+
+export async function getEstadisticaVentas(desde: string, hasta: string): Promise<EstadisticaVentas> {
+  const conn = await getConnection();
+  const binds = { desde, hasta };
+  const rango = RANGO_VENTAS;
+  try {
+    const totales = await totalesVentas(conn, binds);
+    const previo = await totalesVentas(conn, periodoAnterior(desde, hasta));
 
     const meses = await conn.execute<{ PERIODO: string; FACTURAS: number; TOTAL: number }>(
       `SELECT TO_CHAR(f.FECHA_EMISION, 'YYYY-MM') AS PERIODO, COUNT(*) AS FACTURAS, SUM(f.TOTAL) AS TOTAL
@@ -83,13 +124,15 @@ export async function getEstadisticaVentas(desde: string, hasta: string): Promis
         GROUP BY TO_CHAR(f.FECHA_EMISION, 'YYYY-MM') ORDER BY PERIODO`,
       binds,
     );
-    const clientes = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string; FACTURAS: number; TOTAL: number }>(
-      `SELECT d.ID_CLIENTE, c.NOMBRE, COUNT(*) AS FACTURAS, SUM(f.TOTAL) AS TOTAL
+    const clientes = await conn.execute<{ ID_CLIENTE: number; NOMBRE: string; SEGMENTO: string | null; FACTURAS: number; TOTAL: number }>(
+      `SELECT d.ID_CLIENTE, c.NOMBRE, sg.CODIGO AS SEGMENTO, COUNT(*) AS FACTURAS, SUM(f.TOTAL) AS TOTAL
          FROM CXC_FACTURA_FEL f
          JOIN CXC_DOCUMENTOS d ON d.ID_DOCUMENTO = f.ID_DOCUMENTO
          JOIN CLIENTE c ON c.ID_CLIENTE = d.ID_CLIENTE
+         LEFT JOIN CXC_CLIENTE_SEGMENTO cs ON cs.ID_CLIENTE = d.ID_CLIENTE
+         LEFT JOIN CXC_SEGMENTOS_CLIENTE sg ON sg.ID_SEGMENTO = cs.ID_SEGMENTO
         WHERE ${rango} AND f.ESTADO = 'CERTIFICADA'
-        GROUP BY d.ID_CLIENTE, c.NOMBRE ORDER BY TOTAL DESC FETCH FIRST 10 ROWS ONLY`,
+        GROUP BY d.ID_CLIENTE, c.NOMBRE, sg.CODIGO ORDER BY TOTAL DESC FETCH FIRST 10 ROWS ONLY`,
       binds,
     );
     const condiciones = await conn.execute<{ CONDICION: string; FACTURAS: number; TOTAL: number }>(
@@ -104,25 +147,41 @@ export async function getEstadisticaVentas(desde: string, hasta: string): Promis
       binds,
     );
 
-    const ventaTotal = num(t.TOTAL);
+    const porPeriodo = new Map((meses.rows ?? []).map((r) => [r.PERIODO, r]));
     return {
       desde,
       hasta,
-      totales: {
-        facturas,
-        anuladas: num(t.ANULADAS),
-        ventaNeta: num(t.NETO),
-        iva: num(t.IVA),
-        ventaTotal,
-        ticketPromedio: facturas > 0 ? round2(ventaTotal / facturas) : 0,
-      },
-      porMes: (meses.rows ?? []).map((r) => ({ periodo: r.PERIODO, facturas: num(r.FACTURAS), ventaTotal: num(r.TOTAL) })),
-      topClientes: (clientes.rows ?? []).map((r) => ({ idCliente: r.ID_CLIENTE, nombreCliente: r.NOMBRE, facturas: num(r.FACTURAS), ventaTotal: num(r.TOTAL) })),
+      totales,
+      anterior: { facturas: previo.facturas, ventaTotal: previo.ventaTotal, ticketPromedio: previo.ticketPromedio },
+      porMes: mesesDelRango(desde, hasta).map((periodo) => {
+        const r = porPeriodo.get(periodo);
+        return { periodo, facturas: num(r?.FACTURAS), ventaTotal: num(r?.TOTAL) };
+      }),
+      topClientes: (clientes.rows ?? []).map((r) => ({ idCliente: r.ID_CLIENTE, nombreCliente: r.NOMBRE, segmento: r.SEGMENTO?.trim() || null, facturas: num(r.FACTURAS), ventaTotal: num(r.TOTAL) })),
       porCondicion: (condiciones.rows ?? []).map((r) => ({ condicion: r.CONDICION, facturas: num(r.FACTURAS), ventaTotal: num(r.TOTAL) })),
     };
   } finally {
     await conn.close();
   }
+}
+
+/** Facturado, cobrado e índice de un período, con el mismo criterio que la serie mensual. */
+async function facturadoCobrado(conn: Connection, binds: { desde: string; hasta: string }): Promise<EstadisticaCobranza['anterior']> {
+  const f = await conn.execute<{ MONTO: number }>(
+    `SELECT NVL(SUM(TOTAL), 0) AS MONTO FROM CXC_DOCUMENTOS
+      WHERE FECHA_DOCUMENTO >= TO_DATE(:desde, 'YYYY-MM-DD') AND FECHA_DOCUMENTO <= TO_DATE(:hasta, 'YYYY-MM-DD')
+        AND UPPER(ESTADO) NOT IN ('ANULADO', 'ANULADA') AND ID_DOCUMENTO_ORIGEN IS NULL`,
+    binds,
+  );
+  const c = await conn.execute<{ MONTO: number }>(
+    `SELECT NVL(SUM(MONTO_APLICADO), 0) AS MONTO FROM CXC_APLICACION_PAGOS
+      WHERE FECHA_APLICACION >= TO_DATE(:desde, 'YYYY-MM-DD') AND FECHA_APLICACION <= TO_DATE(:hasta, 'YYYY-MM-DD')
+        AND ESTADO = 'CONFIRMADA'`,
+    binds,
+  );
+  const facturado = round2(num(f.rows?.[0]?.MONTO));
+  const cobrado = round2(num(c.rows?.[0]?.MONTO));
+  return { facturado, cobrado, indiceCobranza: facturado > 0 ? round2((cobrado / facturado) * 100) : 0 };
 }
 
 export async function getEstadisticaCobranza(desde: string, hasta: string): Promise<EstadisticaCobranza> {
@@ -175,14 +234,12 @@ export async function getEstadisticaCobranza(desde: string, hasta: string): Prom
       binds,
     );
 
-    // Une facturado y cobrado por mes, incluyendo meses con solo uno de los dos.
-    const periodos = new Map<string, { facturado: number; cobrado: number }>();
-    facturadoMes.rows?.forEach((r) => periodos.set(r.PERIODO, { facturado: num(r.MONTO), cobrado: 0 }));
-    cobradoMes.rows?.forEach((r) => {
-      const actual = periodos.get(r.PERIODO) ?? { facturado: 0, cobrado: 0 };
-      periodos.set(r.PERIODO, { ...actual, cobrado: num(r.MONTO) });
-    });
-    const porMes = [...periodos.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([periodo, v]) => ({ periodo, ...v }));
+    const anterior = await facturadoCobrado(conn, periodoAnterior(desde, hasta));
+
+    // Todos los meses del rango; los que no tuvieron facturación ni cobro quedan en cero.
+    const facturadoPor = new Map((facturadoMes.rows ?? []).map((r) => [r.PERIODO, num(r.MONTO)]));
+    const cobradoPor = new Map((cobradoMes.rows ?? []).map((r) => [r.PERIODO, num(r.MONTO)]));
+    const porMes = mesesDelRango(desde, hasta).map((periodo) => ({ periodo, facturado: facturadoPor.get(periodo) ?? 0, cobrado: cobradoPor.get(periodo) ?? 0 }));
 
     const facturado = round2(porMes.reduce((a, m) => a + m.facturado, 0));
     const cobrado = round2(porMes.reduce((a, m) => a + m.cobrado, 0));
@@ -202,6 +259,7 @@ export async function getEstadisticaCobranza(desde: string, hasta: string): Prom
         porcentajeVencida: carteraTotal > 0 ? round2((carteraVencida / carteraTotal) * 100) : 0,
         diasCartera: facturado > 0 ? Math.round(carteraTotal / (facturado / dias)) : 0,
       },
+      anterior,
       porMes,
       porFormaPago: (formas.rows ?? []).map((r) => ({ formaPago: r.FORMA, pagos: num(r.PAGOS), monto: num(r.MONTO) })),
       promesas: (promesas.rows ?? []).map((r) => ({ estado: r.ESTADO, cantidad: num(r.CANTIDAD), monto: num(r.MONTO) })),
